@@ -1,0 +1,62 @@
+# Sürekli bütünleştirme: her dala yapılan her gönderimde birim testleri ve kısa uçtan uca duman testleri
+# (gerçek fare tıklamalı menü testi dahil) koşar. GitHub Pages "Deploy from a branch" ile doğrudan dalı
+# yayınladığı için bu iş akışı yayını engellemez; aynı gönderim için yeşil/kırmızı durumu verir.
+# Tam uçtan uca takım (npm run test:e2e, ~45 dk) elle (workflow_dispatch, full=true) çalıştırılır.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      full:
+        description: 'Tüm uçtan uca senaryoları koş (yavaş)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: Birim testleri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
+  e2e:
+    name: Uçtan uca (duman)
+    runs-on: ubuntu-latest
+    needs: unit
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tarayıcı (Chromium)
+        run: npx playwright install --with-deps chromium
+      - name: Duman senaryoları
+        if: ${{ !inputs.full }}
+        run: node tools/e2e.mjs smoke-menu ui-clicks
+      - name: Tüm senaryolar
+        if: ${{ inputs.full }}
+        run: npm run test:e2e
+      - name: Senaryo günlükleri ve ekran görüntüleri
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-ciktilari
+          path: |
+            /tmp/e2e-*.log
+            /tmp/*.png
+          if-no-files-found: ignore

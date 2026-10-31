@@ -21,6 +21,7 @@
     "draco3dgltf": "^1.5.9",
     "esbuild": "^0.25.12",
     "meshoptimizer": "^0.22.0",
+    "playwright": "^1.63.0",
     "sharp": "^0.33.5"
   },
   "license": "SEE LICENSE IN LICENSE.md"

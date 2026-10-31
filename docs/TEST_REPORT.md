@@ -6,7 +6,7 @@ Tarih: 31 Ekim 2026 · Ortam: Linux, Node 22, başsız Chromium (Playwright, Swi
 
 | Katman | Kapsam | Sonuç |
 |---|---|---|
-| Birim testleri (`npm test`) | 23 test: envanter (yığın, ağırlık, taşıma, bölme, sıralama, tazelik birleşimi), ihtiyaçlar (açlık/susuzluk, kanama, enfeksiyon, ısı, yere düşme/kaldırma, tüketim), zaman (30 gün, evreler, saat olayları, Son Işık geri sayımı), harita sisi RLE kaydı, hava durumu, ağ-güvenli görev kancaları, kayıt meta bilgisi | ✅ 23/23 |
+| Birim testleri (`npm test`) | 31 test: envanter (yığın, ağırlık, taşıma, bölme, sıralama, tazelik birleşimi), ihtiyaçlar (açlık/susuzluk, kanama, enfeksiyon, ısı, yere düşme/kaldırma, tüketim), zaman (30 gün, evreler, saat olayları, Son Işık geri sayımı), harita sisi RLE kaydı, hava durumu, ağ-güvenli görev kancaları, kayıt meta bilgisi + animasyon paketi kodla-çöz, klip/hız tutarlılığı, 8 yön ağırlıkları, faz hızı, durum geçişi, tek seferlik klip; kit parça birleştirme (düz renk pişirme, aynı malzeme, aynalı sarım) | ✅ 31/31 |
 | Uçtan uca: menü (`tests/e2e/smoke-menu.mjs`) | Önyükleme, ana menü tabelaları, Karakterler, Özelleştirme (3B vitrin), Ayarlar, Nasıl Oynanır, Krediler, Tek Oyna, Arkadaşlarla Oyna ekranları | ✅ 0 hata |
 | Uçtan uca: tek oyuncu (`smoke-single.mjs`) | Oyun başlatma (2 YZ arkadaşla), HUD, hareket, günlük sekmeleri (envanter/üretim/karakter/görevler/harita), inşa menüsü, takım paneli, duraklatma | ✅ 0 hata |
 | Uçtan uca: oynanış (`gameplay.mjs`) | Konteyner arama + depo paneli + hepsini al, yeme, bandaj üretimi, inşa hayaleti + barikat inşası (savunma puanı), zombi doğurma + YZ arkadaş savaşı (öldürme sayısı), araca binip sürme, gece, uyku oylaması (zaman x40), 2. gün takvim yayını, rastgele olay kartı + seçim, kayıt (yuva + otomatik), yaralı arkadaşı sırtlama/bırakma/kaldırma, harita | ✅ 0 hata |
@@ -71,6 +71,7 @@ hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indiri
 
 ## Testleri çalıştırma
 ```bash
+npm install && npx playwright install chromium   # bir kez (Playwright package.json'da; tarayıcı ayrıca indirilir)
 npm test
 npm run test:e2e       # tools/e2e.mjs: kendi sunucusunu açar, senaryoları sırayla koşar, özet tablo basar
 node tools/e2e.mjs carry carry-mp    # seçili senaryolar; tam çıktı /tmp/e2e-<ad>.log

@@ -1,5 +1,7 @@
 # GitHub Pages'e yayın: oyun derleme gerektirmeyen statik bir sitedir; depo olduğu gibi yayınlanır.
-# Ön koşul: Settings → Pages → Source: "GitHub Actions". (Alternatif: "Deploy from a branch".)
+# Ön koşul: Settings → Pages → Source: "GitHub Actions". Depo şu an "Deploy from a branch" ile
+# claude/kiyametten-once-game-0yng28 dalını doğrudan yayınlıyor; bu iş akışı main'e birleştirilince ya da elle
+# (workflow_dispatch) kullanılır. Testler her dalda ci.yml ile koşar.
 name: Pages
 
 on:

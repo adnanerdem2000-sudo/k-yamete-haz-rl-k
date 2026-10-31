@@ -30,7 +30,7 @@
 - Uçak kalkışı ve düşen uçak sahneleri kendi kamerasını kullanmaz; oyuncu kamerası sahneyi uzaktan izler.
 
 ## Görsel / performans
-- Şehir merkezi ve sanayi bölgesinde kare başına ~1000 çizim çağrısı, 1–1,5 milyon üçgen çizilir. Zayıf
+- Şehir merkezinde kare başına ~400 çizim çağrısı (varsayılan ayarlar, gölgeler açık; önceki sürümde ~1.100), 2,5–3 milyon üçgen çizilir. Zayıf
   dizüstü GPU'larda **Ayarlar → Grafik → Kalite: Orta/Düşük** ve **Otomatik çözünürlük** önerilir
   (otomatik çözünürlük varsayılan olarak açıktır).
 - Kalite (gölge haritası çözünürlüğü, kenar yumuşatma) değişikliği tam etki için sayfanın yenilenmesini ister.

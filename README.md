@@ -69,8 +69,9 @@ Lobide **Sesli sohbeti aç** ile mikrofonu aç; oyunda **V** tuşuna basılı tu
 ## 💻 Yerelde çalıştırma (geliştirme)
 
 ```bash
-npm install          # yalnızca araçlar için (varlık paketleyici); oyunun kendisi bağımlılık gerektirmez
-npm start            # http://localhost:8080
+npm install                           # araçlar ve testler (oyunun kendisi bağımlılık gerektirmez)
+npx playwright install chromium       # yalnız testler için, bir kez (uçtan uca testlerin tarayıcısı)
+npm start                             # http://localhost:8080
 ```
 
 `npm start` yerine herhangi bir statik sunucu da olur (ör. `python3 -m http.server 8080`). Dosyayı
@@ -85,7 +86,8 @@ node tools/e2e.mjs story carry-mp             # seçili senaryolar (günlük: /t
 node tools/scenario.mjs tests/e2e/story.mjs   # tek senaryo, elle açılmış sunucuya (`npm start`) karşı
 ```
 
-Ayrıntılar: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).
+Ayrıntılar: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md). Her gönderimde GitHub Actions (`.github/workflows/ci.yml`)
+birim testlerini ve kısa uçtan uca duman testlerini (gerçek fare tıklamalı menü dahil) koşar.
 
 ---
 
