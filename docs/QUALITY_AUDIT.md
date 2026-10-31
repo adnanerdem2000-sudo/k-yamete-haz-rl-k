@@ -203,3 +203,8 @@ Kullanılamayanlar: Mixamo (Adobe hesabı, CC0 değil), Sketchfab (giriş gerekl
 - Ölçüm (orta kalite, orman içi göz hizası): ~1,7 M üçgen, ~313 çizim çağrısı (yüksek kalitede 2,7 M).
 - Kalanlar: şehir cepheleri ve sokak donatısı (Downtown City kitinin modelleri yalnız FBX/OBJ; glTF yok),
   yaşayan dünya (kuşlar, uzak zombiler, sallanan tabelalar, duman), su ve ıslaklık yansımaları.
+
+### Aşama 4 — Çevre (ikinci bölüm)
+- Şehir silueti: Downtown City MegaKit tuğla binaları (ön cephe yola), çatı klimaları, meydan saksıları, babalar.
+- Yaşayan dünya: 6 bölgede karga sürüleri (66 kuş; kanat çırpma gölgelendiricide, silah/patlama gürültüsünde
+  ürkerek yükselir), şehirde 6 yanmış enkazdan tüten duman sütunları (rüzgârla sürüklenir, fırtınada artar).

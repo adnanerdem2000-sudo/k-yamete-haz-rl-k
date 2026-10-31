@@ -17,6 +17,7 @@ import { GroundItems } from './systems/GroundItems.js';
 import { PhysProps } from './systems/PhysProps.js';
 import { Interact } from './systems/Interact.js';
 import { Effects } from './systems/Effects.js';
+import { Birds, SmokeColumns } from './world/LivingWorld.js';
 import { Combat } from './systems/Combat.js';
 import { Zombies } from './systems/Zombies.js';
 import { Build } from './systems/Build.js';
@@ -83,6 +84,15 @@ export class Session {
     this.game.scene.add(this.local.root);
     // ---- sistemler
     this.fx = new Effects(this);
+    // yaşayan dünya: karga sürüleri ve yanan enkazlardan tüten duman sütunları
+    this.living = {
+      birds: new Birds(this.game.scene, [
+        { x: 100, z: -20, alt: 42, r: 34, n: 14, v: 7 }, { x: -235, z: -160, alt: 36, r: 40, n: 12, v: 6, dir: -1 },
+        { x: -640, z: 120, alt: 30, r: 36, n: 10, v: 6 }, { x: -205, z: 185, alt: 34, r: 26, n: 8, v: 5.5, dir: -1 },
+        { x: 330, z: 300, alt: 26, r: 30, n: 10, v: 6.5 }, { x: 120, z: -760, alt: 40, r: 50, n: 12, v: 7, dir: -1 },
+      ]),
+      smoke: new SmokeColumns(this.game.scene, [[3, -18], [140, 5], [205, -60], [110, -102], [92, -300], [-2, 62]].map(([x, z], i) => ({ x, z, y: this.world.terrain.heightAt(x, z) + 0.8, h: 34 + i * 3, life: 14 + i, size: 2.8 + (i % 3) * 0.6, dense: 0.95 })), 26),
+    };
     this.loot = new Loot(this);
     this.ground = new GroundItems(this);
     this.props = new PhysProps(this);
@@ -185,7 +195,7 @@ export class Session {
     this.onEvt('flag', (e) => { this.flags[e.flag] = e.value; this.quests.onFlag(e.flag); });
     this.onEvt('rel', (e) => { this.relations[e.faction] = clamp((this.relations[e.faction] || 0) + e.delta, -100, 100); this.quests.onFlag('rel:' + e.faction); });
     this.onEvt('toast', (e) => this.ui.toast(e.text, e.kind || 'info', e.dur));
-    this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); });
+    this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); if (e.r > 25 && this.living) this.living.birds.scare(e.x, e.z, e.r); });
     this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
     this.onEvt('revived', (e) => {
       if (e.target === this.localId) { this.audio.play('revive', { vol: 0.7 }); this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
@@ -326,6 +336,10 @@ export class Session {
     this.region = region;
     this.env.update(dt, this.game.time, this.time.minuteOfDay, pl.pos, region);
     this.world.vegetation.update(cam.position, Settings.get('graphics.viewDistance'), Settings.get('graphics.grass'), dt, Settings.get('graphics.quality'));
+    if (this.living) {
+      this.living.birds.update(dt, (x, z) => this.world.terrain.heightAt(x, z));
+      this.living.smoke.update(dt, this.env && this.env.weather ? 1 + this.env.weather.storm * 2 : 1);
+    }
     this.world.instancer.cull(cam.position, Settings.get('graphics.viewDistance'));
     this.updateRoofs();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - pl.pos.x, cam.position.z - pl.pos.z) + Math.PI);
@@ -854,6 +868,7 @@ export class Session {
     this.audio.occluder = null;
     this.audio.setEnvironment(false);
     for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    if (this.living) for (const l of Object.values(this.living)) { this.game.scene.remove(l.mesh); l.mesh.geometry.dispose(); l.mesh.material.dispose(); }
     for (const p of this.players.values()) if (p.avatar && !p.isLocal) p.avatar.dispose();
     this.local.dispose();
     this.game.phys.clearDynamic();
