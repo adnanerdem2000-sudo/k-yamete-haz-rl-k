@@ -30,7 +30,21 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   const count = () => evalJS(page, () => { const S = window.__game.session; return S.inventory.items().filter((s) => s.id === 'bandage').reduce((a, s) => a + s.qty, 0); });
   // E: yazılım GPU'sunda ilk kareler (gölgelendirici derlemesi) saniyeler sürebilir; etkileşim gerçekten
   // başlayana (activate çağrılana) kadar en fazla 3 kez dene
-  await evalJS(page, () => { const I = window.__game.session.interact; window.__act = 0; const o = I.activate.bind(I); I.activate = (t) => { window.__act++; return o(t); }; });
+  // zamanlama simülasyon zamanıyla ölçülür (yavaş karelerde duvar saati yanıltır): etkinleşme anı + kare kaydı
+  await evalJS(page, () => {
+    const S = window.__game.session, I = S.interact; window.__act = 0; window.__actT = null;
+    const o = I.activate.bind(I); I.activate = (t) => { window.__act++; if (window.__actT === null) window.__actT = S.t; return o(t); };
+    const cnt = () => S.inventory.items().filter((q) => q.id === 'bandage').reduce((a, q) => a + q.qty, 0);
+    window.__rec = []; const u0 = S.update.bind(S);
+    S.update = (dt) => { u0(dt); window.__rec.push({ t: +S.t.toFixed(3), bandage: cnt(), target: window.__door ? window.__door.target : null, yaw: +S.local.yaw.toFixed(2) }); if (window.__rec.length > 2000) window.__rec.shift(); };
+  });
+  // kayıttan: etkinleşmeden sonra `key` alanı ilk ne zaman değişti (sim sn) ve değişmeden önceki erken kare sayısı
+  const timing = (key, base) => evalJS(page, ([key, base]) => {
+    const t0 = window.__actT; if (t0 === null) return { err: 'etkinleşme yok' };
+    const after = window.__rec.filter((r) => r.t >= t0);
+    const idx = after.findIndex((r) => r[key] !== base);
+    return { t0: +t0.toFixed(2), kareler: after.length, degisim: idx < 0 ? null : +(after[idx].t - t0).toFixed(3), erkenSabit: idx < 0 ? after.length : idx, ilk: after[0] && after[0][key], son: after.length ? after[after.length - 1][key] : null };
+  }, [key, base]);
   const press = async () => {
     for (let i = 0; i < 3; i++) {
       await page.keyboard.down('KeyE'); await wait(140); await page.keyboard.up('KeyE');
@@ -40,13 +54,12 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   };
   const pressed = await press();
   log('E basıldı', { activate: pressed });
-  await simWait(6);
-  const early = { bandage: await count(), yaw: await evalJS(page, () => +window.__game.session.local.yaw.toFixed(2)) };
-  log('E sonrası ~0,1 sn', early);
-  check(early.bandage === r0.bandage, 'eşya hemen envantere girmemeli (animasyon beklenir)', early);
-  await simWait(70);
+  await simWait(80);
+  const pk = await timing('bandage', r0.bandage);
+  log('alma zamanlaması (sim sn)', pk);
+  check(pk.degisim !== null && pk.degisim >= 0.2 && pk.degisim <= 0.9, 'eşya hemen değil, eğilme anında (0,28–0,42 sn) envantere girmeli', pk);
   const late = { bandage: await count(), yaw: await evalJS(page, () => +window.__game.session.local.yaw.toFixed(2)), ground: await evalJS(page, () => window.__game.session.ground.items.size) };
-  log('E sonrası 1,1 sn', late);
+  log('E sonrası 1,3 sn', late);
   check(late.bandage === r0.bandage + 1, 'eşya eğilme anında envantere girmeli', late);
   check(Math.abs(late.yaw - 0.95) < 0.45, 'oyuncu eşyaya dönmeli (~0,95 rad)', late);
   await shot(page, '/tmp/interact-pickup.png');
@@ -77,16 +90,15 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   log('kapı hedefi', dt0);
   if (dt0 && dt0.kind === 'door') {
     d0.target = dt0.target; d0.want = dt0.want;
-    await evalJS(page, () => { window.__act = 0; });
+    await evalJS(page, () => { window.__act = 0; window.__actT = null; window.__rec.length = 0; });
     await press();
-    await simWait(5);
-    const d1 = await evalJS(page, () => ({ target: window.__door.target, open01: +window.__door.open01.toFixed(2), yaw: +window.__game.session.local.yaw.toFixed(2) }));
-    log('E sonrası ~0,1 sn', d1);
-    check(d1.target === d0.target, 'kapı hemen değil, uzanma anında hareket etmeli', d1);
-    await simWait(60);
+    await simWait(80);
+    const dk = await timing('target', d0.target);
+    log('kapı zamanlaması (sim sn)', dk);
+    check(dk.degisim !== null && dk.degisim >= 0.1 && dk.degisim <= 0.6, 'kapı hemen değil, uzanma anında (0,22 sn) hareket etmeli', dk);
     const d2 = await evalJS(page, () => ({ target: window.__door.target, open01: +window.__door.open01.toFixed(2), yaw: +window.__game.session.local.yaw.toFixed(2) }));
-    log('E sonrası 0,84 sn', d2);
-    check(d2.target !== d0.target, 'kapı 0,22 sn sonra açılmalı', d2);
+    log('E sonrası 1,3 sn', d2);
+    check(d2.target !== d0.target, 'kapı açılmalı', d2);
     check(Math.abs(d2.yaw - d0.want) < 0.45, 'oyuncu kapıya dönmeli', { yaw: d2.yaw, want: d0.want });
     await shot(page, '/tmp/interact-door.png');
   } else log('kapı hedeflenemedi (konum uygun değil), kapı adımı atlandı');
