@@ -279,13 +279,13 @@ export class Session {
     if (pl.vault) pl.stepVault(dt);
     else if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.updateLocalDriving(dt, input, blocking);
     else pl.update(dt, input, blocking);
-    if (pl.carryProp) pl.updateCarry(); // taşınan nesne: kinematik hedef fizik adımından önce
     // sabit adımlı fizik (oyuncu kapsülü, araçlar, dinamik nesneler) + enterpolasyonlu çizim
     this.game.phys.update(dt);
     this.updateTimers(dt);
     if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.postPhysicsLocal(dt);
     else pl.postPhysics(dt);
     if (pl.carriedBy) this.followCarrier(pl);
+    if (pl.carryProp) pl.updateCarry(); // taşınan nesne: oyuncunun bu karedeki son konumuyla
     this.local.inside = this.world.buildingAt(pl.pos.x, pl.pos.z, pl.pos.y);
     this.combat.update(dt, input, blocking);
     this.interact.update(dt, input, blocking);
@@ -306,6 +306,7 @@ export class Session {
     this.endings.update(dt);
     this.map.update(dt);
     this.updateRemotes(dt);
+    this.props.followRemoteCarriers();
     this.updateDowned(dt);
     this.renderOnly(dt);
   }

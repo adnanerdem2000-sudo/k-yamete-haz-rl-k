@@ -1,6 +1,6 @@
 // Nesne taşıma testi: oyuncu önündeki kutuyu alır (kinematik), taşır, bırakır ve fırlatır. → /tmp/carry-*.png
 export default async ({ page, url, wait, evalJS, log, shot }) => {
-  await page.goto(url, { waitUntil: 'load' });
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 150000 });
   await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
   await page.waitForFunction(() => window.__game && window.__game.state === 'playing', null, { timeout: 150000 });
@@ -23,7 +23,7 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
   const r1 = await evalJS(page, () => { const S = window.__game.session, pl = S.local; return { carrying: !!pl.carryProp, kinematic: !!(window.__box && window.__box.d.carried), anim: !!pl.animState().carryBox }; });
   log('alındı', r1);
   await page.keyboard.down('KeyW'); await wait(1200); await page.keyboard.up('KeyW');
-  const r2 = await evalJS(page, () => { const S = window.__game.session, pl = S.local, t = window.__box.d.body.translation(); return { dist: +Math.hypot(t.x - pl.pos.x, t.z - pl.pos.z).toFixed(2), h: +(t.y - pl.pos.y).toFixed(2) }; });
+  const r2 = await evalJS(page, () => { const S = window.__game.session, pl = S.local, t = window.__box.d.body.translation(); const o = window.__box.d.obj.position; return { carrying: !!pl.carryProp, mode: pl.mode, dist: +Math.hypot(t.x - pl.pos.x, t.z - pl.pos.z).toFixed(2), h: +(t.y - pl.pos.y).toFixed(2), gorselMesafe: +Math.hypot(o.x - pl.pos.x, o.z - pl.pos.z).toFixed(2), gorselH: +(o.y - pl.pos.y).toFixed(2) }; });
   log('taşınıyor (oyuncuya uzaklık, yükseklik)', r2);
   await shot(page, '/tmp/carry-hold.png');
   // fırlat

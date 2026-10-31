@@ -5,12 +5,13 @@ import * as THREE from 'three';
 import { Avatar } from './Avatar.js';
 import { clamp, damp, dampAngle, wrapAngle, smoothstep } from '../core/util.js';
 import { Settings } from '../core/Settings.js';
+import { packPose } from '../systems/PhysProps.js';
 
 const GRAV = 21;
 const JUMP_V = 6.1;
 const COYOTE = 0.12;
 const JUMP_BUFFER = 0.14;
-const _v = new THREE.Vector3(), _cq = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0);
+const _v = new THREE.Vector3();
 
 export class Player {
   constructor(session, profile) {
@@ -182,7 +183,9 @@ export class Player {
     if (!prop || this.carryProp) return;
     const pw = this.game.phys;
     pw.setCarried(prop.d, true);
+    prop.d.onSleep = null;
     this.carryProp = prop;
+    this.session.act('prop_carry', { id: prop.id, on: 1 }); // iyimser: host çakışmada geri alır
     this.avatar.play('pickup', 0.5);
     this.session.audio && this.session.audio.play('pickup', { vol: 0.4, rate: 0.8 });
   }
@@ -194,20 +197,22 @@ export class Player {
     this.carryProp = null;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const k = throwIt ? 7.5 - Math.min(3, p.def.mass / 6) : 0.6;
-    this.game.phys.setCarried(p.d, false, { x: this.vel.x + fx * k, y: throwIt ? 2.6 : 0.2, z: this.vel.z + fz * k });
+    const v = { x: this.vel.x + fx * k, y: throwIt ? 2.6 : 0.2, z: this.vel.z + fz * k };
+    this.game.phys.setCarried(p.d, false, v);
+    // diğer istemciler aynı yerden aynı hızla bıraksın; durunca son konum yeniden eşitlenir
+    this.session.act('prop_carry', { id: p.id, on: 0, p: packPose(p.d.body.translation(), p.d.body.rotation()), v: [v.x, v.y, v.z].map((x) => Math.round(x * 1000) / 1000) });
+    if (this.session.props) this.session.props.watchRest(p);
     if (throwIt) { this.avatar.play('throw', 0.5); this.session.audio && this.session.audio.play('whoosh', { vol: 0.35 }); }
   }
 
-  /** Taşınan nesneyi her karede gövdenin önünde göğüs hizasında tut */
+  /** Taşınan nesneyi her karede (fizik sonrası, son konumla) gövdenin önünde göğüs hizasında tut */
   updateCarry() {
     const p = this.carryProp;
     if (!p) return;
-    if (!p.alive || this.mode !== 'ground' || (this.stats && this.stats.downed)) { this.dropProp(false); return; }
-    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
-    const h = (p.def.h || 0.7) * 0.5;
-    _v.set(this.pos.x + fx * (0.55 + h * 0.4), this.pos.y + 1.0 + Math.max(0, 0.35 - h), this.pos.z + fz * (0.55 + h * 0.4));
-    _cq.setFromAxisAngle(_up, this.yaw);
-    this.game.phys.moveCarried(p.d, _v, _cq);
+    // basamak inerken kısa havada kalma, zıplama ve eğilme taşımayı bozmaz; yüzme/tırmanma/araç/yatma bırakır
+    const keep = this.mode === 'ground' || this.mode === 'air' || this.mode === 'crouch';
+    if (!p.alive || !keep || (this.stats && this.stats.downed)) { this.dropProp(false); return; }
+    this.session.props.holdAt(p, this.pos, this.yaw);
   }
 
   /** Takla başlat: hareket yönünde ~4 m yuvarlanma */

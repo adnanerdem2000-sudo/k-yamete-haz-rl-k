@@ -7,7 +7,7 @@
   "scripts": {
     "start": "node tools/serve.mjs",
     "test": "node --import ./tests/unit/register.mjs --test tests/unit/*.test.mjs",
-    "test:e2e": "node tools/scenario.mjs tests/e2e/smoke-menu.mjs && node tools/scenario.mjs tests/e2e/smoke-single.mjs && node tools/scenario.mjs tests/e2e/gameplay.mjs && node tools/scenario.mjs tests/e2e/multiplayer-local.mjs && node tools/scenario.mjs tests/e2e/physics.mjs && node tools/scenario.mjs tests/e2e/ai.mjs && node tools/scenario.mjs tests/e2e/story.mjs && node tools/scenario.mjs tests/e2e/audio.mjs && node tools/scenario.mjs tests/e2e/ending.mjs",
+    "test:e2e": "node tools/e2e.mjs",
     "pack-assets": "node tools/pack-assets.mjs",
     "pack-rigged": "node tools/pack-rigged.mjs",
     "event-art": "node tools/scenario.mjs tools/event-art.mjs"

@@ -281,7 +281,7 @@ export class Interact {
     const t = this.findTarget();
     this.target = t;
     // önündeki hafif nesneyi (kutu, kasa, çöp kovası…) eline al: başka hedef yoksa ya da nesne ondan yakınsa
-    let cp = !pl.carrying && pl.mode === 'ground' && S.props ? S.props.nearestCarryable(pl.pos.x, pl.pos.y, pl.pos.z, pl.yaw) : null;
+    let cp = !pl.carrying && (pl.mode === 'ground' || pl.mode === 'crouch') && S.props ? S.props.nearestCarryable(pl.pos.x, pl.pos.y, pl.pos.z, pl.yaw) : null;
     if (cp && t && t.d !== undefined && t.d < cp.dist) cp = null;
     if (cp && t && t.d === undefined) cp = null; // mesafesiz özel hedefler (araçtan in, sırttaki arkadaş) öncelikli
     if (cp) {

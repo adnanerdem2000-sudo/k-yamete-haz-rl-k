@@ -134,17 +134,37 @@ export class PhysicsWorld {
 
   /**
    * Taşıma: gövde kinematiğe alınır (oyuncu kapsülüyle çarpışmaz, diğer nesneleri iter); bırakınca yeniden
-   * dinamik olur. vel: bırakma/fırlatma hızı.
+   * dinamik olur. vel: bırakma/fırlatma hızı; pose [x,y,z,qx,qy,qz,qw]: bırakıldığı yer (ağdan gelen bırakma).
    */
-  setCarried(d, on, vel = null) {
+  setCarried(d, on, vel = null, pose = null) {
     if (!d || !this.dynamic.has(d)) return;
     d.body.setBodyType(on ? RAPIER.RigidBodyType.KinematicPositionBased : RAPIER.RigidBodyType.Dynamic, true);
     d.col.setCollisionGroups(groups(G.PROP, on ? (G.STATIC | G.PROP | G.DEBRIS) : (G.STATIC | G.VEHICLE | G.PROP | G.PLAYER | G.DEBRIS | G.CORPSE)));
     d.carried = !!on;
-    if (!on) { d.body.wakeUp(); if (vel) d.body.setLinvel(vel, true); }
+    if (on) return;
+    if (pose) {
+      d.body.setTranslation({ x: pose[0], y: pose[1], z: pose[2] }, true);
+      d.body.setRotation({ x: pose[3], y: pose[4], z: pose[5], w: pose[6] }, true);
+      d.hasPrev = false; // ışınlanma: araya enterpolasyon çizme
+    }
+    d.body.wakeUp();
+    if (vel) d.body.setLinvel(vel, true);
+  }
+  /** Ağdan gelen dinlenme pozu: gövdeyi oraya koy ve uyut (görsel bir kez güncellenir) */
+  placeAtRest(d, pose) {
+    if (!d || !this.dynamic.has(d) || d.carried) return;
+    d.body.setTranslation({ x: pose[0], y: pose[1], z: pose[2] }, true);
+    d.body.setRotation({ x: pose[3], y: pose[4], z: pose[5], w: pose[6] }, true);
+    d.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    d.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    d.body.sleep();
+    d.hasPrev = false;
+    d.synced = false;
   }
   moveCarried(d, pos, quat) {
     if (!d || !d.carried) return;
+    // kinematik hedef uyuyan gövdeyi uyandırmaz: oyuncu durup yeniden yürüyünce nesne yerde kalmasın
+    if (d.body.isSleeping()) d.body.wakeUp();
     d.body.setNextKinematicTranslation(pos);
     d.body.setNextKinematicRotation(quat);
   }

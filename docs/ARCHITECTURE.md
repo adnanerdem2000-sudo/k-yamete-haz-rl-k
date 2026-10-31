@@ -88,7 +88,13 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Yaşayan dünya (`LivingWorld`):** karga sürüleri (gürültüde ürker) ve duman sütunları; ikisi de tek
   örnekli ağ, animasyon gölgelendiricide.
 - **Taşınabilir nesneler:** hafif fizik nesneleri (≤ 20 kg) E ile alınır; gövde kinematiğe geçer ve oyuncu
-  kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır.
+  kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır. Basamak
+  inerken havada kalma, zıplama ve eğilme taşımayı bozmaz; yüzme, tırmanma, araç ve yatma bırakır. Görsel her
+  karede taşıyanın fizik sonrası konumuna yerleşir (gecikmesiz), kinematik gövde bir adım arkadan gelir.
+  **Çok oyunculu:** `prop_carry` eylemi host'ta doğrulanır (aynı nesneyi iki kişi alamaz; geç kalana gerçek
+  taşıyıcı bildirilir, yerel iyimser alma geri alınır). Uzak oyuncunun taşıdığı nesne onun avatarının önünde
+  izlenir; bırakma/fırlatma o anki poz ve hızla herkese gider, nesne durunca bırakanın gördüğü son konum
+  (`prop_rest`) yeniden eşitlenir. Taşıyan oyundan çıkarsa nesne düşer.
 
 ## Karakterler
 - **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek

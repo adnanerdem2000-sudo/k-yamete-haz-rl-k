@@ -1,6 +1,7 @@
 // Fiziksel dünya nesneleri: yol kenarlarında itilebilir/devrilebilir variller, kasalar, çöp kutuları;
 // vurulunca patlayan kırmızı variller; kırılan kapı/pencere/yapılardan saçılan tahta enkazı;
-// araç ya da patlamayla savrulan cesetler. Her istemci kendi kopyasını simüle eder (görsel fizik).
+// araç ya da patlamayla savrulan cesetler. Her istemci kendi kopyasını simüle eder (görsel fizik); yalnız elde
+// taşıma eşitlenir: kimin taşıdığını host belirler, bırakılan yer ve hız herkese aynı gider.
 import * as THREE from 'three';
 import { G } from '../physics/PhysicsWorld.js';
 import { roadCenterline } from '../world/Roads.js';
@@ -20,7 +21,18 @@ const KINDS = {
 };
 const REGION_SET = { mahalle: ['trash', 'box', 'barrel2'], sehir: ['trash', 'box', 'crate', 'barrel', 'redbarrel'], sanayi: ['barrel', 'redbarrel', 'box2', 'pallet', 'crate'], benzin: ['redbarrel', 'barrel', 'box'], liman: ['barrel', 'box2', 'crate', 'pallet', 'keg'], askeri: ['box2', 'crate', 'redbarrel'], hastane: ['trash', 'box'] };
 
-const _box = new THREE.Box3(), _size = new THREE.Vector3(), _c = new THREE.Vector3();
+const _box = new THREE.Box3(), _size = new THREE.Vector3(), _c = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _tv = new THREE.Vector3(), _tq = new THREE.Quaternion();
+
+/** Gövde pozu → ağ için yuvarlanmış [x,y,z,qx,qy,qz,qw] */
+export function packPose(t, r) { return [t.x, t.y, t.z, r.x, r.y, r.z, r.w].map((x) => Math.round(x * 1000) / 1000); }
+
+/** Taşınan nesnenin hedef pozu: taşıyanın önünde göğüs hizası (yerel oyuncu ve uzak taşıyıcılar aynı formülü kullanır) */
+export function carryTarget(def, pos, yaw, outV, outQ) {
+  const h = (def.h || 0.7) * 0.5, f = 0.55 + h * 0.4;
+  outV.set(pos.x + Math.sin(yaw) * f, pos.y + 1.0 + Math.max(0, 0.35 - h), pos.z + Math.cos(yaw) * f);
+  outQ.setFromAxisAngle(_up, yaw);
+}
 const PLANK_GEO = new THREE.BoxGeometry(0.16, 0.05, 0.85);
 const PLANK_MAT = new THREE.MeshStandardMaterial({ color: 0x8d6e4a, roughness: 0.9 });
 const SHARD_GEO = new THREE.BoxGeometry(0.22, 0.02, 0.18);
@@ -31,6 +43,7 @@ export class PhysProps {
     this.s = session;
     this.pw = session.game.phys;
     this.props = [];
+    this.byId = new Map();
     this.debris = [];
     this.group = new THREE.Group();
     this.group.name = 'physprops';
@@ -38,6 +51,22 @@ export class PhysProps {
     const S = session;
     S.on('prop_explode', (p) => S.emit({ k: 'prop_explode', id: p.id, x: p.x, y: p.y, z: p.z }));
     S.onEvt('prop_explode', (e) => this.onExplode(e));
+    // elde taşıma: aynı nesneyi iki kişi alamaz (host karar verir); kaybeden istemciye gerçek taşıyıcı bildirilir
+    S.on('prop_carry', (p, from) => {
+      const prop = this.byId.get(p.id);
+      if (!prop || !prop.alive) return;
+      if (p.on) {
+        if (!prop.carrier || prop.carrier === from) S.emit({ k: 'prop_carry', id: p.id, by: from, on: 1 });
+        else S.emit({ k: 'prop_carry', id: p.id, by: prop.carrier, on: 1, to: from });
+      } else if (prop.carrier === from) S.emit({ k: 'prop_carry', id: p.id, by: from, on: 0, p: p.p, v: p.v });
+    });
+    S.onEvt('prop_carry', (e) => this.onCarry(e));
+    // bırakılan nesne durunca bırakanın gördüğü son konum herkese gider (istemcilerin fiziği az farklı sonuçlanır)
+    S.on('prop_rest', (p, from) => { const prop = this.byId.get(p.id); if (prop && prop.alive && !prop.carrier) S.emit({ k: 'prop_rest', id: p.id, p: p.p, from }); });
+    S.onEvt('prop_rest', (e) => {
+      const prop = this.byId.get(e.id);
+      if (e.from !== S.localId && prop && prop.alive && !prop.carrier && !prop.d.carried) this.pw.placeAtRest(prop.d, e.p);
+    });
     if (this.pw) this.spawnWorldProps();
   }
 
@@ -102,9 +131,10 @@ export class PhysProps {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     const d = this.pw.addDynamic(g, shape, x, y, z, { quat: { x: q.x, y: q.y, z: q.z, w: q.w }, density: def.mass / Math.max(0.01, vol), friction: 0.7, bounce: 0.1, group: G.PROP, linDamp: 0.2, angDamp: 0.5 });
     d.body.sleep();
-    const prop = { id, kind, def, d, alive: true };
+    const prop = { id, kind, def, d, alive: true, carrier: null };
     d.prop = prop;
     this.props.push(prop);
+    this.byId.set(id, prop);
     return prop;
   }
 
@@ -122,6 +152,54 @@ export class PhysProps {
     }
     if (best) best.dist = bd;
     return best;
+  }
+
+  /** Taşıma olayı (her istemcide): yerel oyuncunun kendi alma/bırakması zaten uygulanmıştır (iyimser) */
+  onCarry(e) {
+    const S = this.s, prop = this.byId.get(e.id);
+    if (!prop || !prop.alive) return;
+    if (e.on) {
+      prop.carrier = e.by;
+      if (e.by === S.localId) return;
+      if (S.local.carryProp === prop) { S.local.carryProp = null; S.ui.toast('Başkası senden önce aldı.', 'warn', 1.5); }
+      this.pw.setCarried(prop.d, true);
+      return;
+    }
+    if (prop.carrier !== e.by) return;
+    prop.carrier = null;
+    if (e.by === S.localId) return;
+    this.pw.setCarried(prop.d, false, e.v ? { x: e.v[0], y: e.v[1], z: e.v[2] } : null, e.p || null);
+  }
+
+  /** Bırakılan nesne uyuyunca (durunca) son pozunu yay */
+  watchRest(prop) {
+    prop.d.onSleep = (d) => {
+      if (!prop.alive || prop.carrier || d.carried) return;
+      this.s.act('prop_rest', { id: prop.id, p: packPose(d.body.translation(), d.body.rotation()) });
+    };
+  }
+
+  /**
+   * Taşınan nesneyi taşıyanın önüne koy: görsel bu karenin son konumuna doğrudan yerleşir (gecikmesiz), kinematik
+   * gövde bir sonraki fizik adımında aynı yere gider (diğer nesneleri iter).
+   */
+  holdAt(prop, pos, yaw) {
+    carryTarget(prop.def, pos, yaw, _tv, _tq);
+    this.pw.moveCarried(prop.d, _tv, _tq);
+    const o = prop.d.obj;
+    if (o) { o.position.copy(_tv); o.quaternion.copy(_tq); }
+  }
+
+  /** Uzak oyuncuların taşıdığı nesneler (Session, uzak avatarlar konumlandıktan sonra çağırır) */
+  followRemoteCarriers() {
+    if (!this.pw) return;
+    const S = this.s;
+    for (const prop of this.props) {
+      if (!prop.carrier || prop.carrier === S.localId || !prop.alive) continue;
+      const rec = S.players.get(prop.carrier);
+      if (!rec || !rec.pos) { prop.carrier = null; this.pw.setCarried(prop.d, false); continue; } // taşıyan ayrıldı: düşer
+      this.holdAt(prop, rec.pos, rec.anim ? rec.anim.yaw || 0 : 0);
+    }
   }
 
   /** Mermi ışını ile fiziksel nesne kesişimi (Combat çağırır). Dönüş {dist, point, prop} */
@@ -150,6 +228,7 @@ export class PhysProps {
     const prop = this.props.find((p) => p.id === e.id);
     if (prop && prop.alive) {
       prop.alive = false;
+      this.byId.delete(prop.id);
       this.pw.removeDynamic(prop.d);
       this.group.remove(prop.d.obj);
       this.props.splice(this.props.indexOf(prop), 1);
@@ -236,7 +315,7 @@ export class PhysProps {
   dispose() {
     for (const p of this.props) if (p.alive) this.pw.removeDynamic(p.d);
     for (const x of this.debris) this.pw.removeDynamic(x.d);
-    this.props = []; this.debris = [];
+    this.props = []; this.debris = []; this.byId.clear();
     this.s.game.scene.remove(this.group);
   }
 }
