@@ -15,6 +15,10 @@ import { CHARACTERS } from './entities/CharacterFactory.js';
 import { Loot } from './systems/Loot.js';
 import { GroundItems } from './systems/GroundItems.js';
 import { PhysProps } from './systems/PhysProps.js';
+import { DoorPhysics } from './physics/DoorPhysics.js';
+import { Drawers } from './physics/Drawers.js';
+import { installBuoyancy } from './physics/Buoyancy.js';
+import { ContactSounds } from './physics/ContactSounds.js';
 import { Interact } from './systems/Interact.js';
 import { Effects } from './systems/Effects.js';
 import { Birds, SmokeColumns } from './world/LivingWorld.js';
@@ -86,6 +90,7 @@ export class Session {
     // ---- sistemler
     this.fx = new Effects(this);
     // yaşayan dünya: karga sürüleri ve yanan enkazlardan tüten duman sütunları
+    });
     this.living = {
       birds: new Birds(this.game.scene, [
         { x: 100, z: -20, alt: 42, r: 34, n: 14, v: 7 }, { x: -235, z: -160, alt: 36, r: 40, n: 12, v: 6, dir: -1 },
@@ -96,7 +101,13 @@ export class Session {
     };
     this.loot = new Loot(this);
     this.ground = new GroundItems(this);
+    if (this.game.phys) {
+      this.contacts = new ContactSounds(this.game.phys, () => this.audio);
+      this.buoyancyOff = installBuoyancy(this.game.phys, this.world.terrain);
+    }
     this.props = new PhysProps(this);
+    this.doorPhys = this.game.phys ? new DoorPhysics(this) : null;
+    this.drawers = this.game.phys ? new Drawers(this) : null;
     this.build = new Build(this);
     this.zombies = new Zombies(this);
     this.vehicles = new Vehicles(this);
@@ -130,6 +141,8 @@ export class Session {
     if (cfg.mode !== 'single') this.net.attachSession(this);
     this.game.input.wantLock = true;
     this.ui.toast(cfg.mode === 'client' ? 'Odaya bağlanıldı. İyi şanslar!' : '30 günün kaldı. Arkadaşlarını topla. Hazırlan. Hayatta kal.', 'story', 6);
+  }
+
   }
 
   newGame(cdef) {
@@ -282,6 +295,8 @@ export class Session {
     else pl.update(dt, input, blocking);
     // sabit adımlı fizik (oyuncu kapsülü, araçlar, dinamik nesneler) + enterpolasyonlu çizim
     this.game.phys.update(dt);
+    if (this.doorPhys) this.doorPhys.update(dt);
+    if (this.drawers) this.drawers.update(dt);
     this.updateTimers(dt);
     if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.postPhysicsLocal(dt);
     else pl.postPhysics(dt);
@@ -839,7 +854,7 @@ export class Session {
     const byId = new Map(this.world.doors.map((x) => [x.id, x]));
     for (const [id, a] of Object.entries(d.doors || {})) { const door = byId.get(id); if (door) this.interact.applyDoorState(door, { target: a[0], broken: !!a[1], barricade: a[2], locked: !!a[3], hp: a[4] }); }
     const wById = new Map(this.world.windows.map((x) => [x.id, x]));
-    for (const [id, a] of Object.entries(d.windows || {})) { const w = wById.get(id); if (w) this.interact.applyWindowState(w, { broken: !!a[0], barricade: a[1], hp: a[2] }); }
+    for (const [id, a] of Object.entries(d.windows || {})) { const w = wById.get(id); if (w) this.interact.applyWindowState(w, { broken: !!a[0], barricade: a[1], hp: a[2] }, true); }
   }
 
   /** İstemci: host'tan gelen tam durum */
@@ -878,7 +893,9 @@ export class Session {
     this.disposed = true;
     this.audio.occluder = null;
     this.audio.setEnvironment(false);
-    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.doorPhys, this.drawers, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    if (this.buoyancyOff) this.buoyancyOff();
+    if (this.contacts) this.contacts.dispose();
     if (this.living) for (const l of Object.values(this.living)) { this.game.scene.remove(l.mesh); l.mesh.geometry.dispose(); l.mesh.material.dispose(); }
     for (const p of this.players.values()) if (p.avatar && !p.isLocal) p.avatar.dispose();
     this.local.dispose();

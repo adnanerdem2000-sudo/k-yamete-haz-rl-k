@@ -38,4 +38,6 @@
   (oyuna dönmek için ekrana tıkla).
 - Karakter kıyafetlerinde kumaş dokusu/normal haritası yoktur (modüler taban UV'siz; renk ve pürüzlülük köşe
   başınadır). 103 kafa×gövde kombinasyonunda geometrik boşluk ölçülmedi (`tools/dev/outfit-combos.mjs`).
+- Menteşeli kapı ve çekmece açıları her istemcide yerel simüle edilir; E ile aç/kapat ve iterek açma durumu
+  eşitlenir, ara açılar istemciler arasında küçük farklar gösterebilir.
 - Bazı nadir karakter giysi kombinasyonlarında doku dikişleri görülebilir.

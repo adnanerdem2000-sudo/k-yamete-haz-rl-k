@@ -45,6 +45,7 @@ export class PhysProps {
     this.props = [];
     this.byId = new Map();
     this.debris = [];
+    this.pool = { wood: [], glass: [], metal: [] }; // enkaz ağ havuzu (nesne yeniden kullanımı; gövde yeniden kurulur)
     this.group = new THREE.Group();
     this.group.name = 'physprops';
     session.game.scene.add(this.group);
@@ -131,6 +132,7 @@ export class PhysProps {
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
     const d = this.pw.addDynamic(g, shape, x, y, z, { quat: { x: q.x, y: q.y, z: q.z, w: q.w }, density: def.mass / Math.max(0.01, vol), friction: 0.7, bounce: 0.1, group: G.PROP, linDamp: 0.2, angDamp: 0.5 });
     d.body.sleep();
+    if (S.contacts) S.contacts.register(d, def.shape === 'cyl' ? (kind === 'trash' ? 'plastic' : 'metal') : 'wood');
     const prop = { id, kind, def, d, alive: true, carrier: null };
     d.prop = prop;
     this.props.push(prop);
@@ -263,9 +265,11 @@ export class PhysProps {
   /** Enkaz: tahta (kapı/pencere/yapı), cam kırıkları, metal parçalar */
   burst(x, y, z, kind = 'wood', n = 5, dir = null) {
     if (!this.pw) return;
+    const pk = kind === 'glass' ? 'glass' : kind === 'metal' ? 'metal' : 'wood';
     for (let i = 0; i < n; i++) {
       const glass = kind === 'glass';
-      const mesh = new THREE.Mesh(glass ? SHARD_GEO : PLANK_GEO, glass ? SHARD_MAT : kind === 'metal' ? metalMat() : PLANK_MAT);
+      const mesh = this.pool[pk].pop() || new THREE.Mesh(glass ? SHARD_GEO : PLANK_GEO, glass ? SHARD_MAT : kind === 'metal' ? metalMat() : PLANK_MAT);
+      mesh.userData.pool = pk;
       mesh.castShadow = !glass;
       this.group.add(mesh);
       const sx = (Math.random() - 0.5), sz = (Math.random() - 0.5);
@@ -274,13 +278,19 @@ export class PhysProps {
         vel: { x: vx, y: 1.5 + Math.random() * 3, z: vz }, spin: { x: (Math.random() - 0.5) * 12, y: (Math.random() - 0.5) * 12, z: (Math.random() - 0.5) * 12 },
         density: glass ? 2500 : 600, friction: 0.8, bounce: 0.25, group: G.DEBRIS,
       });
+      if (this.s.contacts) this.s.contacts.register(d, glass ? 'glass' : kind === 'metal' ? 'metal' : 'wood');
       this.debris.push({ d, mesh, life: 14 + Math.random() * 6 });
     }
     // eski enkazı sınırla
     while (this.debris.length > 90) this.killDebris(this.debris.shift());
   }
 
-  killDebris(x) { this.pw.removeDynamic(x.d); this.group.remove(x.mesh); }
+  killDebris(x) {
+    this.pw.removeDynamic(x.d);
+    this.group.remove(x.mesh);
+    const pk = x.mesh && x.mesh.userData.pool;
+    if (pk && this.pool[pk].length < 60) this.pool[pk].push(x.mesh);
+  }
 
   /** Savrulan ceset (araç çarpması/patlama): görünüm kökü fizik kapsülünü izler */
   launchCorpse(view, dir, force) {
@@ -297,6 +307,7 @@ export class PhysProps {
       spin: { x: dir[1] * f * 0.5 + (Math.random() - 0.5) * 3, y: (Math.random() - 0.5) * 4, z: -dir[0] * f * 0.5 + (Math.random() - 0.5) * 3 }, density: 650, friction: 0.9, bounce: 0.05, group: G.CORPSE,
       filter: G.STATIC | G.PROP, linDamp: 0.3, angDamp: 1.2, visualOffset: new THREE.Vector3(0, -0.8, 0),
     });
+    if (this.s.contacts) this.s.contacts.register(d, 'body');
     view.corpseBody = d;
     this.debris.push({ d, mesh: null, life: 8, view });
   }

@@ -71,6 +71,27 @@ _(aşamalar ilerledikçe doldurulur)_
 - Kıyafetlerde dikiş/kumaş dokusu ve normal haritası: **yapılmadı** (modüler tabanın UV'si yok; köşe renkleriyle
   çalışıyor). Daha kaliteli saç geometrisi: **yapılmadı** (taban modelin saçı, ton gradyanıyla iyileştirildi).
 
+### Aşama 3 — Fizik
+- **Menteşeli kapılar:** 199 bina kapısı (ahşap/metal/lab) dinamik kanat + dönel eklem; E motoru sürer, yürüyerek
+  itilir (itilince durum host'a gider), kilitli/barikatlı sabit, kırılınca eklem kopar ve kanat düşer; zombi
+  yumruğunda sarsılır. Garaj/kasa/hücre/cam kapılar eski (kinematik) yolda kaldı. `physics2` senaryosu: aç →
+  open01 1; kapat → 0,12; iterek aç → open01 1 ve durum eşitlendi (target 1); kilitli kapı 400 N·s itkiye sabit;
+  kırılma → eklem yok, kanat 7,41 → 6,33 m'ye düştü. **Bulunan hata:** itme algılayıcısı, kapat komutundan hemen
+  sonra motor kapatırken "oyuncu itti" sanıp kapıyı yeniden açıyordu → komuttan sonra 2 sn itme sayılmaz.
+- **Çekmeceler:** şifonyer, komodin, masa, dosya dolabı, tezgâh… konteynerlerinde kayar eklemli çekmece;
+  aranırken/panel açıkken dışarı kayar, kapanınca içeri; oyuncu iterse kapanır. Oyuncuya yakın en fazla 14 aktif.
+- **Su:** dinamik nesnelere yoğunluğa göre kaldırma kuvveti, su direnci, dalga ve doğrultma. **Bulunan hata:**
+  Rapier'de `addForce` kalıcıdır; ilk sürümde kuvvet her adımda birikip nesneleri fırlatıyor ve simülasyonu
+  kasıyordu → her adımda `resetForces`.
+- **Çarpışma sesleri:** temas kuvveti olaylarından malzemeye (metal/ahşap/plastik/cam/gövde) ve şiddete göre sentez
+  ses; gövde başına 0,22 sn, adım başına ≤ 4 ses. Enkaz ağları havuzlanır (nesne yeniden kullanımı). Test: düşen
+  varil → metal darbe şiddet 1 / 0,8 / 0,69, düşen kutu → ahşap 0,6 / 0,73; su: kutu 4 sn sonra y 4,13 (su 4,2);
+  çekmece panel açılınca 0,339 m dışarı, kapanınca 0,001 m.
+- **Test ortamı notu:** yazılım GPU'sunda `physics2` koşusunda kare süresi saniyelere çıktı (fizik 2–3 adım/sn;
+  simülasyon doğru ama yavaş); senaryo beklemeleri fizik adımıyla ölçüldüğü için sonuçlar geçerli, "sim hızı"
+  denetimi bu ortamda başarısız kalıyor (kare süresi sondası `tools/dev/perf-probe.mjs` ile inceleniyor).
+- Araçla çite/duvara çarpınca yapı hasarı: **Aşama 5'e** (araç çarpışma modeli) bırakıldı.
+
 ## 6. Test edilemeyenler
 - Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
 - Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).

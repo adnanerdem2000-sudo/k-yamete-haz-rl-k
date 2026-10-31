@@ -70,6 +70,18 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   (yanmış araç enkazı).
 - **Çarpışma ızgarası:** AABB/daire çarpıştırıcılar (yürünebilir zeminler, merdivenler, köprü karoları);
   her çarpıştırıcı Rapier'de statik bir kopya olarak aynalanır (açılan kapılar vb. eşzamanlı).
+- **Menteşeli kapılar (`physics/DoorPhysics`):** ahşap/metal/lab bina kapıları Rapier'de dinamik kanat gövdesi +
+  dönel eklem (menteşe, açı sınırı). E ile aç/kapat eklem motorunu hedef açıya sürer; oyuncu yürüyerek iter
+  (karakter denetleyicisi 80 kg itki), nesne/araç çarpınca savrulur, zombi yumruklayınca sarsılır (her
+  istemcide görünüm durumundan). Kilitli/barikatlı kapı sabit gövde. Kırılınca eklem kopar, kanat düşer,
+  uyuyunca gövde kaldırılır. Görsel kanadın gerçek dönüşümünden yazılır (açı ve çarpışma alanı birebir).
+  Oyun tarafı AABB (yol bulma, görüş hattı, zombi engeli) kalır ama Rapier'e aynalanmaz. İterek açılan kapı
+  0,35 sn sonra host'a `door` eylemi gönderir (kilitli değilse) → durum herkeste eşitlenir.
+- **Su fiziği (`physics/Buoyancy`):** dinamik nesneler suya girince batan hacim oranında kaldırma kuvveti
+  (yoğunluğa göre: ahşap/plastik/varil yüzer, cam batar), su direnci, hafif dalga ve doğrultucu tork.
+- **Çarpışma sesleri (`physics/ContactSounds`):** Rapier temas kuvveti olayları (EventQueue) → nesnenin
+  malzemesine (metal/ahşap/plastik/cam/gövde) ve şiddetine göre sentez ses (`AudioManager.impact`); gövde başına
+  0,22 sn, adım başına en fazla 4 ses (yuvarlanan varil ses patlaması yapmaz).
 - **Fizik (Rapier 3D):** sabit 1/60 sn adım + çizimde enterpolasyon; oyuncu kapsülü kinematik karakter
   denetleyicisiyle (basamak, eğim, kayma), araçlar ışın tabanlı araç denetleyicisiyle (süspansiyon,
   tutunma sınırlı direksiyon, fren, devrilme önleyici); itilebilir/patlayan nesneler, enkaz, cesetler.

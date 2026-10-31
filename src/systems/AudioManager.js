@@ -166,6 +166,26 @@ export class AudioManager {
     return g;
   }
 
+  /**
+   * Fiziksel çarpışma sesi: material metal|wood|glass|plastic|body|other, sev 0..1 (temas kuvveti), mass kg.
+   * Ağır nesne daha gür ve uzaktan duyulur; cam kırılma sesi şiddete göre kısılır.
+   */
+  impact(material, sev, at, mass = 5, against = 'ground') {
+    if (!this.ctx || !this.enabled) return;
+    const vol = Math.min(1, 0.12 + sev * 0.88) * Math.min(1.3, 0.55 + mass / 45);
+    const range = 24 + sev * 22 + Math.min(20, mass / 4);
+    const rate = 1 + (Math.random() - 0.5) * 0.18;
+    switch (material) {
+      case 'glass': this.play('glass', { at, vol: vol * 0.6, range }); break;
+      case 'metal': this.play('impact_metal', { at, vol, range, rate: rate * (mass > 20 ? 0.8 : 1.1) }); break;
+      case 'wood': this.play('impact_wood', { at, vol, range, rate }); break;
+      case 'plastic': this.play('impact_plastic', { at, vol: vol * 0.8, range }); break;
+      case 'body': this.play('impact_body', { at, vol: vol * 0.9, range }); break;
+      default: this.play('hit', { at, vol: vol * 0.7, range });
+    }
+    void against;
+  }
+
   /** Örnek ya da sentez sesi çal */
   play(name, o = {}) {
     if (!this.ctx || !this.enabled) return;
@@ -265,6 +285,11 @@ export class AudioManager {
     S.bark = (v, p) => { const c = self.ctx; for (let i = 0; i < 2; i++) { const t = c.currentTime + i * 0.18; const o = c.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.1); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500; const g = c.createGain(); self.env(g, t, 0.005, v * 0.35, 0.12); o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.15); } };
     S.door = (v, p) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.6); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 18; f.frequency.setValueAtTime(600, t); f.frequency.linearRampToValueAtTime(900 + Math.random() * 400, t + 0.45); const g = c.createGain(); self.env(g, t, 0.05, v * 0.6, 0.45); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.6); };
     S.bash = (v, p) => { S.hit(v * 1.2, p); const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g = c.createGain(); self.env(g, t, 0.002, v * 0.7, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.3); };
+    // çarpışma sesleri (malzemeye göre): metal çınlama, ahşap tok vuruş, plastik boş tıkırtı, gövde düşüşü
+    S.impact_metal = (v, p, o = {}) => { const c = self.ctx, t = c.currentTime, r = o.rate || 1; for (const [f0, a, d] of [[420 * r, 0.5, 0.35], [1130 * r, 0.3, 0.22], [2650 * r, 0.14, 0.12]]) { const os = c.createOscillator(); os.type = 'triangle'; os.frequency.setValueAtTime(f0, t); os.frequency.exponentialRampToValueAtTime(f0 * 0.92, t + d); const g = c.createGain(); self.env(g, t, 0.001, v * a, d); os.connect(g); g.connect(self.out('sfx', 1, p)); os.start(t); os.stop(t + d + 0.05); } const n = self.noiseSrc(0.08); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1800; f.Q.value = 0.8; const g2 = c.createGain(); self.env(g2, t, 0.001, v * 0.5, 0.05); n.connect(f); f.connect(g2); g2.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.1); };
+    S.impact_wood = (v, p) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(210, t); o.frequency.exponentialRampToValueAtTime(90, t + 0.08); const g = c.createGain(); self.env(g, t, 0.001, v * 0.8, 0.11); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.15); const n = self.noiseSrc(0.09); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; const g2 = c.createGain(); self.env(g2, t, 0.001, v * 0.55, 0.07); n.connect(f); f.connect(g2); g2.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.1); };
+    S.impact_plastic = (v, p) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(640, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.05); const g = c.createGain(); self.env(g, t, 0.001, v * 0.35, 0.07); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.1); };
+    S.impact_body = (v, p) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.14); const g = c.createGain(); self.env(g, t, 0.003, v * 0.9, 0.18); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.22); const n = self.noiseSrc(0.12); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g2 = c.createGain(); self.env(g2, t, 0.002, v * 0.4, 0.1); n.connect(f); f.connect(g2); g2.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.13); };
     S.glass = (v, p) => { const c = self.ctx, t = c.currentTime; for (let i = 0; i < 6; i++) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 2500 + Math.random() * 4000; const g = c.createGain(); self.env(g, t + i * 0.02, 0.001, v * 0.12, 0.3 + Math.random() * 0.4); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t + i * 0.02); o.stop(t + 1); } const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 3000; const g = c.createGain(); self.env(g, t, 0.001, v * 0.6, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t); n.stop(t + 0.3); };
     // ayak sesi: zemine göre süzgeç/uzunluk; ahşapta boğuk tok ses, metalde çınlama, kumda/çimde hışırtı
     const STEP = { grass: ['bandpass', 1900, 0.8, 0.09, 0], dirt: ['lowpass', 1000, 0.7, 0.07, 70], gravel: ['bandpass', 2600, 1.2, 0.08, 60], sand: ['highpass', 2400, 0.6, 0.12, 0], wood: ['lowpass', 750, 1.1, 0.06, 110], hard: ['lowpass', 2400, 0.8, 0.05, 90], tile: ['bandpass', 3000, 1.4, 0.04, 120], metal: ['bandpass', 3400, 9, 0.12, 0], water: ['bandpass', 1300, 1.0, 0.16, 0], snow: ['lowpass', 1400, 0.7, 0.1, 0] };

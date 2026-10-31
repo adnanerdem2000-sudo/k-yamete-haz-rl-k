@@ -90,7 +90,7 @@ export class PhysicsWorld {
     while (this.acc >= STEP && n < 6) {
       for (const h of this.hooks) h(STEP);
       this.recordPrev();
-      this.w.step();
+      this.w.step(this.eventQueue || undefined);
       for (const a of this.after) a(STEP);
       this.acc -= STEP;
       n++;
