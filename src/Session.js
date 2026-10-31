@@ -279,6 +279,7 @@ export class Session {
     if (pl.vault) pl.stepVault(dt);
     else if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.updateLocalDriving(dt, input, blocking);
     else pl.update(dt, input, blocking);
+    if (pl.carryProp) pl.updateCarry(); // taşınan nesne: kinematik hedef fizik adımından önce
     // sabit adımlı fizik (oyuncu kapsülü, araçlar, dinamik nesneler) + enterpolasyonlu çizim
     this.game.phys.update(dt);
     this.updateTimers(dt);
@@ -341,6 +342,7 @@ export class Session {
       this.living.smoke.update(dt, this.env && this.env.weather ? 1 + this.env.weather.storm * 2 : 1);
     }
     this.world.instancer.cull(cam.position, Settings.get('graphics.viewDistance'));
+    this.world.cullInteriors(cam.position, dt);
     this.updateRoofs();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - pl.pos.x, cam.position.z - pl.pos.z) + Math.PI);
     this.audio.setEnvironment(!!pl.inside);

@@ -38,8 +38,10 @@ async function newPage(name = 'p' + pages.length, w = 960, h = 540, sameContext 
 }
 const page = await newPage('p0');
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-const shot = async (p, file) => { try { await p.screenshot({ path: file, timeout: 120000 }); logs.push('[shot] ' + file); } catch (e) { logs.push('[shot-fail] ' + file + ' ' + e.message.split('\n')[0]); } };
-const evalJS = async (p, fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { logs.push('[eval-error] ' + e.message.split('\n')[0]); return undefined; } };
+// tarayıcı/sekme çökmesi ya da kapanması her durumda hata sayılır (yalnız 'crash' olayına güvenilmez)
+const fatal = (msg) => { if (/Target crashed|has been closed|Browser closed|Target closed/i.test(msg)) errors.push('[fatal] ' + msg); };
+const shot = async (p, file) => { try { await p.screenshot({ path: file, timeout: 120000 }); logs.push('[shot] ' + file); } catch (e) { const m = e.message.split('\n')[0]; logs.push('[shot-fail] ' + file + ' ' + m); fatal(m); } };
+const evalJS = async (p, fn, arg) => { try { return await p.evaluate(fn, arg); } catch (e) { const m = e.message.split('\n')[0]; logs.push('[eval-error] ' + m); fatal(m); return undefined; } };
 const log = (...a) => logs.push('[log] ' + a.map((x) => (typeof x === 'string' ? x : JSON.stringify(x))).join(' '));
 const mod = await import(pathToFileURL(path.resolve(scenarioPath)).href);
 let ok = true;

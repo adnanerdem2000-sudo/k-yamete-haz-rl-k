@@ -10,7 +10,7 @@ const GRAV = 21;
 const JUMP_V = 6.1;
 const COYOTE = 0.12;
 const JUMP_BUFFER = 0.14;
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _cq = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0);
 
 export class Player {
   constructor(session, profile) {
@@ -110,7 +110,7 @@ export class Player {
     if (dl > 0) { dx /= dl; dz /= dl; }
     // ---- duruş geçişleri (tavan kontrolüyle)
     if (!uiBlocking && st && !st.downed) {
-      if (input.wasPressed('crouch') && this.sprinting && this.onGround && !this.swimming && moving && st.stamina > 14 && !this.carrying) { this.startRoll(dx, dz); return; }
+      if (input.wasPressed('crouch') && this.sprinting && this.onGround && !this.swimming && moving && st.stamina > 14 && !this.carrying && !this.carryProp) { this.startRoll(dx, dz); return; }
       if (input.wasPressed('crouch')) this.wantStance = this.mode === 'crouch' ? 'stand' : 'crouch';
       if (input.wasPressed('prone')) this.wantStance = this.mode === 'prone' ? 'crouch' : 'prone';
     }
@@ -118,7 +118,7 @@ export class Player {
     else if (this.mode === 'downed') { this.mode = 'ground'; this.applyStance('stand'); }
     else if (this.swimming) this.applyStance('stand');
     else this.applyStance(this.wantStance);
-    const wantSprint = !uiBlocking && input.isDown('sprint') && moving && this.mode !== 'prone' && this.mode !== 'downed' && !this.aiming;
+    const wantSprint = !uiBlocking && input.isDown('sprint') && moving && this.mode !== 'prone' && this.mode !== 'downed' && !this.aiming && !this.carryProp;
     const walkSlow = !uiBlocking && input.keyDown('AltLeft');
     const sm = st ? st.speedMul(this.session.overweight || 0) : 1;
     let target = 0;
@@ -133,6 +133,7 @@ export class Player {
       else target = this.aiming ? 2.4 : base;
       target *= sm;
       if (this.carrying) target *= 0.6;
+      if (this.carryProp) target = Math.min(target, 3.2) * (this.carryProp.def.mass > 14 ? 0.8 : 0.9);
       if (this.grabT > 0) target *= 0.35;
       // geri geri yürürken yavaş
       if (mz < 0 && this.aiming) target *= 0.8;
@@ -174,6 +175,39 @@ export class Player {
     this.lockMove = Math.max(0, this.lockMove - dt);
     this.grabT = Math.max(0, (this.grabT || 0) - dt);
     this.recoil = damp(this.recoil, 0, 9, dt);
+  }
+
+  /** Hafif fizik nesnesini (kutu, kasa, çöp kovası) eline al: gövde kinematiğe geçer, önünde taşınır */
+  pickProp(prop) {
+    if (!prop || this.carryProp) return;
+    const pw = this.game.phys;
+    pw.setCarried(prop.d, true);
+    this.carryProp = prop;
+    this.avatar.play('pickup', 0.5);
+    this.session.audio && this.session.audio.play('pickup', { vol: 0.4, rate: 0.8 });
+  }
+
+  /** Bırak (throw: ileri fırlat) — gövde yeniden dinamik olur, oyuncunun hızını devralır */
+  dropProp(throwIt = false) {
+    const p = this.carryProp;
+    if (!p) return;
+    this.carryProp = null;
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const k = throwIt ? 7.5 - Math.min(3, p.def.mass / 6) : 0.6;
+    this.game.phys.setCarried(p.d, false, { x: this.vel.x + fx * k, y: throwIt ? 2.6 : 0.2, z: this.vel.z + fz * k });
+    if (throwIt) { this.avatar.play('throw', 0.5); this.session.audio && this.session.audio.play('whoosh', { vol: 0.35 }); }
+  }
+
+  /** Taşınan nesneyi her karede gövdenin önünde göğüs hizasında tut */
+  updateCarry() {
+    const p = this.carryProp;
+    if (!p) return;
+    if (!p.alive || this.mode !== 'ground' || (this.stats && this.stats.downed)) { this.dropProp(false); return; }
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
+    const h = (p.def.h || 0.7) * 0.5;
+    _v.set(this.pos.x + fx * (0.55 + h * 0.4), this.pos.y + 1.0 + Math.max(0, 0.35 - h), this.pos.z + fz * (0.55 + h * 0.4));
+    _cq.setFromAxisAngle(_up, this.yaw);
+    this.game.phys.moveCarried(p.d, _v, _cq);
   }
 
   /** Takla başlat: hareket yönünde ~4 m yuvarlanma */
@@ -359,6 +393,7 @@ export class Player {
     this.vel.set(0, 0, 0);
     this.climbDir = this.pos.y < (l.top + l.bottom) / 2 ? 1 : -1;
     this.syncBody();
+    this.avatar.play('ladderIn', 0.55);
   }
 
   updateLadder(dt, input) {
@@ -373,6 +408,7 @@ export class Player {
       const ax = l.exitX ?? l.cx ?? l.x, az = l.exitZ ?? l.cz ?? l.z;
       this.pos.x = ax; this.pos.z = az;
       this.mode = 'ground'; this.ladder = null;
+      this.avatar.play('ladderOut', 0.7);
     } else if (this.pos.y <= l.bottom) {
       this.pos.y = l.bottom; this.mode = 'ground'; this.ladder = null;
       this.pos.x += Math.sin(this.yaw + Math.PI) * 0.6; this.pos.z += Math.cos(this.yaw + Math.PI) * 0.6;
@@ -466,7 +502,7 @@ export class Player {
     const moveAngle = sp > 0.3 ? wrapAngle(Math.atan2(this.vel.x, this.vel.z) - this.yaw) : 0;
     return {
       mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.mode === 'climb' ? this.climbV || 0 : this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
-      aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying,
+      aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying, carryBox: !!this.carryProp,
       mood: st && st.morale < 30 ? 1 : 0, tired: !!(st && st.stamina < 15), act: this.avatar.lastAct || null, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
     };
   }

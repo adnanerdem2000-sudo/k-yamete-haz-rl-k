@@ -133,6 +133,26 @@ export class World {
     }
   }
 
+  /**
+   * İç mekân ağlarını uzakta gizle: yalnızca iç yüzeylere ait malzemeler (iç duvar, parke, fayans, halı)
+   * — dışarıdan pencere ardında bile 45 m ötesinde görünmezler; çizim çağrısını ciddi azaltır.
+   */
+  cullInteriors(camPos, dt = 0.016) {
+    if (!this._interiors) {
+      this._interiors = [];
+      for (const b of this.buildings) {
+        if (!b.shell) continue;
+        const cx = (b.box.minX + b.box.maxX) / 2, cz = (b.box.minZ + b.box.maxZ) / 2, rad = Math.hypot(b.box.maxX - b.box.minX, b.box.maxZ - b.box.minZ) / 2;
+        for (const m of b.shell.children) if (m.isMesh && /geo_(interior|woodfloor|tiles|carpet)$/.test(m.material && m.material.name)) this._interiors.push({ m, cx, cz, rad });
+      }
+      this._icT = 0;
+    }
+    this._icT -= dt;
+    if (this._icT > 0) return;
+    this._icT = 0.25;
+    for (const it of this._interiors) it.m.visible = Math.hypot(it.cx - camPos.x, it.cz - camPos.z) - it.rad < 45;
+  }
+
   addGeo(geo, parent = this.root) {
     const meshes = geo.toMeshes();
     for (const m of meshes) parent.add(m);

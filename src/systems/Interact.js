@@ -272,8 +272,24 @@ export class Interact {
         return;
       }
     }
+    // elde taşınan nesne: E bırak (sol tık fırlatma Player'da)
+    if (pl.carryProp) {
+      S.ui.setPrompt({ label: 'Bırak', key: input.label('interact'), sub: 'Sol tık: fırlat' });
+      if (input.wasPressed('interact')) pl.dropProp(false);
+      return;
+    }
     const t = this.findTarget();
     this.target = t;
+    // önündeki hafif nesneyi (kutu, kasa, çöp kovası…) eline al: başka hedef yoksa ya da nesne ondan yakınsa
+    let cp = !pl.carrying && pl.mode === 'ground' && S.props ? S.props.nearestCarryable(pl.pos.x, pl.pos.y, pl.pos.z, pl.yaw) : null;
+    if (cp && t && t.d !== undefined && t.d < cp.dist) cp = null;
+    if (cp && t && t.d === undefined) cp = null; // mesafesiz özel hedefler (araçtan in, sırttaki arkadaş) öncelikli
+    if (cp) {
+      this.target = null;
+      S.ui.setPrompt({ label: 'Taşı', key: input.label('interact') });
+      if (input.wasPressed('interact')) pl.pickProp(cp);
+      return;
+    }
     S.ui.setPrompt(t ? { label: t.label, key: t.key || input.label('interact'), sub: t.sub, holdHint: t.holdTime > 0 } : null);
     // yaralı arkadaşı sırtlama / bırakma
     if (input.wasPressed('reload')) {
@@ -391,14 +407,14 @@ export class Interact {
         return;
       }
       if (inv.has('crowbar')) {
-        this.startHold('Kapı zorlanıyor… (gürültülü)', 4, () => { S.act('door', { id: d.id, open: true, unlock: true }); S.act('noise', { x: d.center.x, z: d.center.z, r: 35, src: 'pry' }); }, 'search');
+        this.startHold('Kapı zorlanıyor… (gürültülü)', 4, () => { S.act('door', { id: d.id, open: true, unlock: true }); S.act('noise', { x: d.center.x, z: d.center.z, r: 35, src: 'pry' }); }, 'push');
         return;
       }
       S.ui.toast('Kilitli. Maymuncuk, levye ya da anahtar gerekli.', 'warn');
       return;
     }
     S.act('door', { id: d.id, open: d.target < 0.5 });
-    S.local.avatar.play('pickup', 0.3);
+    S.local.avatar.play('interact', 0.55); // kapı koluna uzanma (yerden alma değil)
   }
 
   useSpecial(it, t) {

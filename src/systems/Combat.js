@@ -58,6 +58,8 @@ export class Combat {
     S.ui.setCrosshair(pl.aiming || (def && def.gun) ? (this.scoped ? 'scope' : 'aim') : canAct ? 'dot' : null, this.currentSpread(def));
     this.attacking = this.swing !== null;
     if (!canAct || S.interact.hold || pl.carrying) return;
+    // elde taşınan nesne: sol tık fırlatır (silah/vuruş yok)
+    if (pl.carryProp) { if (input.mouse.leftPressed) pl.dropProp(true); return; }
     const reviveTarget = S.interact.target && S.interact.target.kind === 'revive';
     if (input.wasPressed('reload') && def && def.gun && !S.build.placing && !reviveTarget) this.reload();
     if (!(input.mouse.leftPressed || (input.mouse.left && def && def.gun && def.gun.auto))) return;

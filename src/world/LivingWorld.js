@@ -3,7 +3,7 @@
 // gölgelendiricisinde (kanat çırpma, duman kartlarının kameraya dönmesi), CPU yalnız örnek matrislerini yazar.
 import * as THREE from 'three';
 
-const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _Y = new THREE.Vector3(0, 1, 0);
+const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _p = new THREE.Vector3(), _s = new THREE.Vector3(), _e = new THREE.Euler(0, 0, 0, 'YXZ');
 
 /** Basit kuş: gövde + iki kanat (kanat ucu köşelerinde aWing = ±1; gölgelendirici çırpar) */
 function birdGeometry() {
@@ -68,7 +68,7 @@ export class Birds {
         const y = gy + f.alt + b.h + Math.sin(this.t * 0.8 + b.ph) * 2.5 + up;
         // yön: çember teğeti (+Z ileri), dönüşe doğru yatış
         const yaw = Math.atan2(-Math.sin(b.a) * (f.dir || 1), Math.cos(b.a) * (f.dir || 1));
-        _q.setFromEuler(new THREE.Euler(0, yaw, -0.35 * (f.dir || 1), 'YXZ'));
+        _q.setFromEuler(_e.set(0, yaw, -0.35 * (f.dir || 1), 'YXZ'));
         _m.compose(_p.set(x, y, z), _q, _s.setScalar(1.1));
         this.mesh.setMatrixAt(i++, _m);
       }

@@ -778,6 +778,20 @@ export class Vehicles {
     v.revMat.emissiveIntensity = on && sp < -0.4 ? 1.2 : 0;
   }
 
+  /** Arazide/toprak yolda hızlı giden aracın arkasından toz (asfaltta ve ıslakken yok) */
+  dustTrail(v, dt) {
+    const sp = Math.abs(v.speed || 0);
+    if (sp < 6 || v.def.water || !v.pos) return;
+    const S = this.s, T = S.world.terrain;
+    if (S.env && S.env.weather && S.env.weather.rain > 0.2) return;
+    const ix = Math.round((v.pos.x + T.half) / T.cell), iz = Math.round((v.pos.z + T.half) / T.cell);
+    const k = T.idx(clamp(ix, 0, T.N), clamp(iz, 0, T.N));
+    if (T.roadMask[k] >= 1) return; // asfalt (yol kenarı/toprak geçişte toz olur)
+    if (Math.random() > dt * sp * 0.9) return;
+    const bx = v.pos.x - Math.sin(v.yaw) * v.def.len * 0.45, bz = v.pos.z - Math.cos(v.yaw) * v.def.len * 0.45;
+    S.fx.dust(bx + (Math.random() - 0.5) * v.def.wid * 0.8, v.pos.y + 0.25, bz, 2);
+  }
+
   update(dt) {
     const S = this.s;
     const alpha = S.game.phys ? S.game.phys.alpha : 1;
@@ -786,6 +800,7 @@ export class Vehicles {
       this.syncVisual(v, alpha);
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
       this.updateTailLights(v, dt, false);
+      this.dustTrail(v, dt);
       if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
       else S.audio.stopLoop('engine_' + v.id);
       if (v.wrecked && Math.random() < dt * 3) S.fx.smoke(v.pos.x, v.pos.y + 1.5, v.pos.z, 1, '#333333');
@@ -795,6 +810,7 @@ export class Vehicles {
       const v = this.local;
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
       this.updateTailLights(v, dt, true);
+      this.dustTrail(v, dt);
       if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 3) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#555555');
     }
   }

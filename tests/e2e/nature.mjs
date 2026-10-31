@@ -38,6 +38,8 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
       c.position.set(x + off[0], y + off[1], z + off[2]);
       c.lookAt(x + look[0], T.heightAt(x + look[0], z + look[2]) + look[1], z + look[2]);
       g.world.vegetation.update(c.position, 420, true, 1);
+      g.world.cullInteriors(c.position, 1);
+      g.world.instancer.cull(c.position, 420);
       g.env.update(0.016, g.time, hour * 60, c.position, null);
       const R = g.gfx.renderer;
       R.info.autoReset = false; R.info.reset();

@@ -132,6 +132,23 @@ export class PhysicsWorld {
     return d;
   }
 
+  /**
+   * Taşıma: gövde kinematiğe alınır (oyuncu kapsülüyle çarpışmaz, diğer nesneleri iter); bırakınca yeniden
+   * dinamik olur. vel: bırakma/fırlatma hızı.
+   */
+  setCarried(d, on, vel = null) {
+    if (!d || !this.dynamic.has(d)) return;
+    d.body.setBodyType(on ? RAPIER.RigidBodyType.KinematicPositionBased : RAPIER.RigidBodyType.Dynamic, true);
+    d.col.setCollisionGroups(groups(G.PROP, on ? (G.STATIC | G.PROP | G.DEBRIS) : (G.STATIC | G.VEHICLE | G.PROP | G.PLAYER | G.DEBRIS | G.CORPSE)));
+    d.carried = !!on;
+    if (!on) { d.body.wakeUp(); if (vel) d.body.setLinvel(vel, true); }
+  }
+  moveCarried(d, pos, quat) {
+    if (!d || !d.carried) return;
+    d.body.setNextKinematicTranslation(pos);
+    d.body.setNextKinematicRotation(quat);
+  }
+
   removeDynamic(d) {
     if (!d || !this.dynamic.has(d)) return;
     this.dynamic.delete(d);

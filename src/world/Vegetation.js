@@ -365,13 +365,17 @@ export class Vegetation {
     this.imp = { im, tileAttr, rt, mat };
   }
 
-  /** Mesafeye göre bantlara dağıt (kamera 6 m'den fazla kaydıkça ya da 0.5 sn'de bir) */
+  /** Mesafeye göre bantlara dağıt (kamera 8 m'den fazla kaydıkça ya da 1 sn'de bir) */
   update(camPos, viewDist, grassOn = true, dt = 0.016, quality = 'medium') {
     if (!this.groups) return;
     const RANGE = RANGES[quality] || RANGES.medium;
     if (!this.imp && this.renderer && this.impKeys.size) this.buildImpostors(this.renderer);
     this.t += dt;
-    if (this.last && this.t < 0.5 && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 6 && this.last.v === viewDist && this.last.g === grassOn && this.last.i === !!this.imp && this.last.q === quality) return;
+    if (this.last && this.t < 1.0 && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 8 && this.last.v === viewDist && this.last.g === grassOn && this.last.i === !!this.imp && this.last.q === quality) return;
+    // gerçek zamanla da sınırlı (en sık 0.2 sn): toplu adımlamada/ışınlanmada art arda yüklemeler olmasın
+    const nowMs = performance.now();
+    if (this.last && this.last.q === quality && this.last.v === viewDist && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 50 && nowMs - (this._ms || 0) < 200) return;
+    this._ms = nowMs;
     this.t = 0;
     this.last = { x: camPos.x, z: camPos.z, v: viewDist, g: grassOn, i: !!this.imp, q: quality };
     for (const g of this.meshes) g.n = 0;
@@ -400,16 +404,20 @@ export class Vegetation {
         g.n++;
       }
     }
+    // yalnız kullanılan aralığı yükle (kapasite çim için on binlerce örnek: tamamını her seferinde göndermek
+    // bant genişliği ve sürücü belleği israfıydı)
+    const upload = (attr, n) => { attr.clearUpdateRanges(); attr.addUpdateRange(0, Math.max(1, n) * attr.itemSize); attr.needsUpdate = true; };
     for (const g of this.meshes) for (const im of g.ims) {
+      const was = im.count;
       im.count = g.n;
       im.visible = g.n > 0;
-      if (g.n > 0) im.instanceMatrix.needsUpdate = true;
+      if (g.n > 0 || was > 0) upload(im.instanceMatrix, g.n);
     }
     if (imp) {
       imp.im.count = ni;
       imp.im.visible = ni > 0;
-      imp.im.instanceMatrix.needsUpdate = true;
-      imp.tileAttr.needsUpdate = true;
+      upload(imp.im.instanceMatrix, ni);
+      upload(imp.tileAttr, ni);
     }
   }
 }

@@ -73,10 +73,12 @@ const UAL_ACTIONS = {
   vault: { clip: 'SafetyVault', mask: 'full', fadeIn: 0.05, fadeOut: 0.1 },
   climbUp: { clip: 'ClimbUp_1m', mask: 'full', fadeIn: 0.05, fadeOut: 0.12 },
   climbUp2: { clip: 'ClimbUp_2m', mask: 'full', fadeIn: 0.05, fadeOut: 0.15 },
+  ladderIn: { clip: 'Climb_Enter', mask: 'full', from: 0.1, to: 0.95, fadeIn: 0.08, fadeOut: 0.2 },
+  ladderOut: { clip: 'Climb_Exit', mask: 'full', from: 0.05, to: 0.9, fadeIn: 0.06, fadeOut: 0.25 },
 };
 const HIT_CLIPS = ['Hit_Chest', 'Hit_Head', 'Hit_Stomach', 'Hit_Shoulder_L', 'Hit_Shoulder_R'];
 // ağda uzak oyunculara yansıtılan eylemler (takla ve ifadeler anim durumunda ayrıca taşınır)
-const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'jump', 'land', 'interact', 'stop']);
+const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'jump', 'land', 'interact', 'push', 'stop']);
 
 // Poz sözlüğü ↔ iskelet maskeleri
 const VSPINE = ['Spine', 'Chest', 'UpperChest', 'Neck', 'Head'].map((n) => BONES.indexOf(n));
@@ -341,7 +343,7 @@ export class Avatar {
     const o = { mask: def.mask, from: def.from, to: def.to, fadeIn: def.fadeIn, fadeOut: def.fadeOut, loop: !!def.loop, group: d.emote ? 'emote' : 'act', rate: def.rate };
     const total = d.fixed ?? Math.max(dur, d.minDur || 0);
     if (!def.loop) { o.dur = total; delete o.rate; }
-    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!M.play(def.clip, o); }
+    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!M.play(def.clip, o); }
     const shot = M.play(def.clip, o);
     if (!shot) return false;
     this.action = { type, t: 0, dur: total, kind, shot, motion: true, then: def.then || d.then || null, loop: false, loopish: !!def.loop };
@@ -579,6 +581,12 @@ export class Avatar {
       if (em && !(this.action && this.action.type === em)) this.playMotion(em, 2.6);
       this._emote = em;
     } else if (a.emote === 'wave' && !this.overlays.some((o) => o.name === 'wave')) this.overlay('wave', 1.6);
+    // elde kutu/kasa taşıma: üst gövde taşıma döngüsü (bacaklar hareket katmanından)
+    if (!!a.carryBox !== !!this._carryBox) {
+      if (a.carryBox) M.play('Walk_Carry_Loop', { mask: 'upper', loop: true, group: 'carry', fadeIn: 0.2, fadeOut: 0.2 });
+      else M.stop('carry');
+      this._carryBox = !!a.carryBox;
+    }
     // dış sistem eylemi bitirdiyse (action = null) döngüdeki klibi durdur
     if (this._mAct && this.action !== this._mAct) {
       M.stopShot(this._mAct.shot); if (this._mAct.next) M.stopShot(this._mAct.next);

@@ -497,7 +497,7 @@ export class Net {
   summaryOf(st) { return { health: Math.round(st.health), maxHealth: st.maxHealth, hunger: Math.round(st.hunger), thirst: Math.round(st.thirst), downed: !!st.downed }; }
 
   compactAnim(a) {
-    return { mode: a.mode, speed: Math.round(a.speed * 10) / 10, vy: Math.round((a.vy || 0) * 10) / 10, yaw: Math.round(a.yaw * 100) / 100, pitch: Math.round((a.pitch || 0) * 100) / 100, aim: !!a.aim, steer: Math.round((a.steer || 0) * 100) / 100, emote: a.emote || null, carrying: !!a.carrying, moveAngle: Math.round((a.moveAngle || 0) * 100) / 100, roll: a.roll ? 1 : 0, tired: a.tired ? 1 : 0, act: a.act || null };
+    return { mode: a.mode, speed: Math.round(a.speed * 10) / 10, vy: Math.round((a.vy || 0) * 10) / 10, yaw: Math.round(a.yaw * 100) / 100, pitch: Math.round((a.pitch || 0) * 100) / 100, aim: !!a.aim, steer: Math.round((a.steer || 0) * 100) / 100, emote: a.emote || null, carrying: !!a.carrying, moveAngle: Math.round((a.moveAngle || 0) * 100) / 100, roll: a.roll ? 1 : 0, tired: a.tired ? 1 : 0, carryBox: a.carryBox ? 1 : 0, act: a.act || null };
   }
 
   sendState() {

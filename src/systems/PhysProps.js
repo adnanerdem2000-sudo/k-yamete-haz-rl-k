@@ -108,6 +108,22 @@ export class PhysProps {
     return prop;
   }
 
+  /** Elde taşınabilecek hafif nesne (≤ 20 kg, patlayıcı değil): oyuncunun önünde 1.7 m içinde en yakını */
+  nearestCarryable(x, y, z, yaw) {
+    let best = null, bd = 1.7;
+    const fx = Math.sin(yaw), fz = Math.cos(yaw);
+    for (const p of this.props) {
+      if (!p.alive || p.def.mass > 20 || p.def.explosive || p.d.carried) continue;
+      const t = p.d.body.translation();
+      const dx = t.x - x, dz = t.z - z, d = Math.hypot(dx, dz);
+      if (d > bd || Math.abs(t.y - y - 0.5) > 1.2) continue;
+      if (d > 0.4 && (dx * fx + dz * fz) / d < 0.3) continue; // önde olsun
+      best = p; bd = d;
+    }
+    if (best) best.dist = bd;
+    return best;
+  }
+
   /** Mermi ışını ile fiziksel nesne kesişimi (Combat çağırır). Dönüş {dist, point, prop} */
   rayHit(o, dir, range) {
     if (!this.pw) return null;

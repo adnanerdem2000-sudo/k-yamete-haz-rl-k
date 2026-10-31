@@ -116,7 +116,7 @@ export class Environment {
 
   /** Gökyüzü kubbesini (paylaşılan malzeme) ve zemin diskini ortam haritasına çiz */
   updateEnvMap(key, k, isNight, overcast) {
-    this.envT = 4; this.envKey = key;
+    this.envT = 20; this.envKey = key;
     const sky = this.world && this.world.sky;
     if (!sky) return;
     if (!this.envSky) { this.envSky = new THREE.Mesh(sky.mesh.geometry, sky.mesh.material); this.envSky.scale.setScalar(500); this.envScene.add(this.envSky); }
@@ -185,10 +185,13 @@ export class Environment {
     sky.uGlow.value = 1 - overcast;
     if (this.flash > 0) { sky.uTop.value.lerp(_c1.set('#e8ecff'), this.flash); sky.uHorizon.value.lerp(_c1.set('#ffffff'), this.flash); }
     this.world.sky.follow(cam);
-    // ortam haritası: 4 sn'de bir ya da gök belirgin değişince (saat dilimi, hava)
+    // ortam haritası: gök belirgin değişince (15 oyun dakikası, bulut, kıyamet/Kanlı Ay) ya da en geç 20 sn'de
+    // bir; art arda değişimlerde en sık 2 sn'de bir (her yenileme bir küp çizimi + bulanıklaştırma)
     this.envT -= dt;
     const ek = `${Math.round(minuteOfDay / 15)}|${Math.round(overcast * 10)}|${Math.round(this.doom * 10)}|${Math.round(this._blood * 10)}`;
-    if (this.envT <= 0 || (ek !== this.envKey && this.envT < 3.5)) this.updateEnvMap(ek, k, isNight, overcast);
+    // gerçek zamana göre de sınırlı (en sık 2.5 sn): zaman hızlandırma/toplu adımlamada küp çizimleri birikmesin
+    const nowMs = performance.now();
+    if ((this.envT <= 0 || (ek !== this.envKey && this.envT < 18)) && nowMs - (this._envMs || 0) > 2500) { this._envMs = nowMs; this.updateEnvMap(ek, k, isNight, overcast); }
     // bölge renk tonu
     this.targetTint.setRGB(1, 1, 1);
     if (region) {

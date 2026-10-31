@@ -209,6 +209,7 @@ export class Zombies {
         if (zb.state === 'chase' && zb.target && zb.target.kind === 'player' && d > 8) continue;
         zb.target = { kind: 'pos', x: x + (this.rng.next() - 0.5) * 4, z: z + (this.rng.next() - 0.5) * 4 };
         zb.state = 'investigate'; zb.alert = Math.max(zb.alert, 0.7); zb.path = null; zb.repath = 0;
+        zb.search = Math.max(zb.search || 0, 1); // ses kaynağının çevresine de bir göz at
       }
     }
     void src;
@@ -366,13 +367,26 @@ export class Zombies {
     if (best && bestScore >= 2) {
       zb.target = { kind: best.kind, id: best.id, x: best.x, z: best.z };
       if (zb.state !== 'attack' && zb.state !== 'bash') zb.state = 'chase';
-      zb.alert = 1; zb.lastSeen = { x: best.x, z: best.z };
+      // son görülen yer + hedefin hız tahmini (görüş kaybolunca nereye gittiği öngörülür)
+      const L = zb.lastSeen, now = S.t;
+      let vx = 0, vz = 0;
+      if (L && L.id === best.id && now - L.t > 0.05 && now - L.t < 2) {
+        vx = (best.x - L.x) / (now - L.t); vz = (best.z - L.z) / (now - L.t);
+        vx = L.vx * 0.6 + vx * 0.4; vz = L.vz * 0.6 + vz * 0.4;
+      }
+      zb.alert = 1; zb.lastSeen = { id: best.id, x: best.x, z: best.z, t: now, vx, vz };
     } else if (best && bestScore >= 1 && zb.state !== 'chase') {
       zb.target = { kind: 'pos', x: best.x, z: best.z };
       zb.state = 'investigate'; zb.alert = Math.max(zb.alert, 0.6);
+      zb.search = Math.max(zb.search || 0, 1);
     } else if (zb.state === 'chase' && zb.alert < 0.3) {
       zb.state = zb.lastSeen ? 'investigate' : 'wander';
-      zb.target = zb.lastSeen ? { kind: 'pos', ...zb.lastSeen } : null;
+      if (zb.lastSeen) {
+        // görüş kaybı: tahmini konuma git (en çok 10 m ileri), oradan 2-3 noktada ara
+        const L = zb.lastSeen, k = Math.min(1.6, 10 / Math.max(0.1, Math.hypot(L.vx || 0, L.vz || 0)));
+        zb.target = { kind: 'pos', x: L.x + (L.vx || 0) * k, z: L.z + (L.vz || 0) * k };
+        zb.search = 2 + (this.rng.next() < 0.5 ? 1 : 0);
+      } else zb.target = null;
     }
     zb.alert = Math.max(0, zb.alert - 0.06);
     // lider etkisi
@@ -461,7 +475,17 @@ export class Zombies {
       }
     } else if (zb.state === 'investigate') {
       goal = zb.target;
-      if (goal && dist(goal.x, goal.z, zb.x, zb.z) < 2) { zb.state = 'wander'; zb.target = null; goal = null; }
+      if (goal && dist(goal.x, goal.z, zb.x, zb.z) < 2) {
+        if ((zb.search || 0) > 0) {
+          // arama: hedefin son gidiş yönüne meyilli yakın bir nokta (köşe başı, çalı arkası…)
+          zb.search--;
+          const L = zb.lastSeen;
+          const base = L && (L.vx || L.vz) ? Math.atan2(L.vx, L.vz) : this.rng.next() * Math.PI * 2;
+          const a = base + (this.rng.next() - 0.5) * 2.4, r = 4 + this.rng.next() * 5;
+          zb.target = { kind: 'pos', x: zb.x + Math.sin(a) * r, z: zb.z + Math.cos(a) * r };
+          goal = zb.target;
+        } else { zb.state = 'wander'; zb.target = null; goal = null; zb.lastSeen = null; }
+      }
     } else if (zb.state === 'bash') {
       const b = zb.bash;
       if (!b || this.bashDone(b)) { zb.state = zb.target ? 'chase' : 'wander'; zb.bash = null; zb.path = null; }

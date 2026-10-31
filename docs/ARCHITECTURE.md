@@ -82,6 +82,13 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   örnekleme (tekrar deseni gizlenir); çimen katmanı prosedürel ot dokusu. Biyom renkleri sRGB doğal tonlar.
 - **Ortam ışığı:** gökyüzü kubbesi + zemin diski 4 sn'de bir (ya da saat/hava değişince) PMREM ortam
   haritasına çizilir (`scene.environment`); yarımküre ışığı buna göre azaltılır.
+- **Şehir kiti (`city.glb`, `tools/pack-city.mjs`):** Downtown City MegaKit hazır tuğla binaları (silüet, ön
+  cephe en yakın yola döndürülür) ve donatı (klima, baba, saksı). İç mekân ağları (iç duvar, parke, fayans,
+  halı) 45 m ötesinde çizilmez (`WorldBuilder.cullInteriors`).
+- **Yaşayan dünya (`LivingWorld`):** karga sürüleri (gürültüde ürker) ve duman sütunları; ikisi de tek
+  örnekli ağ, animasyon gölgelendiricide.
+- **Taşınabilir nesneler:** hafif fizik nesneleri (≤ 20 kg) E ile alınır; gövde kinematiğe geçer ve oyuncu
+  kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır.
 
 ## Karakterler
 - **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
