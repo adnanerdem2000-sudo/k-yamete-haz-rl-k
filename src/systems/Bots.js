@@ -27,8 +27,12 @@ const LINES = {
   stay: ['Burada bekliyorum.', 'Tamam, burayı tutuyorum.'],
   base: ['Üsse dönüyorum, nöbet tutarım.', 'Evde görüşürüz.'],
   ammo: ['Mermim bitti, yakın dövüşe geçiyorum!'],
+  loot: ['Çevreyi arıyorum, işe yarar bir şey bulurum.', 'Dolapları bir yoklayayım.'],
+  build: ['İnşaata yardım ediyorum.', 'Çekici kaptım, geliyorum.'],
+  found: ['Bak ne buldum!', 'Bunlar işimize yarar.'],
+  nothing: ['Burada bir şey yok.', 'Boş… başka yere bakayım.'],
 };
-const ORDERS = { follow: 'Takip et', stay: 'Burada bekle', base: 'Üsse dön, nöbet tut' };
+const ORDERS = { follow: 'Takip et', stay: 'Burada bekle', base: 'Üsse dön, nöbet tut', loot: 'Çevreyi yağmala', build: 'İnşaata yardım et' };
 const _res = { x: 0, z: 0, hit: false, hits: [] };
 
 class Bot {
@@ -100,7 +104,8 @@ export class Bots {
     this.list = [];
     this.rng = new RNG(session.seed + ':bots');
     const S = session;
-    S.on('bot_order', (p) => { const b = this.byId(p.id); if (b && b.order !== undefined) { b.order = p.order; b.anchor = p.order === 'stay' ? { x: b.pos.x, z: b.pos.z } : null; b.say(p.order); } });
+    S.on('bot_order', (p) => { const b = this.byId(p.id); if (b && b.order !== undefined) { b.order = p.order; b.anchor = p.order === 'stay' || p.order === 'loot' || p.order === 'build' ? { x: b.pos.x, z: b.pos.z } : null; b.lootDone = new Set(); b.lootTarget = null; b.say(p.order); S.emit({ k: 'bot_order_set', id: b.id, order: p.order }); } });
+    S.onEvt('bot_order_set', (e) => { const b = this.byId(e.id); if (b) b.order = e.order; const px = this.proxies && this.proxies.get(e.id); if (px) px.order = e.order; });
     S.onEvt('bot_fx', (e) => this.onFx(e));
   }
 
@@ -264,7 +269,31 @@ export class Bots {
         if (dl > 70) { this.teleportNear(b, L.pos); return; }
         run = dl > 9;
       } else if (b.order === 'stay' && b.anchor) fp = b.anchor;
-      else if (b.order === 'base') { const h = S.world.home; fp = h.frame.pt(12.5 + (this.list.indexOf(b) - 1) * 2, 18); run = dist(b.pos.x, b.pos.z, fp.x, fp.z) > 15; }
+      else if (b.order === 'base') {
+        // nöbet: üs çevresinde üç nokta arasında devriye (18–28 sn'de bir değişir)
+        const h = S.world.home, p0 = h.frame.pt(12.5 + (this.list.indexOf(b) - 1) * 2, 18);
+        b.patrolT = (b.patrolT ?? 0) - dt;
+        if (b.patrolT <= 0) { b.patrolT = 18 + Math.random() * 10; b.patrolI = ((b.patrolI ?? 0) + 1) % 3; }
+        const off = [[0, 0], [-6, -5], [6, -5]][b.patrolI ?? 0];
+        fp = { x: p0.x + off[0], z: p0.z + off[1] };
+        run = dist(b.pos.x, b.pos.z, fp.x, fp.z) > 15;
+      } else if (b.order === 'loot') {
+        // yağma: emir verilen yerin 30 m çevresinde aranmamış, kilitsiz konteynerler; 2,5 sn arayıp eşyaları alır
+        const c = this.lootTargetFor(b);
+        if (c) {
+          const d = dist(b.pos.x, b.pos.z, c.x, c.z);
+          if (d > 1.7) { fp = { x: c.x, z: c.z }; b.lootT = 0; }
+          else { b.lootT = (b.lootT || 0) + dt; b.speed = 0; b.yaw = Math.atan2(c.x - b.pos.x, c.z - b.pos.z); if (b.lootT > 2.5) { b.lootT = 0; this.botLoot(b, c); } }
+        } else if (b.anchor) fp = b.anchor;
+      } else if (b.order === 'build') {
+        // inşaat: üsteki bitmemiş yapıya gider, 2 sn'de bir çeyrek ilerletir (8 sn'de biter)
+        const st = this.buildTargetFor(b);
+        if (st) {
+          const d = dist(b.pos.x, b.pos.z, st.x, st.z);
+          if (d > 2.4) fp = { x: st.x, z: st.z };
+          else { b.speed = 0; b.yaw = Math.atan2(st.x - b.pos.x, st.z - b.pos.z); b.buildT = (b.buildT || 0) + dt; if (b.buildT > 2) { b.buildT = 0; S.applyAction('build_work', { id: st.id, amount: 0.25 }, b.id); S.emit({ k: 'bot_fx', id: b.id, a: 'melee', kind: 'hammer' }); } }
+        } else if (b.anchor) fp = b.anchor;
+      }
       if (attack) {
         const d = dist(b.pos.x, b.pos.z, attack.x, attack.z);
         const ranged = b.kit.gun && b.ammo > 0;
@@ -298,6 +327,50 @@ export class Bots {
     if (st.hunger < 40) { const d = take((d) => d && d.cat === 'food' && d.use && d.use.hunger > 0 && !(d.use.poison > 0.3)); if (d) st.consume(d.use); }
     if (st.thirst < 40) { const d = take((d) => d && d.cat === 'drink' && d.use && d.use.thirst > 0); if (d) st.consume(d.use); }
     if (st.health < st.maxHealth * 0.5 || st.cond.bleeding > 0) { const d = take((d) => d && d.cat === 'med' && d.use && (d.use.heal || d.use.bleed)); if (d) st.consume(d.use, st.heal || 1); }
+  }
+
+  /** Yağma hedefi: 30 m içinde aranmamış, kilitsiz, botla aynı bina içinde/dışında olan en yakın konteyner */
+  lootTargetFor(b) {
+    const S = this.s;
+    if (!b.lootDone) b.lootDone = new Set();
+    if (b.lootTarget && !b.lootDone.has(b.lootTarget.id)) {
+      // ulaşılamayan hedef: 20 sn (sim) içinde varılamazsa vazgeç
+      if ((b.lootSince ?? S.t) + 20 < S.t) { b.lootDone.add(b.lootTarget.id); b.lootTarget = null; }
+      else return b.lootTarget;
+    }
+    const a = b.anchor || b.pos, myB = S.world.buildingAt(b.pos.x, b.pos.z, b.pos.y);
+    let best = null, bd = 30;
+    for (const c of S.world.containers) {
+      if (b.lootDone.has(c.id) || c.type === 'safe') continue;
+      const st = S.loot.state.get(c.id);
+      if (st && (st.searched || st.locked)) continue;
+      if (S.world.buildingAt(c.x, c.z) !== myB) continue;
+      const d = dist(a.x, a.z, c.x, c.z);
+      if (d < bd) { bd = d; best = c; }
+    }
+    b.lootTarget = best; b.lootSince = S.t;
+    return best;
+  }
+
+  /** Konteyneri ara ve içindekileri al (host): search_done + loot_take_all → grant bot envanterine */
+  botLoot(b, c) {
+    const S = this.s;
+    (b.lootDone || (b.lootDone = new Set())).add(c.id); b.lootTarget = null;
+    S.applyAction('search_done', { id: c.id }, b.id);
+    const st = S.loot.state.get(c.id);
+    // 'grant' olayı yalnız oyunculara ulaşır: bot envanterine doğrudan aktar, konteyner herkeste boşalır
+    const items = st ? st.slots.filter(Boolean) : [];
+    if (items.length) { st.slots = st.slots.map(() => null); S.emit({ k: 'container', id: c.id, slots: st.slots }); for (const it of items) this.receive(b.id, { ...it }); }
+    b.say(items.length ? 'found' : 'nothing');
+    S.emit({ k: 'bot_fx', id: b.id, a: 'search' });
+  }
+
+  /** İnşaat hedefi: 40 m içinde bitmemiş en yakın yapı */
+  buildTargetFor(b) {
+    const S = this.s;
+    let best = null, bd = 40;
+    for (const st of S.build.structures.values()) { if (st.built >= 1) continue; const d = dist(b.pos.x, b.pos.z, st.x, st.z); if (d < bd) { bd = d; best = st; } }
+    return best;
   }
 
   findDowned(b) {

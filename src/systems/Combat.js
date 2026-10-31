@@ -371,6 +371,11 @@ export class Combat {
           S.fx.smoke(p.x, p.y + 0.3, p.z, 12, '#d0d0d0');
           S.audio.play('alert', { at: { x: p.x, y: p.y, z: p.z }, vol: 1, range: 70 });
           S.ui.toast('Ses bombası zombileri çekiyor!', 'info', 2);
+        } else if (p.kind === 'glass') {
+          // dikkat dağıtıcı: kırılan şişe (cam kırıkları + 32 m ses) → zombiler sesin yerine gider
+          S.act('noise', { x: p.x, z: p.z, r: p.def.throwable.noise || 32, src: 'bottle' });
+          if (S.props) S.props.burst(p.x, p.y + 0.1, p.z, 'glass', 1, [p.vx * 0.05, p.vz * 0.05]);
+          S.audio.play('glass', { at: { x: p.x, y: p.y, z: p.z }, vol: 0.8, range: 40 });
         } else if (p.kind === 'fire') {
           S.act('molotov', { x: p.x, y: S.world.terrain.heightAt(p.x, p.z), z: p.z, r: 4 });
           S.act('noise', { x: p.x, z: p.z, r: 30, src: 'fire' });

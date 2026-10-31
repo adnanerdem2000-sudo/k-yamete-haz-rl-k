@@ -64,26 +64,31 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
   const loot = await evalJS(page, () => {
     const S = window.__game.session, b = S.bots.list[0];
     if (!b) return { err: 'bot yok' };
-    for (const z of S.zombies.list.values()) z.dead = true;
+    for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id); // önceki testlerin zombileri botlara saldırmasın
+    for (const bt of S.bots.list) if (bt.stats.downed) { bt.stats.revive(60); bt.mode = 'ground'; bt.downT = 0; }
     const home = S.world.home;
-    const c = S.world.containers.find((q) => q.building === 'home' && !(S.loot.state.get(q.id) || {}).searched && q.type !== 'safe');
+    const c = S.world.containers.find((q) => q.building === 'home' && !(S.loot.state.get(q.id) || {}).searched && q.type !== 'safe' && home.roomAt(q.x, q.z));
     if (!c) return { err: 'ev konteyneri yok' };
-    b.pos.set(c.x + 3, home.floorY, c.z + 2); b.path = null;
-    S.local.spawnAt(c.x + 4, home.floorY + 0.1, c.z + 3, 0);
+    const room = home.roomAt(c.x, c.z);
+    const cx = (room.minX + room.maxX) / 2, cz = (room.minZ + room.maxZ) / 2;
+    b.pos.set(cx, home.floorY, cz); b.path = null;
+    S.local.spawnAt(cx + 0.8, home.floorY + 0.1, cz + 0.8, 0);
     const inv0 = b.inv.reduce((a, s) => a + s.qty, 0);
     S.applyAction('bot_order', { id: b.id, order: 'loot' }, S.localId);
     let searched = false; let t = 0;
     window.__step(1800, [], () => { t++; if (!searched && (S.loot.state.get(c.id) || {}).searched) searched = t; });
     const inv1 = b.inv.reduce((a, s) => a + s.qty, 0);
-    const anySearched = S.world.containers.filter((q) => q.building === 'home' && (S.loot.state.get(q.id) || {}).searched).length;
-    return { order: b.order, searchedAt: searched ? +(searched / 60).toFixed(1) : null, hedefKonteyner: c.id, evdeArananlar: anySearched, cantaOnce: inv0, cantaSonra: inv1, lootDone: b.lootDone ? b.lootDone.size : null };
+    const aranan = [...(b.lootDone || [])].filter((id) => (S.loot.state.get(id) || {}).searched).length;
+    return { order: b.order, searchedAt: searched ? +(searched / 60).toFixed(1) : null, hedefKonteyner: c.id, oda: room.type, botArananlar: aranan, cantaOnce: inv0, cantaSonra: inv1, lootDone: b.lootDone ? b.lootDone.size : null, downed: b.stats.downed };
   });
   log('yağma emri', loot);
-  check(loot && !loot.err && loot.evdeArananlar >= 1 && loot.cantaSonra >= loot.cantaOnce, 'bot yağma emrinde konteyner aramalı ve eşyaları almalı', loot);
+  check(loot && !loot.err && loot.botArananlar >= 1 && loot.cantaSonra >= loot.cantaOnce, 'bot yağma emrinde konteyner aramalı ve eşyaları almalı', loot);
   // 5) bot inşaat emri: yarım bir tahta duvar yerleştir, emir ver, 30 sn sonra tamamlanmış olmalı
   const build = await evalJS(page, () => {
     const S = window.__game.session, b = S.bots.list[0];
     if (!b) return { err: 'bot yok' };
+    for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id);
+    for (const bt of S.bots.list) if (bt.stats.downed) { bt.stats.revive(60); bt.mode = 'ground'; bt.downT = 0; }
     const home = S.world.home, fr = home.frame;
     // evin önünde geçerli bir yer: birkaç aday dene (bahçe, yol kenarı değil)
     let st = null, p = null, y = 0;
@@ -98,7 +103,7 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     S.applyAction('bot_order', { id: b.id, order: 'build' }, S.localId);
     let doneAt = null, t = 0;
     window.__step(1800, [], () => { t++; if (!doneAt && st.built >= 1) doneAt = t; });
-    return { order: b.order, built: +st.built.toFixed(2), doneAt: doneAt ? +(doneAt / 60).toFixed(1) : null };
+    return { order: b.order, built: +st.built.toFixed(2), doneAt: doneAt ? +(doneAt / 60).toFixed(1) : null, downed: b.stats.downed, mesafe: +Math.hypot(b.pos.x - st.x, b.pos.z - st.z).toFixed(1) };
   });
   log('inşaat emri', build);
   check(build && !build.err && build.built >= 1, 'bot inşaat emrinde yapıyı tamamlamalı', build);

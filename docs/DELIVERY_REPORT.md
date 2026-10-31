@@ -155,6 +155,23 @@ _(aşamalar ilerledikçe doldurulur)_
 - **Yapılmadı:** araç türüne özel kabin modelleri (ortak prosedürel kabin), kapı/bagaj kanatları gövdeden ayrı
   modellenmedi (gövde üstünde ince panel), lastik izi/çamur sıçraması, hasarlı aracın sürüş davranışı (yalnız
   azami hız düşer).
+### Aşama 6 — Zombi ve bot YZ
+- **Sürü:** yol bulma bütçesi en yakındakilere; 60 m'den uzaktakiler seyrek düşünür. Üst üste binme yok: aynı noktaya
+  doğan 12 zombi 3 sn sonra en yakın çift 0,55 m (önce 0,37 m, bir çift iç içeydi); zombi kovalarken oyuncuya
+  en yakın 1,57 m (saldırı menzili dışına çıkmadan içine girmez). Arama davranışı (son görülen yer + tahmin + 2–3
+  arama noktası) korundu.
+- **Dikkat dağıtma:** boş şişe fırlatılabilir; kırılınca cam kırığı + 32 m ses; test: boşta duran zombi 'investigate'
+  durumuna geçip sesin yerine gitti (hedefe 5,3 m).
+- **Botlar:** `loot` emri — ev oturma odasında 3,7 sn'de ilk konteyneri aradı, 30 sn'de 4 konteyner, çanta 2 → 10
+  eşya; `build` emri — yarım tahta çit 8,8 sn'de tamamlandı; `base` nöbeti devriye. Takım ekranında emir ve çanta
+  sayısı; emir anlık görüntüyle istemcilere gider.
+- **Bulunan hatalar (inceleme iş akışı + test):** bot ödülü 'grant' olayı botlara ulaşmıyordu (eşya yok oluyordu) →
+  doğrudan `Bots.receive`; kayıttan dönen/host göçüyle oluşan botta `lootDone` tanımsızdı → kurucu/koruma;
+  ulaşılamayan konteynerde takılma → 20 sn'de vazgeçer; önceki testlerin zombileri botları yere düşürüyordu (test
+  düzeni: zombi temizliği + diriltme).
+- **Yapılmadı:** botların araç sürmesi (yalnız yolcu olarak biner), botların kendi başına üs savunması inşa etmesi
+  (yalnız oyuncunun yerleştirdiği yapıyı tamamlar), zombi sürüsü için akış alanı (flow field) — A* bütçesi yeterli
+  bulundu.
 ## 6. Test edilemeyenler
 - Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
 - Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).

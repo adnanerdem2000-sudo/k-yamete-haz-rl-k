@@ -262,7 +262,7 @@ export class GamePanels {
         const orders = m.isBot ? h('div.orders', Object.entries(S.bots.orders()).map(([k, n]) => button(n, () => { S.act('bot_order', { id: m.id, order: k }); setTimeout(render, 50); }, 'small' + ((S.bots.byId(m.id) || {}).order === k ? ' active' : '')))) : null;
         const kick = net.isHost && !m.isLocal && !m.isBot ? button('Odadan At', () => this.ui.confirm(`${m.name} odadan atılsın mı?`, () => net.kick(m.id)), 'small red') : null;
         rows.append(h('div.team-card' + (m.downed ? '.downed' : ''), { style: { '--c': CHARACTERS[m.charId]?.color } },
-          portrait(m.charId), h('div.team-card-info', h('b', `${m.name}${m.isLocal ? ' (sen)' : ''}${m.isBot ? ' 🤖' : ''}`), h('small', `${CHARACTERS[m.charId]?.role || ''} · ${m.isLocal ? 'burada' : d + ' m uzakta'}${m.downed ? ' · YERDE!' : ''}`),
+          portrait(m.charId), h('div.team-card-info', h('b', `${m.name}${m.isLocal ? ' (sen)' : ''}${m.isBot ? ' 🤖' : ''}`), h('small', `${CHARACTERS[m.charId]?.role || ''} · ${m.isLocal ? 'burada' : d + ' m uzakta'}${m.downed ? ' · YERDE!' : ''}${m.isBot ? ` · ${S.bots.orders()[(S.bots.byId(m.id) || {}).order] || ''}${S.bots.byId(m.id) && S.bots.byId(m.id).inv ? ` · çanta: ${S.bots.byId(m.id).inv.reduce((a, q) => a + q.qty, 0)} eşya` : ''}` : ''}`),
             h('div.mini-bars', h('span', '❤️'), bar(m.health, 1, 'hp'), h('span', '🍖'), bar(m.hunger, 1, 'hu'), h('span', '💧'), bar(m.thirst, 1, 'th'))), orders, kick));
       }
       const mp = net.active ? h('div.mp-box',

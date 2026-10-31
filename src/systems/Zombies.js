@@ -318,19 +318,28 @@ export class Zombies {
     const dark = S.env.darkness || 0;
     let threat = 0;
     const lp = S.local.pos;
-    for (const zb of [...this.list.values()]) {
+    this._players = players;
+    // yol bulma bütçesi en yakındakilere: zombiler oyunculara uzaklığa göre sıralanır (uzaktakiler seyrek düşünür)
+    const order = [];
+    for (const zb of this.list.values()) {
       if (zb.dead) {
         zb.deadT += dt;
         if (zb.deadT > 25) this.removeZombie(zb.id);
         continue;
       }
-      // en yakın oyuncu
       let nearest = null, nd = Infinity;
       for (const p of players) { const d = dist(p.x, p.z, zb.x, zb.z); if (d < nd) { nd = d; nearest = p; } }
+      zb._nd = nd; zb._nearest = nearest;
+      order.push(zb);
+    }
+    order.sort((a, b) => a._nd - b._nd);
+    for (const zb of order) {
+      const nd = zb._nd, nearest = zb._nearest;
+      void nearest;
       // uzaklaşınca havuza geri dön
       if (nd > 170 && !zb.horde) { if (zb.zone) zb.zone.pop++; this.removeZombie(zb.id); continue; }
       zb.think -= dt;
-      if (zb.think <= 0) { zb.think = 0.25 + this.rng.next() * 0.15; this.perceive(zb, players, night, dark); }
+      if (zb.think <= 0) { zb.think = (nd > 60 ? 0.6 : 0.25) + this.rng.next() * 0.15; this.perceive(zb, players, night, dark); }
       this.act(zb, dt, players);
       const ld = dist(lp.x, lp.z, zb.x, zb.z);
       if ((zb.state === 'chase' || zb.state === 'attack' || zb.state === 'bash') && ld < 35) threat += (35 - ld) / 35 * (zb.def.hp > 200 ? 0.5 : 0.25);
@@ -338,7 +347,30 @@ export class Zombies {
       zb.groanT -= dt;
       if (zb.groanT <= 0) { zb.groanT = 4 + this.rng.next() * 9; if (ld < 40) S.audio.play(zb.def.dog ? 'bark' : 'groan', { at: zb, vol: zb.state === 'chase' ? 0.8 : 0.45, range: 40 }); }
     }
+    this.resolveOverlaps();
     this.threatLevel = clamp(threat, 0, 1);
+  }
+
+  /** Üst üste binme yok: komşu hücrelerdeki (3×3) zombi çiftleri 0,55 m'den yakınsa yarı yarıya itilir */
+  resolveOverlaps() {
+    const min = 0.55;
+    const push = (a, b) => {
+      if (a.dead || b.dead) return;
+      const dx = b.x - a.x, dz = b.z - a.z, dd = dx * dx + dz * dz;
+      if (dd < min * min && dd > 1e-6) { const d = Math.sqrt(dd), k = ((min - d) / d) * 0.5; a.x -= dx * k; a.z -= dz * k; b.x += dx * k; b.z += dz * k; }
+    };
+    for (const arr of this.grid.values()) {
+      if (!arr.length) continue;
+      const k0 = Math.floor(arr[0].x / 3), k1 = Math.floor(arr[0].z / 3);
+      for (let i = 0; i < arr.length; i++) {
+        for (let j = i + 1; j < arr.length; j++) push(arr[i], arr[j]);
+        // komşu hücreler (yalnız ileri yöndekiler: çiftler bir kez işlensin)
+        for (const [a, b] of [[1, -1], [1, 0], [1, 1], [0, 1]]) {
+          const o = this.grid.get(((k0 + a) * 7919) ^ (k1 + b));
+          if (o) for (const z of o) push(arr[i], z);
+        }
+      }
+    }
   }
 
   perceive(zb, players, night, dark) {
@@ -616,6 +648,8 @@ export class Zombies {
   moveBy(zb, mx, mz) {
     const S = this.s;
     const r = S.world.physics.resolveCircle(zb.x + mx, zb.z + mz, zb.def.dog ? 0.3 : zb.def.hp > 300 ? 0.5 : 0.33, zb.y, zb.y + 1.7, 0.5, null, _res);
+    // oyuncu/botların içinden geçme: 0,75 m içindeyse dışarı it (saldırı menzili 1 m+ olduğundan vuruş etkilenmez)
+    for (const p of this._players || []) { const dx = r.x - p.x, dz = r.z - p.z, dd = dx * dx + dz * dz; if (dd < 0.5625 && dd > 1e-6 && Math.abs((p.y || zb.y) - zb.y) < 1.6) { const d = Math.sqrt(dd), k = (0.75 - d) / d; r.x += dx * k; r.z += dz * k; } }
     const g = S.world.physics.groundHeight(r.x, r.z, zb.y, 0.55);
     if (g - zb.y > 0.6) return; // çok yüksek
     zb.x = r.x; zb.z = r.z;

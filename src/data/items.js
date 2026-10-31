@@ -40,7 +40,7 @@ export const ITEMS = {
   juice: I('juice', { name: 'Meyve Suyu', cat: 'drink', weight: 0.4, stack: 8, model: ['items', 'carton', 1.0], desc: 'Şekerli ve ferahlatıcı.', use: { thirst: 30, hunger: 5, morale: 3, time: 1 } }),
   soda: I('soda', { name: 'Gazlı İçecek', cat: 'drink', weight: 0.35, stack: 8, model: ['items', 'soda-can', 1.4], desc: 'Kıyamete karşı bir yudum mutluluk.', use: { thirst: 20, morale: 5, energy: 5, time: 0.8 } }),
   energy_drink: I('energy_drink', { name: 'Enerji İçeceği', cat: 'drink', weight: 0.35, stack: 8, rarity: 'uncommon', model: ['items', 'soda-bottle', 1.0], desc: 'Enerjiyi hızla yükseltir. Fazlası uykusuzluk yapar.', use: { thirst: 15, energy: 35, morale: 2, time: 0.8 } }),
-  empty_bottle: I('empty_bottle', { name: 'Boş Şişe', cat: 'misc', weight: 0.08, stack: 10, model: ['items', 'glass', 1.4], desc: 'Su kaynaklarından doldurulabilir.' }),
+  empty_bottle: I('empty_bottle', { name: 'Boş Şişe', cat: 'misc', weight: 0.08, stack: 10, model: ['items', 'glass', 1.4], desc: 'Su kaynaklarından doldurulabilir. Fırlat: kırılma sesi yakındaki zombileri oraya çeker.', throwable: { noise: 32, kind: 'glass' } }),
   // ------------------------------------------------------------ TIBBİ
   bandage: I('bandage', { name: 'Bandaj', cat: 'med', weight: 0.05, stack: 10, model: 'bandage', desc: 'Kanamayı durdurur, biraz iyileştirir.', use: { health: 10, cure: ['bleeding'], time: 2.2, heal: true } }),
   first_aid: I('first_aid', { name: 'İlk Yardım Çantası', cat: 'med', weight: 0.6, stack: 3, rarity: 'uncommon', model: 'medkit', desc: 'Sağlığı artırır. Yaralanmaları ve kanamayı tedavi eder.', use: { health: 45, cure: ['bleeding', 'injury'], time: 3.5, heal: true } }),
