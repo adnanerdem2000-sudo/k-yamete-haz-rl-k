@@ -1,0 +1,36 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#333}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script></head>
+<body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+const r = new THREE.WebGLRenderer({antialias:true}); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x445566);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 2.5));
+const cam = new THREE.PerspectiveCamera(35, innerWidth/innerHeight, 0.1, 100); cam.position.set(0, 1.3, 7); cam.lookAt(0,1.1,0);
+const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d');
+const R = (u0,v0,u1,v1,col)=>{ g.fillStyle=col; g.fillRect(u0*512,v0*512,(u1-u0)*512,(v1-v0)*512); };
+const mode = new URLSearchParams(location.search).get('m') || 'a';
+if (mode==='a') {
+R(0,0,0.625,0.48,'#e33'); R(0.625,0,0.8,0.51,'#3c3'); R(0.8,0,1,0.51,'#33f'); R(0,0.48,0.6,1,'#ee3');
+R(0.16,0.48,0.47,1,'#f80'); R(0,0.48,0.08,1,'#3ff'); R(0.08,0.48,0.16,1,'#f3f'); R(0.47,0.48,0.53,1,'#f3f'); R(0.53,0.48,0.6,1,'#3ff');
+R(0.6,0.51,1,0.75,'#fff'); R(0.6,0.75,1,1,'#80f');
+} else {
+ // fine grid of v bands
+ const cols=['#e33','#3c3','#33f','#ee3','#f80','#3ff','#f3f','#fff','#80f','#000'];
+ for (let i=0;i<10;i++) R(0,i/10,1,(i+1)/10, cols[i]);
+ for (let j=0;j<10;j++) { g.fillStyle='rgba(0,0,0,0.35)'; if (j%2) g.fillRect(j*51.2,0,51.2,512); }
+}
+const tex = new THREE.CanvasTexture(c); tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; tex.magFilter = THREE.NearestFilter;
+new GLTFLoader().load('../../assets/models/chars.glb', (gl) => {
+  const src = gl.scene.getObjectByName('male');
+  const views = [0, Math.PI, Math.PI/2];
+  views.forEach((ry, i) => {
+    const m = SkeletonUtils.clone(src); m.rotation.y = ry; m.position.x = (i-1)*2.4;
+    m.traverse(o => { if (o.isMesh) { o.material = new THREE.MeshStandardMaterial({ map: tex }); } });
+    scene.add(m);
+  });
+  const box = new THREE.Box3().setFromObject(src); console.log('bbox', JSON.stringify(box.min), JSON.stringify(box.max));
+  r.render(scene, cam);
+});
+</script></body></html>

@@ -1,0 +1,20 @@
+{
+  "name": "kiyametten-once",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KIYAMETTEN ÖNCE - 2-6 oyunculu co-op hayatta kalma oyunu (Three.js, tarayıcıda çalışır)",
+  "type": "module",
+  "scripts": {
+    "start": "node tools/serve.mjs",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:e2e": "node tests/e2e/run-all.mjs",
+    "pack-assets": "node tools/pack-assets.mjs"
+  },
+  "devDependencies": {
+    "@gltf-transform/core": "^4.2.1",
+    "@gltf-transform/extensions": "^4.2.1",
+    "@gltf-transform/functions": "^4.2.1",
+    "draco3dgltf": "^1.5.9"
+  },
+  "license": "SEE LICENSE IN LICENSE.md"
+}

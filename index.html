@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>KIYAMETTEN ÖNCE — 30 Günün Kaldı</title>
+  <meta name="description" content="2-6 oyunculu, üçüncü şahıs, açık dünya co-op hayatta kalma oyunu. 30 günün kaldı. Arkadaşlarını topla. Hazırlan. Hayatta kal.">
+  <link rel="icon" href="assets/img/favicon.svg">
+  <link rel="stylesheet" href="src/ui/style.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+  <script src="vendor/peerjs.min.js" defer></script>
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas" tabindex="0"></canvas>
+    <div id="ui-root"></div>
+    <div id="loading-screen">
+      <div class="ls-art"></div>
+      <div class="ls-inner">
+        <div class="game-logo">
+          <div class="logo-main"><span>KIYAMETTEN</span><span>ÖNCE</span></div>
+          <div class="logo-tag">30 GÜN KALDI</div>
+        </div>
+        <div class="ls-bar"><div class="ls-fill" id="ls-fill"></div></div>
+        <div class="ls-status" id="ls-status">Yükleniyor…</div>
+        <div class="ls-tip" id="ls-tip">İpucu: Silah sesleri zombileri çeker. Her sorunu silahla çözme.</div>
+      </div>
+    </div>
+    <noscript><div class="fatal">Bu oyun JavaScript gerektirir.</div></noscript>
+  </div>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#000}</style>
+
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script></head>
+<body><canvas id="c"></canvas><script type="module">
+import * as THREE from 'three';
+import { Assets } from '../../src/core/Assets.js';
+import { World } from '../../src/world/WorldBuilder.js';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({canvas: document.getElementById('c'), antialias: true});
+r.setSize(innerWidth, innerHeight); r.shadowMap.enabled = true; r.toneMapping = THREE.ACESFilmicToneMapping; r.outputColorSpace = THREE.SRGBColorSpace;
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0xbfd8e8, 0.0016);
+const cam = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 2000);
+const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x6a5a3a, 1.2); scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff0d0, 2.6); sun.position.set(120, 200, 80); scene.add(sun); scene.add(sun.target);
+sun.castShadow = true; sun.shadow.mapSize.set(2048,2048); const sc = sun.shadow.camera; sc.left=-120; sc.right=120; sc.top=120; sc.bottom=-120; sc.far=600;
+const t0 = performance.now();
+const assets = new Assets('../../'); await assets.loadAll();
+const world = new World(assets, scene);
+await world.build((l)=>console.log(l));
+console.log('build ms', Math.round(performance.now()-t0), 'buildings', world.buildings.length, 'containers', world.containers.length, 'doors', world.doors.length, 'windows', world.windows.length, 'colliders', world.physics.all.size);
+const [cx, cy, cz, tx, ty, tz] = (q.get('cam') || '-285,40,215,-285,6,150').split(',').map(Number);
+cam.position.set(cx, cy, cz); cam.lookAt(tx, ty, tz);
+sun.target.position.set(tx, ty, tz); sun.position.set(tx + 60, ty + 120, tz + 40);
+world.sky.uniforms.uSunDir.value.set(0.4, 0.7, 0.3);
+world.sky.follow(cam);
+if (world.vegetation) world.vegetation.update(cam.position, 600);
+if (q.get('noroof')) for (const b of world.buildings) b.roof.visible = false;
+r.render(scene, cam);
+const info = r.info.render; console.log('calls', info.calls, 'tris', info.triangles);
+window.__done = true;
+</script></body></html>

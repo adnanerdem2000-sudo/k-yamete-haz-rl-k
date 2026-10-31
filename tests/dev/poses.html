@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;background:#333;font:12px sans-serif;color:#fff}#l{position:absolute;top:0;left:0;width:100%}#l span{position:absolute;}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script></head>
+<body><div id="l"></div><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { CharacterRig, Pose } from '../../src/entities/CharacterRig.js';
+import * as A from '../../src/entities/Animations.js';
+const r = new THREE.WebGLRenderer({antialias:true}); r.setSize(innerWidth, innerHeight); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0x667788);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445544, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 2); dl.position.set(3,6,8); scene.add(dl);
+const view = new URLSearchParams(location.search).get('v') || 'front';
+const cam = new THREE.PerspectiveCamera(30, innerWidth/innerHeight, 0.1, 200);
+const D = Math.PI/180;
+const T = 1.3;
+const poses = [
+ ['idle', p=>A.idle(p,T)], ['walk', p=>A.locomotion(p,Math.PI/2,0,T)], ['run', p=>A.locomotion(p,Math.PI/2,1,T)], ['sprint', p=>A.locomotion(p,2.2,2,T)],
+ ['crouch', p=>A.crouch(p,1,1,T)], ['pistol', p=>{A.idle(p,T); A.aim(p,'pistol',0);}], ['rifle', (p,rig)=>{A.idle(p,T); A.aim(p,'rifle',0); rig.setArmIK('Left', new THREE.Vector3(-0.05,1.45,0.75), new THREE.Vector3(1,-1,0)); }], ['melee-up', p=>{A.idle(p,T); A.meleeSwing(p,0.33,false);}],
+ ['melee-hit', p=>{A.idle(p,T); A.meleeSwing(p,0.5,true);}], ['drive', p=>A.seated(p,0.3,T,true)], ['zombie', p=>A.zombieWalk(p,1.2,0.2,T,0)], ['search', p=>A.search(p,T,0.6)],
+ ['bow', p=>{A.idle(p,T); A.aim(p,'bow',0);}], ['climb', p=>A.climb(p,1)], ['consume', p=>{A.idle(p,T); A.consume(p,0.5);}], ['zattack', p=>{A.zombieWalk(p,1,0,T,0); A.zombieAttack(p,0.5);}],
+];
+new GLTFLoader().load('../../assets/models/chars.glb', (gl) => {
+  const src = gl.scene.getObjectByName(view==='zombie'?'zombie-1':'survivor-male');
+  const cols = 8;
+  poses.forEach(([name, fn], i) => {
+    const m = SkeletonUtils.clone(src);
+    m.position.set(0,0,0); m.rotation.set(0,0,0); m.updateMatrixWorld(true);
+    const rig = new CharacterRig(m);
+    const p = new Pose(); fn(p, rig); rig.apply(p);
+    const holder = new THREE.Group(); holder.add(m);
+    holder.position.set((i%cols - (cols-1)/2)*2.2, -Math.floor(i/cols)*3.2, 0);
+    if (view==='side') m.rotation.y = Math.PI/2;
+    if (view==='back') m.rotation.y = Math.PI;
+    scene.add(holder);
+    const sp = document.createElement('span'); sp.textContent = name; document.getElementById('l').appendChild(sp);
+    sp.dataset.i = i;
+    holder.userData.label = sp;
+    m.traverse(o=>{ if (o.isSkinnedMesh) o.frustumCulled = false; });
+  });
+  cam.position.set(0, -0.3, 26); cam.lookAt(0,-0.3,0);
+  r.render(scene, cam);
+  scene.children.forEach(h=>{ if(h.userData.label){ const v=h.position.clone().add(new THREE.Vector3(0,2.6,0)).project(cam); h.userData.label.style.left=((v.x+1)/2*innerWidth-20)+'px'; h.userData.label.style.top=((1-v.y)/2*innerHeight)+'px'; }});
+});
+</script></body></html>
