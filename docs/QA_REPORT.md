@@ -98,13 +98,37 @@ kiti 2,0 MB, yüzey dokuları 0,34 MB. Sokak dokusu ve tabela atlası çalışma
 
 ## 5. Regresyon (tam koşu)
 
-Tam koşu sonuçları aşağıda (bkz. `tools/e2e.mjs` özeti). Koşu sürüyor; bu bölüm koşu bitince güncellenecek.
+Tam koşu (`npm run test:e2e`, 17 senaryo, sırayla): **17/17 geçti** + yeni `ui-clicks`.
 
-<!-- REGRESSION -->
-| Senaryo | Sonuç | Süre |
-|---|---|---|
-| ai | ✅ | 76 sn |
-| audio | ✅ | 84 sn |
+| Senaryo | Sonuç | Süre | Not |
+|---|---|---|---|
+| ai | ✅ | 76 sn | |
+| audio | ✅ | 84 sn | |
+| carry | ✅ | 167 sn | |
+| carry-mp | ✅ | 468 sn | |
+| ending | ✅ | 145 sn | |
+| gameplay | ✅ | 343 sn | |
+| lineup | ✅ | 67 sn | |
+| living | ✅ | 135 sn | ilk koşuda aynı anda açılan ikinci bir test tarayıcısı yüzünden sekme çöktü; tek başına geçti |
+| mobs | ✅ | 58 sn | |
+| motion | ✅ | 60 sn | |
+| multiplayer-local | ✅ | 368 sn | ilk koşuda aynı nedenle 2. sekme 30 sn'de yüklenemedi; zaman aşımı 120 sn yapıldı, tek başına geçti |
+| nature | ✅ | 50 sn | |
+| physics | ✅ | 155 sn | |
+| regions | ✅ | 30 sn | |
+| smoke-menu | ✅ | 111 sn | |
+| smoke-single | ✅ | 288 sn | |
+| story | ✅ | 315 sn | |
+| **ui-clicks** (yeni) | ✅ | 133 sn | gerçek fare tıklaması: menü → Tek Oyna → Oyuna Başla → oyun tuvali → Devam Et |
+
+**Kullanıcının bulduğu hata (bu turda düzeltildi):** yayınlanan oyunda menüdeki hiçbir düğmeye tıklanamıyordu.
+`#ui-root *` kuralı (id önceliği) tam ekran katmanları tıklamaya kapatan `.layer` kuralını eziyordu; en üstteki
+görünmez bindirme katmanı bütün tıklamaları yutuyordu. Arayüzün ilk sürümünden beri vardı; e2e senaryoları menü
+işlevlerini doğrudan çağırdığı için yakalanmamıştı. `ui-clicks` senaryosu artık gerçek tıklamayla doğruluyor.
+
+**Tek dosyalık sürüm:** `npm run build:single` → `dist/KiyamettenOnce.html` (~45 MB, sunucusuz). `file://` ile
+doğrulandı (`tools/dev/single-file-test.mjs`): menü ~15 sn'de açılır, gerçek tıklamayla oyuna girilir, dış istek
+yok, müzik gömülü veriden çalar.
 
 ## 6. Hâlâ eksik olanlar / geliştirilmesi gerekenler (öncelik sırasıyla)
 1. **Bina cephe geometrisi:** kir, is, grafiti, afiş ve akıntı katmanı eklendi; ama girilebilir binalar hâlâ
