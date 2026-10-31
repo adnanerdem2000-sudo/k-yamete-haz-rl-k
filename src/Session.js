@@ -28,6 +28,7 @@ import { MapSystem } from './systems/MapSystem.js';
 import { Weather } from './systems/Weather.js';
 import { Bots } from './systems/Bots.js';
 import { SaveSystem } from './systems/SaveSystem.js';
+import { Crafting } from './systems/Crafting.js';
 
 export const DIFFICULTY = {
   easy: { name: 'Kolay', zombies: 0.7, dmg: 0.65, needs: 0.8, loot: 1.3 },
@@ -93,6 +94,7 @@ export class Session {
     this.weather = new Weather(this);
     this.bots = new Bots(this);
     this.saves = new SaveSystem(this);
+    this.crafting = new Crafting(this);
     this.registerCore();
     this.players.set(this.localId, { id: this.localId, name: prof.name, charId: cdef.id, look, isLocal: true, token: this.token, pos: this.local.pos, summary: null });
     // ---- başlangıç
@@ -181,7 +183,7 @@ export class Session {
     this.on('rel', (p) => this.emit({ k: 'rel', faction: p.faction, delta: p.delta }));
     this.on('noise', (p) => this.emit({ k: 'noise', x: p.x, z: p.z, r: p.r, src: p.src }));
     this.on('revive', (p, from) => {
-      const fromName = this.players.get(from)?.name || 'Takım arkadaşı';
+      const fromName = this.players.get(from)?.name || this.bots.byId(from)?.name || 'Takım arkadaşı';
       this.emit({ k: 'revived', target: p.target, hp: p.hp || 30, byName: fromName });
       if (p.target.startsWith('bot_')) this.bots.revive(p.target);
     });
@@ -217,6 +219,7 @@ export class Session {
     } else {
       this.time.total += dt * this.time.rate * this.time.ff;
       this.tickNeeds(dt * this.time.rate * this.time.ff);
+      this.weather.blend(dt);
     }
     // yerel oyuncu
     const pl = this.local;
@@ -227,6 +230,7 @@ export class Session {
     this.combat.update(dt, input, blocking);
     this.interact.update(dt, input, blocking);
     this.handleHotkeys(input, blocking);
+    this.build.localUpdate(dt);
     pl.avatar.update(dt, pl.animState());
     // dünya sistemleri
     this.zombies.update(dt);
@@ -480,7 +484,7 @@ export class Session {
     if (input.wasPressed('map')) this.ui.openJournal('map');
     if (input.wasPressed('team')) this.ui.openTeam();
     if (input.wasPressed('build') && this.local.mode !== 'drive') this.build.toggleMenu();
-    if (input.wasPressed('pause')) this.ui.openPause();
+    if (input.wasPressed('pause') && !this.build.placing) this.ui.openPause();
     if (input.wasPressed('chat')) this.ui.openChat();
     if (input.wasPressed('emote')) this.ui.openEmotes();
     if (input.wasPressed('flashlight')) this.toggleFlashlight();
@@ -608,6 +612,7 @@ export class Session {
     const players = {};
     players[this.token] = this.localData();
     for (const p of this.players.values()) if (!p.isLocal && p.saved) players[p.token] = p.saved;
+    for (const [tok, pd] of Object.entries(this.offlinePlayers || {})) if (!players[tok]) players[tok] = pd;
     return {
       v: 1, savedAt: Date.now(), seed: this.seed, cfg: { difficulty: this.cfg.difficulty, dayMinutes: this.time.dayMinutes, aiTeammates: this.cfg.aiTeammates || 0 },
       time: this.time.serialize(), flags: this.flags, relations: this.relations,
@@ -698,6 +703,7 @@ export class Session {
     this.events.load(w.events);
     this.weather.load(w.weather);
     this.loadDoors(w.doors);
+    if (w.env) { this.env.streetPower = w.env.streetPower !== false; this.env.doom = w.env.doom || 0; this.env.redMist = w.env.redMist || 0; }
     this.zombies.initClient();
     for (const p of w.players || []) if (p.id !== this.localId) this.addRemotePlayer(p);
     this.selectHotbar(0);

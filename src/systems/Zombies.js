@@ -112,7 +112,7 @@ export class Zombies {
     this.spawnT -= dt;
     if (this.spawnT > 0) return;
     this.spawnT = 1.2;
-    const players = this.targets();
+    const players = this.targets().filter((t) => t.kind === 'player');
     if (!players.length) return;
     const day = S.time.day;
     const night = S.time.isNight;
@@ -123,10 +123,13 @@ export class Zombies {
         if (this.list.size >= this.cap) break;
         const dz = dist(pl.x, pl.z, zn.cx, zn.cz);
         if (dz > zn.r + 140) continue;
+        const activeHere = [...this.list.values()].filter((z) => z.zone === zn && !z.dead).length;
+        // bölgenin toplam nüfusu (sanal + aktif) güne göre artar; öldürülenler geri gelmez
         const target = Math.round((zn.base + zn.perDay * day) * S.diff.zombies * (night ? 1.25 : 1));
-        if (zn.pop + zn.killed < target) zn.pop = Math.max(0, target - zn.killed);
-        const activeHere = [...this.list.values()].filter((z) => z.zone === zn).length;
-        const want = Math.min(zn.pop, Math.round(zn.r * 0.12 + 6));
+        if (zn.pop + activeHere + zn.killed < target) zn.pop = Math.max(0, target - zn.killed - activeHere);
+        // aynı anda etrafta dolaşan sayısı: bölge yoğunluğu, gün ve gece ile ölçeklenir (1. gün sakin başlar)
+        const dens = Math.min(2.2, 0.6 + (zn.base / 14) * 0.5);
+        const want = Math.round((4 + zn.r * 0.05) * (0.5 + day * 0.035) * (night ? 1.4 : 1) * dens * S.diff.zombies);
         if (activeHere >= want || zn.pop <= 0) continue;
         // görüş dışında, 55-110 m mesafede bir nokta
         for (let tries = 0; tries < 6; tries++) {
@@ -174,7 +177,8 @@ export class Zombies {
       out.push({ kind: 'player', id: p.id, x: pos.x, y: pos.y, z: pos.z, noise: p.isLocal ? S.local.noise : (p.anim && p.anim.speed > 4 ? 10 : 4), crouch: p.isLocal ? S.local.mode === 'crouch' || S.local.mode === 'prone' : p.anim && (p.anim.mode === 'crouch' || p.anim.mode === 'prone'), downed: sm && sm.downed, vehicle: inVeh, light: p.isLocal ? !!S.local.avatar.flashlight : false });
     }
     for (const b of S.bots.list) if (!b.stats.downed) out.push({ kind: 'bot', id: b.id, x: b.pos.x, y: b.pos.y, z: b.pos.z, noise: 4, bot: b });
-    for (const n of S.npcs.list) if (n.visible && n.alive && n.zombieTarget) out.push({ kind: 'npc', id: n.id, x: n.pos.x, y: n.pos.y, z: n.pos.z, noise: 3, npc: n });
+    // korunması gereken NPC'ler yalnızca bir oyuncuyu takip ederken (eskort) hedef olur: oyuncu yokken ölmezler
+    for (const n of S.npcs.list) if (n.visible && n.alive && n.zombieTarget && n.follow) out.push({ kind: 'npc', id: n.id, x: n.pos.x, y: n.pos.y, z: n.pos.z, noise: 3, npc: n });
     return out;
   }
 
@@ -257,6 +261,16 @@ export class Zombies {
     if (S.isHost) {
       this.populate(dt);
       this.simulate(dt);
+    } else {
+      // istemci: tehdit seviyesini anlık görüntülerden hesapla (müzik, uyku kontrolü)
+      let threat = 0;
+      const lp = S.local.pos;
+      for (const v of this.views.values()) {
+        if (v.state.dead || (v.state.state !== 'chase' && !v.state.bashing)) continue;
+        const d = dist(lp.x, lp.z, v.pos.x, v.pos.z);
+        if (d < 35) threat += (35 - d) / 35 * 0.25;
+      }
+      this.threatLevel = clamp(threat, 0, 1);
     }
     this.updateViews(dt);
   }

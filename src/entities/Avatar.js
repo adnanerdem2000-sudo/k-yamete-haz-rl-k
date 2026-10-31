@@ -54,7 +54,7 @@ export class Avatar {
     if (this.nameTag) { this.root.remove(this.nameTag); this.nameTag.material.map.dispose(); }
     const c = document.createElement('canvas'); c.width = 256; c.height = 64;
     const g = c.getContext('2d');
-    g.font = '28px "Lilita One", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = '28px "Luckiest Guy", sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.75)'; g.strokeText(name, 128, 32);
     g.fillStyle = color; g.fillText(name, 128, 32);
     const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;

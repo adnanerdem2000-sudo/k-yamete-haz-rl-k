@@ -55,6 +55,39 @@ export class Build {
     S.on('struct_repair', (p) => { const st = this.structures.get(p.id); if (st) S.emit({ k: 'struct_set', id: st.id, hp: BUILDABLES[st.type].hp }); });
     S.on('struct_data', (p) => { const st = this.structures.get(p.id); if (st) S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, ...p.data } }); });
     S.on('door_struct', (p) => { const st = this.structures.get(p.id); if (st) S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, open: !st.data.open } }); });
+    // ortak depo (sandık/raf) — yuvalar st.data.slots
+    S.on('store_take', (p, from) => {
+      const st = this.structures.get(p.id);
+      if (!st || !st.data.slots) return;
+      const s = st.data.slots[p.slot];
+      if (!s) return;
+      const qty = Math.min(p.qty || s.qty, s.qty);
+      const slots = st.data.slots.map((x) => (x ? { ...x } : null));
+      slots[p.slot].qty -= qty;
+      if (slots[p.slot].qty <= 0) slots[p.slot] = null;
+      S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, slots } });
+      S.emit({ k: 'grant', to: from, items: [{ ...s, qty }] });
+    });
+    S.on('store_take_all', (p, from) => {
+      const st = this.structures.get(p.id);
+      if (!st || !st.data.slots) return;
+      const items = st.data.slots.filter(Boolean);
+      S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, slots: st.data.slots.map(() => null) } });
+      if (items.length) S.emit({ k: 'grant', to: from, items });
+    });
+    S.on('store_put', (p, from) => {
+      const st = this.structures.get(p.id);
+      const def = st && BUILDABLES[st.type];
+      if (!st || !def.storage) return;
+      const slots = (st.data.slots || new Array(def.storage).fill(null)).map((x) => (x ? { ...x } : null));
+      while (slots.length < def.storage) slots.push(null);
+      const idef = ITEMS[p.stack.id];
+      let left = p.stack.qty;
+      if (idef.stack > 1) for (const s of slots) if (s && s.id === p.stack.id && !s.noteId && left > 0) { const a = Math.min(idef.stack - s.qty, left); s.qty += a; left -= a; }
+      for (let i = 0; i < slots.length && left > 0; i++) if (!slots[i]) { const a = Math.min(idef.stack, left); slots[i] = { ...p.stack, qty: a }; left -= a; }
+      S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, slots } });
+      if (left > 0) S.emit({ k: 'grant', to: from, items: [{ ...p.stack, qty: left }], silent: true });
+    });
     S.on('gen', (p) => S.emit({ k: 'gen', ...this.gen, ...p }));
     S.on('bunker', (p) => S.emit({ k: 'bunker', ...this.bunker, ...p }));
     S.on('fire_set', (p) => S.emit({ k: 'fire', id: p.id, x: p.x, y: p.y, z: p.z, fuel: p.fuel }));
@@ -747,13 +780,10 @@ export class Build {
       if (this._genNoise <= 0) { this._genNoise = 6; S.applyAction('noise', { x: -268, z: 137.5, r: 16, src: 'generator' }, null); }
       if (this.gen.fuel <= 0) { S.emit({ k: 'gen', ...this.gen, on: false }); S.emit({ k: 'toast', text: 'Jeneratörün yakıtı bitti!', kind: 'warn' }); }
     }
-    S.audio.loop('generator', 'generator', { at: { x: -268, y: 7, z: 137.5 }, vol: this.gen.on && this.gen.fixed && this.gen.fuel > 0 ? 0.35 : 0, range: 30 });
     // ateşler
     for (const [id, f] of this.fires) {
       f.fuel -= mins * (S.env.weather.rain > 0.5 ? 2 : 1);
       if (f.fuel <= 0) S.emit({ k: 'fire', id, fuel: 0 });
-      f.mesh.children.forEach((c, i) => { c.scale.y = 0.8 + Math.sin(S.t * 9 + i) * 0.25; });
-      S.audio.loop('fire_' + id, 'fire', { at: f, vol: 0.3, range: 18, bus: 'ambient' });
     }
     // yağmur deposu
     if (S.env.weather.rain > 0.2) for (const st of this.structures.values()) if (BUILDABLES[st.type].rain && st.built >= 1) st.data.water = Math.min(BUILDABLES[st.type].rain, (st.data.water || 0) + mins / 20);
@@ -775,6 +805,16 @@ export class Build {
       S.flags.base_def = this.defenseScore();
       S.quests.onFlag('base_def');
     }
+  }
+
+  /** Her istemcide çalışır: yerleştirme hayaleti, ateş/jeneratör görsel ve sesleri */
+  localUpdate(dt) {
+    const S = this.s;
+    S.audio.loop('generator', 'generator', { at: { x: -268, y: 7, z: 137.5 }, vol: this.gen.on && this.gen.fixed && this.gen.fuel > 0 ? 0.35 : 0, range: 30 });
+    for (const [id, f] of this.fires) {
+      f.mesh.children.forEach((c, i) => { c.scale.y = 0.8 + Math.sin(S.t * 9 + i) * 0.25; });
+      S.audio.loop('fire_' + id, 'fire', { at: f, vol: 0.3, range: 18, bus: 'ambient' });
+    }
     // yerleştirme
     if (this.placing) this.updatePlacing(dt, S.game.input);
     // otomatik inşa başlat (yerleştirme sonrası)
@@ -782,7 +822,7 @@ export class Build {
       this.pendingAuto.t += dt;
       const pa = this.pendingAuto;
       for (const st of this.structures.values()) if (st.built < 1 && Math.abs(st.x - pa.x) < 0.01 && Math.abs(st.z - pa.z) < 0.01) { this.pendingAuto = null; this.use(st); break; }
-      if (this.pendingAuto && this.pendingAuto.t > 2) this.pendingAuto = null;
+      if (this.pendingAuto && this.pendingAuto.t > 3) this.pendingAuto = null;
     }
   }
 

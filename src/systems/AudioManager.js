@@ -6,6 +6,7 @@ import { Settings } from '../core/Settings.js';
 const SCALE = [57, 60, 62, 64, 67, 69, 72, 74, 76]; // A minör pentatonik (MIDI)
 const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 55, 60], [55, 59, 62], [57, 60, 64], [52, 55, 59], [53, 57, 60], [50, 53, 57]];
 const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const SOUND_ALIAS = { jump: 'jump_a', craft: 'build', open: 'pickup', close: 'toggle' };
 
 export class AudioManager {
   constructor(game) {
@@ -82,6 +83,7 @@ export class AudioManager {
   /** Örnek ya da sentez sesi çal */
   play(name, o = {}) {
     if (!this.ctx || !this.enabled) return;
+    name = SOUND_ALIAS[name] || name;
     const sp = this.spatial(o.at, o.range || 45);
     if (sp.gain <= 0.01) return;
     const vol = (o.vol ?? 1) * sp.gain;
@@ -162,6 +164,10 @@ export class AudioManager {
     S.build = (v, p) => { for (let i = 0; i < 2; i++) setTimeout(() => S.hit(v * 0.6, p), i * 180); };
     S.horn = (v, p) => { const c = self.ctx, t = c.currentTime; for (const fr of [392, 494]) { const o = c.createOscillator(); o.type = 'sawtooth'; o.frequency.value = fr; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500; const g = c.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v * 0.15, t + 0.02); g.gain.setValueAtTime(v * 0.15, t + 0.45); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55); o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.6); } };
     S.splash = (v, p) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.5); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1200; const g = c.createGain(); self.env(g, t, 0.01, v * 0.5, 0.4); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.5); };
+    S.error = (v) => { const c = self.ctx; [0, 0.12].forEach((d) => { const t = c.currentTime + d; const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 180; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900; const g = c.createGain(); self.env(g, t, 0.005, v * 0.2, 0.09); o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.12); }); };
+    S.fire_whoosh = (v, p) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.8); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(1800, t + 0.3); f.frequency.exponentialRampToValueAtTime(400, t + 0.7); const g = c.createGain(); self.env(g, t, 0.08, v * 0.5, 0.6); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.8); };
+    S.hover = (v) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 1400; const g = c.createGain(); self.env(g, t, 0.001, v * 0.06, 0.03); o.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.05); };
+    S.ready = (v) => { const c = self.ctx; [0, 7].forEach((s, i) => { const t = c.currentTime + i * 0.09; const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = midi(67 + s); const g = c.createGain(); self.env(g, t, 0.005, v * 0.2, 0.25); o.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.3); }); };
     return S;
   }
 

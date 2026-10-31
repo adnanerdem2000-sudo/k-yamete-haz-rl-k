@@ -26,7 +26,7 @@ function colorize(geo, color, jitter = 0.06, rng) {
 
 function blob(r, detail, x, y, z, color, rng, sy = 1) {
   let g = new THREE.IcosahedronGeometry(r, detail);
-  g = g.toNonIndexed();
+  if (g.index) g = g.toNonIndexed();
   const p = g.attributes.position;
   for (let i = 0; i < p.count; i++) {
     const k = 1 + (rng.next() - 0.5) * 0.18;

@@ -326,12 +326,15 @@ export class World {
     P.bunkerHatch(g, bx, T.heightAt(bx, bz), bz);
     this.interactable('bunker', bx, T.heightAt(bx, bz) + 0.4, bz, { name: 'Bodrum Kapağı' });
     this.bunkerPos = { x: bx, z: bz };
-    P.woodpile(g, -297, T.heightAt(-297, 132), 132, 0);
-    this.physics.addBoxC(-297, 132, 0.9, 1.0, T.heightAt(-297, 132), T.heightAt(-297, 132) + 1.3, { kind: 'prop' });
-    this.container('crate', -297, 129.5, { label: 'Odun Yığını', special: 'woodpile', h: 0.6 });
-    P.campfirePit(g, -288, T.heightAt(-288, 118), 118);
-    this.interactable('campfire_pit', -288, T.heightAt(-288, 118) + 0.3, 118, { name: 'Ateş Çukuru' });
-    for (const [lx, lz, la] of [[-290.6, 118, Math.PI / 2], [-285.4, 118, Math.PI / 2], [-288, 120.8, 0]]) P.logBench(g, lx, T.heightAt(lx, lz), lz, la);
+    P.woodpile(g, -297.5, T.heightAt(-297.5, 121), 121, 0);
+    this.physics.addBoxC(-297.5, 121, 0.9, 1.0, T.heightAt(-297.5, 121), T.heightAt(-297.5, 121) + 1.3, { kind: 'prop' });
+    this.container('crate', -297.5, 118.5, { label: 'Odun Yığını', special: 'woodpile', h: 0.6 });
+    // ateş çukuru evin arka verandasının önünde (ana menü sahnesiyle aynı yer)
+    const FX = -290, FZ = 133;
+    P.campfirePit(g, FX, T.heightAt(FX, FZ), FZ);
+    this.interactable('campfire_pit', FX, T.heightAt(FX, FZ) + 0.3, FZ, { name: 'Ateş Çukuru' });
+    this.firePit = { x: FX, z: FZ };
+    for (const [lx, lz, la] of [[FX - 2.6, FZ, Math.PI / 2], [FX + 2.6, FZ, Math.PI / 2], [FX, FZ + 2.8, 0]]) P.logBench(g, lx, T.heightAt(lx, lz), lz, la);
     this.interactable('rain_spot', -272.5, T.heightAt(-272.5, 132) + 0.5, 132, { name: 'Yağmur Suyu Deposu Yeri' });
     // eve ait araç park yeri (garaj) ve eski pikap (tamir gerekli)
     const gp = home.frame.pt(21.5, 6.5);

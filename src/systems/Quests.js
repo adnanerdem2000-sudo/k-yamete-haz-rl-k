@@ -5,6 +5,16 @@ import { ITEMS } from '../data/items.js';
 import { POIS } from '../world/WorldLayout.js';
 import { dist } from '../core/util.js';
 
+const MATCH = {
+  kill: (o, cur, a) => (!o.zombie || o.zombie === a ? cur + 1 : cur),
+  build: (o, cur, a) => (o.item === a ? cur + 1 : cur),
+  craft: (o, cur, a) => (o.item === a ? cur + 1 : cur),
+  interact: (o, cur, a) => (o.target === a ? 1 : null),
+  repair: (o, cur, a) => (o.target === a ? 1 : null),
+  talk: (o, cur, a) => (o.npc === a ? 1 : null),
+  search: (o, cur, a) => (!o.building || o.building === a ? cur + 1 : cur),
+};
+
 export class Quests {
   constructor(session) {
     this.s = session;
@@ -71,27 +81,30 @@ export class Quests {
   }
 
   // ======================================================================= ilerleme kancaları
-  bump(type, match) {
+  // İstemciler fonksiyon değil kanca adı + argüman gönderir; eşleştirme host'ta yapılır.
+  hook(type, arg) {
     const S = this.s;
-    if (!S.isHost) { S.net.sendToHost({ t: 'qhook', type, match }); return; }
+    if (!S.isHost) { S.net.sendToHost({ t: 'qhook', type, arg }); return; }
+    const match = MATCH[type];
+    if (!match) return;
     for (const id of this.active()) {
       const def = this.def(id);
       def.objs.forEach((o, i) => {
         if (o.t !== type) return;
         const cur = this.st[id].prog[i] || 0;
-        const r = match(o, cur);
-        if (r !== null && r !== undefined && r !== cur) S.applyAction('quest_prog', { id, i, value: r }, null);
+        const r = match(o, cur, arg);
+        if (r !== null && r !== undefined && r !== cur) S.applyAction('quest_prog', { id, i, value: Math.min(r, o.count || 1) }, null);
       });
     }
   }
   onCollect() { this._collectDirty = true; }
-  onKill(type) { this.bump('kill', (o, cur) => (!o.zombie || o.zombie === type ? cur + 1 : cur)); }
-  onBuild(type) { this.bump('build', (o, cur) => (o.item === type ? cur + 1 : cur)); if (type === 'antenna') this.s.applyAction('flag', { flag: 'antenna_built', value: 1 }, null); }
-  onCraft(item) { this.bump('craft', (o, cur) => (o.item === item ? cur + 1 : cur)); }
-  onInteract(target) { this.bump('interact', (o) => (o.target === target ? 1 : null)); }
-  onRepair(target) { this.bump('repair', (o) => (o.target === target ? 1 : null)); }
-  onTalk(npc) { this.bump('talk', (o) => (o.npc === npc ? 1 : null)); }
-  onSearch(c) { this.bump('search', (o, cur) => (!o.building || o.building === c.building ? cur + 1 : cur)); }
+  onKill(type) { this.hook('kill', type); }
+  onBuild(type) { this.hook('build', type); if (type === 'antenna') this.s.act('flag', { flag: 'antenna_built', value: 1 }); }
+  onCraft(item) { this.hook('craft', item); }
+  onInteract(target) { this.hook('interact', target); }
+  onRepair(target) { this.hook('repair', target); }
+  onTalk(npc) { this.hook('talk', npc); }
+  onSearch(c) { this.hook('search', c && c.building ? c.building : null); }
   onFlag(flag) {
     const S = this.s;
     if (!S.isHost) return;

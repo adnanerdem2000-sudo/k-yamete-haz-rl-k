@@ -164,8 +164,8 @@ export function signTexture(text, bg = '#c0392b', fg = '#ffffff', w = 512, h = 1
   g.fillStyle = 'rgba(255,255,255,0.12)'; g.fillRect(0, 0, w, h * 0.45);
   g.strokeStyle = 'rgba(0,0,0,0.35)'; g.lineWidth = 8; g.strokeRect(4, 4, w - 8, h - 8);
   let fs = Math.floor(h * 0.6);
-  g.font = `${fs}px "Lilita One", "Arial Black", sans-serif`;
-  while (g.measureText(text).width > w * 0.86 && fs > 10) { fs -= 2; g.font = `${fs}px "Lilita One", "Arial Black", sans-serif`; }
+  g.font = `${fs}px "Luckiest Guy", "Arial Black", sans-serif`;
+  while (g.measureText(text).width > w * 0.86 && fs > 10) { fs -= 2; g.font = `${fs}px "Luckiest Guy", "Arial Black", sans-serif`; }
   g.textAlign = 'center'; g.textBaseline = 'middle';
   g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillText(text, w / 2 + 3, h / 2 + 5);
   g.fillStyle = fg; g.fillText(text, w / 2, h / 2 + 2);

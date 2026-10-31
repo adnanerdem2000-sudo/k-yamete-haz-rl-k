@@ -82,7 +82,7 @@ export class Effects {
   text(x, y, z, str, color = '#ffffff', size = 1) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 64;
     const g = c.getContext('2d');
-    g.font = `${Math.round(34 * size)}px "Lilita One", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.font = `${Math.round(34 * size)}px "Luckiest Guy", sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.8)'; g.strokeText(str, 128, 32); g.fillStyle = color; g.fillText(str, 128, 32);
     const tex = new THREE.CanvasTexture(c);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
