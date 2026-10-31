@@ -213,6 +213,23 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
 - Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
 
+## Çok oyunculu (Aşama 7 ekleri)
+- **ICE/TURN:** `PeerTransport.iceServers()` varsayılan STUN listesine `window.KIYAMET_ICE`, localStorage
+  `kiyamet.net.ice` (ayarlar ekranındaki JSON alanı) ya da `?ice=` parametresinden gelen TURN sunucularını ekler;
+  kimlik bilgisi koda yazılmaz.
+- **Ağ ölçümü:** host her eşe, istemci host'a 2 sn'de bir ping (RTT); paketlere sıra numarası (`st.n`, `snap.n`) →
+  5 sn pencerede kayıp = atlanan sıra / (gelen + atlanan). `Net.netStats()` / `netQuality()`; HUD'da gecikme, kayıp
+  yüzdesi ve "bağlantı zayıf" (sarı/kırmızı).
+- **Host göçü:** host düşünce (`onHostClose`) oda sırasına göre kimliği en küçük çevrimiçi istemci aynı oda koduyla
+  host olur (`migrateToHost`): mevcut oturum korunur (kapılar, yağma, yapılar, araçlar, envanter), `Session.becomeHost`
+  zombi/bot simülasyonunu başlatır (istemci vekilleri gerçek bota dönüşür, eski görünümler temizlenir, ayrılanların
+  koltukları boşalır). Diğer istemciler 2,5 sn sonra aynı koda yeniden bağlanır; yeni host'ta onların envanteri
+  `pdata` yedeklerinden gelir (host 8 sn'de bir tüm oyuncuların kayıt verisini herkese yayınlar).
+- **Geç katılan:** karşılama paketi taşınan/yerinden oynamış fizik nesnelerinin pozunu ve taşıyıcısını içerir
+  (`PhysProps.serializeDynamic`).
+- **Yakınlık sesi:** uzak oyuncuların sesi Web Audio `PannerNode` (HRTF, ters mesafe, 35 m) ile konumlanır; iki
+  tarafta da telsiz varsa mesafesiz ve yönsüz (özet paketinde `radio`).
+
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),
   14 NPC (selam, sohbet konuları `lore`, ticaret bayrağı), 29 görev, 38 belge, 7 final.
