@@ -122,6 +122,16 @@ class Vehicle {
       g.add(sl); g.add(t); sl.target = t;
       this.headlights.push(sl);
     }
+    // stop/fren ve geri vites lambaları: arka köşelerde ışıyan paneller (yayılım parlaklığı + bloom)
+    this.tailMat = new THREE.MeshStandardMaterial({ color: 0x4a0606, emissive: 0xff0600, emissiveIntensity: 0.1, roughness: 0.4 });
+    this.revMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, emissive: 0xfff4e0, emissiveIntensity: 0, roughness: 0.4 });
+    // grup uzayı: model merkezlenmiş (taban y=0), ön +Z → arka yüz min z
+    const rearZ = box.min.z - c.z - 0.02, ly = (box.max.y - box.min.y) * 0.5, lx = (box.max.x - box.min.x) * 0.36;
+    for (const sx of [-1, 1]) {
+      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.04), this.tailMat); tl.position.set(sx * lx, ly, rearZ); g.add(tl);
+      const rl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), this.revMat); rl.position.set(sx * (lx - 0.2), ly - 0.1, rearZ); g.add(rl);
+    }
+    this.brakeGlow = 0;
     this.root = g;
     this.armorVis = null;
     this.updateUpgradeVisuals();
@@ -755,6 +765,19 @@ export class Vehicles {
     return { x, z };
   }
 
+  /** Arka lambalar: fren (girdi ya da hızlı yavaşlama), farlar açıkken kısık stop, geri viteste beyaz */
+  updateTailLights(v, dt, local) {
+    if (!v.tailMat) return;
+    const sp = v.speed || 0, prev = v._tlSpeed ?? sp;
+    v._tlSpeed = sp;
+    const decel = dt > 0 ? (Math.abs(prev) - Math.abs(sp)) / dt : 0;
+    const braking = local ? (v.inThr < 0 && sp > 0.6) || (v.inThr > 0 && sp < -0.6) || v.inHB : decel > 2.5 && Math.abs(sp) > 0.5;
+    v.brakeGlow = damp(v.brakeGlow, braking ? 1 : 0, braking ? 30 : 8, dt);
+    const on = v.seats && v.seats[0];
+    v.tailMat.emissiveIntensity = (on ? (v.lights ? 0.35 : 0.08) : 0.03) + v.brakeGlow * 1.4;
+    v.revMat.emissiveIntensity = on && sp < -0.4 ? 1.2 : 0;
+  }
+
   update(dt) {
     const S = this.s;
     const alpha = S.game.phys ? S.game.phys.alpha : 1;
@@ -762,6 +785,7 @@ export class Vehicles {
       if (v === this.local) continue;
       this.syncVisual(v, alpha);
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
+      this.updateTailLights(v, dt, false);
       if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
       else S.audio.stopLoop('engine_' + v.id);
       if (v.wrecked && Math.random() < dt * 3) S.fx.smoke(v.pos.x, v.pos.y + 1.5, v.pos.z, 1, '#333333');
@@ -770,6 +794,7 @@ export class Vehicles {
     if (this.local) {
       const v = this.local;
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
+      this.updateTailLights(v, dt, true);
       if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 3) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#555555');
     }
   }
