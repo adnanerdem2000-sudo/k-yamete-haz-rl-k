@@ -208,3 +208,19 @@ Kullanılamayanlar: Mixamo (Adobe hesabı, CC0 değil), Sketchfab (giriş gerekl
 - Şehir silueti: Downtown City MegaKit tuğla binaları (ön cephe yola), çatı klimaları, meydan saksıları, babalar.
 - Yaşayan dünya: 6 bölgede karga sürüleri (66 kuş; kanat çırpma gölgelendiricide, silah/patlama gürültüsünde
   ürkerek yükselir), şehirde 6 yanmış enkazdan tüten duman sütunları (rüzgârla sürüklenir, fırtınada artar).
+
+### Aşama 5–8 — Etkileşim, çok oyunculu eşitleme, performans, kıyamet sonrası doku
+- Hafif nesne taşıma (kutu, kasa, çöp kovası ≤ 20 kg): al / taşı / bırak / fırlat; kinematik gövde, üst gövde
+  Walk_Carry; basamak inerken, zıplarken, eğilirken bırakılmaz. Çok oyunculu: host doğrular (çakışmada tek
+  taşıyıcı), uzak taşıyıcı izlenir, bırakma pozu + hız yayılır, durunca son konum eşitlenir.
+- Zombi YZ: hedef kaybolunca son görülen hıza göre tahminli konum ve çevrede arama.
+- Merdiven giriş/çıkış, kapı uzanma, levye itme klipleri.
+- Performans (varsayılan ayarlar, gölgeler açık): şehir cephesi 1.144 → 417, şehir tepeden 887 → 397, mahalle
+  437 → 279 çizim çağrısı. Kit parça birleştirme + düz renk pişirme, birleşik çatılar (gölgelendiricide kesit),
+  tabela atlası, iç mekân hücreleri. **Düzeltme:** önceki turda "iç mekân ayıklaması" olarak raporlanan kod,
+  kabuklar birleştirildikten sonra sahnede olmayan ağları gizliyordu (etkisizdi); artık iç yüzeyler kendi
+  hücrelerinde birleşip gerçekten gizleniyor.
+- Kıyamet sonrası doku: ~4.600 zemin izi (tek çağrı), ~780 ot, çöp torbası yığınları, yanmış araç enkazları,
+  boyanmış SOS, arızalı (sönük/titreyen) sokak lambaları, uzaktan gelen olay sesleri.
+- Test altyapısı: `tools/e2e.mjs` (kendi sunucusu, sıralı koşu, özet), `carry`, `carry-mp`, parça birleştirme
+  birim testleri; çizim çağrısı dökümü (`tools/dev/drawcall-probe.mjs`), görsel kontrol araçları.

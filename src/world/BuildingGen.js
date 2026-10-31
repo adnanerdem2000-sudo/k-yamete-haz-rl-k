@@ -7,6 +7,7 @@ import { TEMPLATES } from './BuildingTemplates.js';
 import { furnishRoom } from './Furnish.js';
 import { NAV } from './NavGrid.js';
 import { RNG } from '../core/util.js';
+import { planFacade } from './Dressing.js';
 
 export const FLOOR_LIFT = 0.3;
 const EXT_T = 0.25, INT_T = 0.15, DOOR_H = 2.15;
@@ -123,6 +124,8 @@ export function buildBuilding(spec, ctx) {
 
   const sideLen = { F: w, B: w, L: d, R: d };
   const doorOps = [], winOps = [];
+  // dış duvar malzemesinde zemine yakın kir/is (köşe rengi; terk edilmiş bina görünümü)
+  geo.grime = { key: extKey, y0: F, h: 1.1, k: spec.id === 'home' ? 0.18 : 0.42 };
   for (const side of ['F', 'B', 'L', 'R']) {
     const ops = openings[side].sort((a, b) => a.s - b.s);
     const sg = sideGeom(side, 0, w, d, EXT_T);
@@ -137,6 +140,9 @@ export function buildBuilding(spec, ctx) {
       if (op.win) createWindow(B, fr, side, op, ctx, geo, trimCol);
     }
   }
+  geo.grime = null;
+  // cephe izleri (grafiti, afiş, akıntı, is, X işareti…): açıklıklarla çakışmadan; WorldBuilder tek ağda toplar
+  B.facade = planFacade(spec, tpl, fr, openings, F, H, EXT_T);
 
   // ---------------------------------------------------------- iç duvarlar
   const segs = interiorSegments(tpl);
@@ -231,12 +237,14 @@ function buildWall(geo, side, len, ops, o, onCollider) {
     const outerMin = inw > 0 ? g.c - t / 2 : g.c, outerMax = inw > 0 ? g.c : g.c + t / 2;
     const innerMin = inw > 0 ? g.c : g.c - t / 2, innerMax = inw > 0 ? g.c + t / 2 : g.c;
     const y0 = o.F + p.y0, y1 = o.F + p.y1;
+    // dış yüz zemin bandında ikiye bölünür: köşe rengi kiri (Geo.grime) alt 1 m'de toplanır
+    const ys = o.ext && y0 < o.F + 1.05 && y1 > o.F + 1.25 ? [[y0, o.F + 1.1, 63 & ~4], [o.F + 1.1, y1, 63 & ~8]] : [[y0, y1, 63]];
     if (g.axis === 'x') {
-      geo.box(o.extKey, p.a, y0, outerMin, p.b, y1, outerMax, o.extCol);
+      for (const [a, b, f] of ys) geo.box(o.extKey, p.a, a, outerMin, p.b, b, outerMax, o.extCol, f);
       geo.box('interior', p.a, y0, innerMin, p.b, y1, innerMax, o.intCol);
       onCollider({ x0: p.a, x1: p.b, z0: g.c - t / 2, z1: g.c + t / 2, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01);
     } else {
-      geo.box(o.extKey, outerMin, y0, p.a, outerMax, y1, p.b, o.extCol);
+      for (const [a, b, f] of ys) geo.box(o.extKey, outerMin, a, p.a, outerMax, b, p.b, o.extCol, f);
       geo.box('interior', innerMin, y0, p.a, innerMax, y1, p.b, o.intCol);
       onCollider({ x0: g.c - t / 2, x1: g.c + t / 2, z0: p.a, z1: p.b, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01);
     }

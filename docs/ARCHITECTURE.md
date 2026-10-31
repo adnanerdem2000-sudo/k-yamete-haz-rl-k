@@ -57,7 +57,17 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Genişletilmiş bölgeler:** `src/world/RegionsExtra.js` (çiftlik, fener, tatil köyü, cezaevi, havaalanı,
   dağ köyü, baraj, köprü başı) prosedürel yapılar + etkileşim noktaları (fener lambası, santral paneli, uçak).
 - **Binalar:** şablonlardan prosedürel üretilir (duvarlar, kapı/pencere boşlukları, iç kapılar, çatı,
-  mobilya, yağma konteynerleri). İçeri girildiğinde çatı gizlenir. Kapı/pencere/cam paneller instanced çizilir.
+  mobilya, yağma konteynerleri). Kapı/pencere/cam paneller instanced çizilir.
+- **Statik birleştirme (çizim çağrısı):** bina kabukları malzeme + 512 m parça başına birleşir (parça sınırları
+  256 m kaydırılmış: şehir tek parçaya düşer); iç yüzeyler (iç duvar, parke, fayans, halı) 64 m'lik hücrelerde
+  birleşir ve `cullInteriors` 45 m ötesindekileri gizler. Çatılar da birleşiktir: her köşe binasının numarasını
+  (`aRoof`) taşır, oyuncunun içinde olduğu binanın çatısı köşe gölgelendiricisinde kırpılır (`setRoofHidden`;
+  gölge geçişi de aynı kuralla). Tabelalar tek doku atlasındadır (ışıklı dükkân tabelaları bir, ahşap yol
+  levhaları bir çağrı; `signSpots` konumları tutar). Örneklenmiş kit modellerinde (`Instancer`) parçalar
+  `src/core/PartMerge.js` ile birleşir: aynı malzemeli parçalar tek geometri; dokusuz düz renkli malzemeler
+  (Kenney araçları) renk/pürüzlülük/metallik/ışıma köşe başına pişirilerek tek malzemede toplanır. İç mekân
+  eşyaları 64 m'lik hücrelerde, 50 m ötede çizilmez. Model çeşitleri: `assets.parts(kit, ad, 'burnt')`
+  (yanmış araç enkazı).
 - **Çarpışma ızgarası:** AABB/daire çarpıştırıcılar (yürünebilir zeminler, merdivenler, köprü karoları);
   her çarpıştırıcı Rapier'de statik bir kopya olarak aynalanır (açılan kapılar vb. eşzamanlı).
 - **Fizik (Rapier 3D):** sabit 1/60 sn adım + çizimde enterpolasyon; oyuncu kapsülü kinematik karakter
@@ -83,10 +93,17 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Ortam ışığı:** gökyüzü kubbesi + zemin diski 4 sn'de bir (ya da saat/hava değişince) PMREM ortam
   haritasına çizilir (`scene.environment`); yarımküre ışığı buna göre azaltılır.
 - **Şehir kiti (`city.glb`, `tools/pack-city.mjs`):** Downtown City MegaKit hazır tuğla binaları (silüet, ön
-  cephe en yakın yola döndürülür) ve donatı (klima, baba, saksı). İç mekân ağları (iç duvar, parke, fayans,
-  halı) 45 m ötesinde çizilmez (`WorldBuilder.cullInteriors`).
+  cephe en yakın yola döndürülür) ve donatı (klima, baba, saksı).
+- **Kıyamet sonrası doku (`Dressing`):** prosedürel 12 hücreli iz atlası (yağ, çatlak, çöp, gazete, cam kırığı,
+  yanık, fren izi, kuru leke, yaprak, kaldırım dibinde toprak, çakıl, yola boyanmış SOS) tek örnekli düzlemde
+  (~4.600 iz, tek çizim çağrısı; `aCell` özniteliği atlas hücresini seçer). Kaldırım kenarı ve meydan
+  çatlaklarında ot (bitki sistemi), kaldırımlarda ve çöp konteynerlerinin yanında prosedürel çöp torbası
+  yığınları (tek çağrı, örnek başına renk), devrilmiş kutu/şişe. Duman sütunlarının altındaki kaza araçları
+  yanmış enkazdır (`SMOKE_SITES`), çevrelerinde yanık/cam/yağ/çakıl izi. Yerleşim tohumlu RNG ile her istemcide
+  aynı.
 - **Yaşayan dünya (`LivingWorld`):** karga sürüleri (gürültüde ürker) ve duman sütunları; ikisi de tek
-  örnekli ağ, animasyon gölgelendiricide.
+  örnekli ağ, animasyon gölgelendiricide. Sokak lambalarının ~%10'u yanmaz, ~%14'ü kesik kesik titrer
+  (konuma göre deterministik; sprite rengi + ışık havuzu).
 - **Taşınabilir nesneler:** hafif fizik nesneleri (≤ 20 kg) E ile alınır; gövde kinematiğe geçer ve oyuncu
   kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır. Basamak
   inerken havada kalma, zıplama ve eğilme taşımayı bozmaz; yüzme, tırmanma, araç ve yatma bırakır. Görsel her
@@ -139,7 +156,8 @@ Konumsal sesler HRTF panner'dan geçer; kazanç oyunun kendi mesafe eğrisiyle h
 için alçak geçiren süzgeç uygulanır, dinleyici ile kaynak arasında görüşü kesen yapı varsa (kare başına
 sınırlı ışın) ses boğuklaşır. Efekt kanalı üretilmiş darbe yanıtlı bir konvolüsyon yankısına gönderilir;
 iç mekânda gönderim artar. Müzik prosedüreldir; çatışma yoğunluğu yüksek kalınca CC0 savaş teması akış
-olarak devreye girer.
+olarak devreye girer. Ortam: rüzgâr/yağmur/gündüz döngüleri, uzak siren ve 16–48 sn arayla 140–300 m ötede
+rastgele yönde köpek, silah, çığlık, inilti ya da korna (sentez, yönlü ve süzgeçli; gürültü sistemine girmez).
 
 ## Kayıt
 `Session.serialize()` tüm dünya durumunu (zaman, bayraklar, ilişkiler, konteynerler, yerdeki eşyalar,

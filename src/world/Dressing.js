@@ -373,5 +373,199 @@ export function buildDressing(W, spots = []) {
   for (const [x, z, rot] of [[35, -47, 0.05], [-60, -33, Math.PI / 2]]) push('sos', x, z, surfY(x, z) + 0.01, rot, 1, 0.5);
   const decals = new Decals(W.root, list);
   const bagMesh = new TrashBags(W.root, bags);
-  return { decals, bags: bagMesh, count: list.length, bagCount: bags.length, weeds, litter, rubble };
+  const fac = [];
+  for (const b of W.buildings || []) if (b.facade) fac.push(...b.facade);
+  const facade = new FacadeDecals(W.root, fac);
+  return { decals, bags: bagMesh, facade, count: list.length, bagCount: bags.length, facadeCount: fac.length, weeds, litter, rubble };
+}
+
+// ======================================================================= cepheler
+// Bina dış duvarlarında yaşlanma: grafiti, afet arama ekiplerinin kapı yanına boyadığı "X" işareti, yırtık
+// afişler, yağmur/pas akıntısı, pencere üstünde is, duvar çatlağı, boyanmış uyarılar. Konumlar BuildingGen'de
+// açıklıklara (kapı/pencere) çakışmadan seçilir (planFacade); hepsi tek InstancedMesh (FacadeDecals).
+export const FACADE = { graffiti: 0, xcode: 1, posters: 2, streaks: 3, soot: 4, cracks: 5, warn: 6, help: 7 };
+const FCOLS = 4, FROWS = 2, FCW = 512, FCH = 256;
+
+function facadeAtlas(seed = 'facade') {
+  const rng = new RNG(seed);
+  const c = document.createElement('canvas');
+  c.width = FCW * FCOLS; c.height = FCH * FROWS;
+  const g = c.getContext('2d');
+  // lw×lh mantıksal tuval hücreyi doldurur (dörtgenin en/boy oranında çizilir, hücreye gerilir)
+  const cell = (i, lw, lh, fn) => { g.save(); g.translate((i % FCOLS) * FCW, Math.floor(i / FCOLS) * FCH); g.beginPath(); g.rect(0, 0, FCW, FCH); g.clip(); g.scale(FCW / lw, FCH / lh); fn(lw, lh); g.restore(); };
+  const blob = (x, y, r, col) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, col.replace(/[\d.]+\)$/, '0)')); g.fillStyle = gr; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  const spray = (text, x, y, size, fill, stroke) => {
+    g.font = `bold ${size}px "Arial Black", Impact, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineJoin = 'round'; g.lineWidth = size * 0.16; g.strokeStyle = stroke; g.strokeText(text, x, y);
+    g.fillStyle = fill; g.fillText(text, x, y);
+  };
+  const drips = (x0, x1, y, col, n) => { g.fillStyle = col; for (let k = 0; k < n; k++) { const x = rng.range(x0, x1); g.fillRect(x, y, 2.2, rng.range(6, 26)); } };
+  // grafiti: kalın konturlu harfler (rastgele isim/sembol), sprey sisi ve damlalar
+  cell(FACADE.graffiti, 512, 256, (W, H) => {
+    blob(W / 2, H / 2, 210, `rgba(${rng.int(20, 80)},${rng.int(20, 80)},${rng.int(20, 80)},0.18)`);
+    spray(rng.pick(['KAOS', 'SON', 'Z-23', 'ÖLÜM', 'BİZ']), W / 2, H / 2, 128, rng.pick(['#c0392b', '#2980b9', '#8e44ad', '#16a085', '#d35400']), 'rgba(15,15,15,0.9)');
+    drips(90, W - 90, H / 2 + 50, 'rgba(20,20,20,0.6)', 40);
+    g.strokeStyle = 'rgba(240,240,240,0.7)'; g.lineWidth = 7; g.beginPath(); g.moveTo(60, H - 40); g.bezierCurveTo(180, H - 90, 320, H - 10, W - 50, H - 60); g.stroke();
+  });
+  // afet arama işareti (X kodu): çeyreklerde tarih, ekip, tehlike, bulunan sayısı
+  cell(FACADE.xcode, 256, 256, (W, H) => {
+    g.strokeStyle = 'rgba(214,72,30,0.92)'; g.lineWidth = 13; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(40, 40); g.lineTo(W - 40, H - 40); g.moveTo(W - 40, 40); g.lineTo(40, H - 40); g.stroke();
+    g.fillStyle = 'rgba(214,72,30,0.95)'; g.font = 'bold 30px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText('3/11', W / 2, 46); g.fillText('E-2', 50, H / 2); g.fillText('Z!', W - 50, H / 2); g.fillText(rng.pick(['0', '2', '1+']), W / 2, H - 44);
+    drips(60, W - 60, H / 2 + 10, 'rgba(214,72,30,0.55)', 12);
+  });
+  // yırtık afişler: üst üste kâğıtlar, başlık ve resim blokları, köşeleri kopuk
+  cell(FACADE.posters, 256, 256, (W, H) => {
+    for (let k = 0; k < 4; k++) {
+      g.save(); g.translate(W / 2 + rng.range(-50, 50), H / 2 + rng.range(-40, 40)); g.rotate(rng.range(-0.12, 0.12));
+      const w = rng.range(90, 140), h = rng.range(110, 160);
+      g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(-w / 2 + 4, -h / 2 + 4, w, h);
+      g.fillStyle = rng.pick(['#e8e2d0', '#d9c9a3', '#efe9dc', '#c8b48a', '#b9c4c9']); g.fillRect(-w / 2, -h / 2, w, h);
+      g.fillStyle = rng.pick(['#8e2a1f', '#1f3a5c', '#2b2b2b', '#5c4a1f']); g.fillRect(-w / 2 + 8, -h / 2 + 8, w - 16, 22);
+      g.fillStyle = 'rgba(80,80,80,0.55)'; g.fillRect(-w / 2 + 12, -h / 2 + 40, w - 24, h * 0.35);
+      for (let l = 0; l < 4; l++) g.fillRect(-w / 2 + 12, h * 0.05 + l * 9, (w - 24) * rng.range(0.5, 1), 3);
+      // yırtık köşe
+      g.globalCompositeOperation = 'destination-out'; g.beginPath(); g.moveTo(w / 2, h / 2); g.lineTo(w / 2 - rng.range(20, 50), h / 2); g.lineTo(w / 2, h / 2 - rng.range(20, 60)); g.fill(); g.globalCompositeOperation = 'source-over';
+      g.restore();
+    }
+  });
+  // yağmur ve pas akıntıları: üstten aşağı inceltilmiş koyu çizgiler
+  cell(FACADE.streaks, 128, 256, (W, H) => {
+    for (let k = 0; k < 22; k++) {
+      const x = rng.range(6, W - 6), len = rng.range(H * 0.3, H * 0.95), w = rng.range(2, 7);
+      const gr = g.createLinearGradient(0, 0, 0, len);
+      const rust = rng.chance(0.35);
+      gr.addColorStop(0, rust ? 'rgba(110,60,25,0.55)' : 'rgba(25,25,22,0.5)'); gr.addColorStop(1, 'rgba(25,25,22,0)');
+      g.fillStyle = gr; g.fillRect(x, 0, w, len);
+    }
+  });
+  // is: pencere üstünden yukarı açılan kara duman izi
+  cell(FACADE.soot, 256, 256, (W, H) => {
+    for (let k = 0; k < 26; k++) { const t = k / 26; blob(W / 2 + rng.range(-40, 40) * (1 + t), H - 20 - t * (H - 40), 40 + t * 60, `rgba(8,8,8,${(0.32 * (1 - t * 0.7)).toFixed(2)})`); }
+  });
+  // duvar çatlağı: dallanan çizgi, açık kenarlı
+  cell(FACADE.cracks, 256, 256, (W, H) => {
+    const paths = [];
+    const branch = (x, y, a, len, w, depth) => {
+      const pts = [[x, y]];
+      for (let s = 0; s < len; s += 5) { a += rng.range(-0.5, 0.5); x += Math.cos(a) * 5; y += Math.sin(a) * 5; pts.push([x, y]); if (depth < 3 && rng.chance(0.1)) branch(x, y, a + rng.range(-1.2, 1.2), len * 0.45, w * 0.6, depth + 1); }
+      paths.push([pts, w]);
+    };
+    branch(W * 0.2, 10, 1.2, 240, 4, 0);
+    g.lineCap = 'round';
+    for (const [col, extra] of [['rgba(200,195,185,0.4)', 2.5], ['rgba(20,18,16,0.9)', 0]]) { g.strokeStyle = col; for (const [pts, w] of paths) { g.lineWidth = w + extra; g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.stroke(); } }
+  });
+  // boyanmış uyarılar
+  cell(FACADE.warn, 640, 256, (W, H) => {
+    spray('GİRMEYİN', W / 2, H * 0.36, 92, 'rgba(178,34,34,0.92)', 'rgba(0,0,0,0)');
+    spray('ENFEKTE', W / 2, H * 0.74, 78, 'rgba(178,34,34,0.92)', 'rgba(0,0,0,0)');
+    drips(80, W - 80, H * 0.45, 'rgba(178,34,34,0.6)', 26);
+  });
+  cell(FACADE.help, 640, 256, (W, H) => {
+    spray('YARDIM EDİN', W / 2, H * 0.4, 84, 'rgba(236,234,226,0.92)', 'rgba(0,0,0,0)');
+    spray('3 KİŞİYİZ', W / 2, H * 0.76, 60, 'rgba(236,234,226,0.9)', 'rgba(0,0,0,0)');
+    drips(80, W - 80, H * 0.5, 'rgba(236,234,226,0.55)', 22);
+  });
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 8;
+  return t;
+}
+
+/** Dikey cephe izleri: tek örnekli düzlem (+Z normal), örnek başına atlas hücresi */
+export class FacadeDecals {
+  constructor(parent, list) {
+    const n = list.length;
+    const geo = new THREE.PlaneGeometry(1, 1);
+    const cellAttr = new Float32Array(Math.max(1, n) * 2);
+    const mat = new THREE.MeshStandardMaterial({ map: facadeAtlas(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4, roughness: 0.85 });
+    mat.onBeforeCompile = (sh) => {
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute vec2 aCell;')
+        .replace('#include <uv_vertex>', `#include <uv_vertex>\nvMapUv = (aCell + vMapUv) * vec2(${(1 / FCOLS).toFixed(5)}, ${(1 / FROWS).toFixed(5)});`);
+    };
+    mat.customProgramCacheKey = () => 'facade-decals';
+    mat.name = 'facade_decals';
+    this.mesh = new THREE.InstancedMesh(geo, mat, Math.max(1, n));
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    list.forEach((d, i) => {
+      m.compose(p.set(d.x, d.y, d.z), q.setFromAxisAngle(up, d.ry), s.set(d.w, d.h, 1));
+      this.mesh.setMatrixAt(i, m);
+      cellAttr[i * 2] = d.cell % FCOLS;
+      cellAttr[i * 2 + 1] = FROWS - 1 - Math.floor(d.cell / FCOLS);
+    });
+    this.mesh.count = n;
+    geo.setAttribute('aCell', new THREE.InstancedBufferAttribute(cellAttr, 2));
+    this.mesh.instanceMatrix.needsUpdate = true;
+    this.mesh.computeBoundingSphere();
+    this.mesh.receiveShadow = true;
+    this.mesh.renderOrder = 1;
+    this.mesh.name = 'facade_decals';
+    parent.add(this.mesh);
+  }
+}
+
+const FACADE_URBAN = new Set(['sehir', 'sanayi', 'liman', 'hastane', 'benzin', 'cezaevi', 'havaalani']);
+
+/**
+ * Bir binanın dış duvarlarında cephe izi konumları (BuildingGen çağırır). openings: { F|B|L|R: [{s, e, y0, y1, door|win}] }
+ * (y'ler zemin döşemesine göre). Dönüş: [{x, y, z, ry, w, h, cell}] dünya koordinatında.
+ */
+export function planFacade(spec, tpl, fr, openings, F, H, t) {
+  if (spec.id === 'home') return [];
+  const rng = new RNG('facade:' + spec.id);
+  const urban = FACADE_URBAN.has(spec.region);
+  const table = urban
+    ? [['graffiti', 26], ['posters', 16], ['streaks', 22], ['cracks', 14], ['warn', 5], ['help', 3]]
+    : [['streaks', 50], ['cracks', 30], ['graffiti', 10], ['posters', 8]];
+  const pick = () => { let tot = 0; for (const [, w] of table) tot += w; let r = rng.next() * tot; for (const [k, w] of table) { r -= w; if (r <= 0) return k; } return table[0][0]; };
+  const out = [];
+  const sides = { F: { len: tpl.w, n: [0, 1] }, B: { len: tpl.w, n: [0, -1] }, L: { len: tpl.d, n: [-1, 0] }, R: { len: tpl.d, n: [1, 0] } };
+  for (const side of ['F', 'B', 'L', 'R']) {
+    const S = sides[side], ops = openings[side] || [];
+    const nw = fr.dir(S.n[0], S.n[1]), ry = Math.atan2(nw.x, nw.z), off = t / 2 + 0.02;
+    const at = (u, y, w, h, kind) => {
+      const tp = side === 'F' ? [u, tpl.d + off] : side === 'B' ? [u, -off] : side === 'L' ? [-off, u] : [tpl.w + off, u];
+      const p = fr.pt(tp[0], tp[1]);
+      out.push({ x: p.x, y: fr.baseY + F + y, z: p.z, ry, w, h, cell: FACADE[kind] });
+    };
+    const free = (u0, u1, y0, y1) => u0 > 0.25 && u1 < S.len - 0.25 && y0 > 0.05 && y1 < H - 0.2
+      && !ops.some((o) => u1 > o.s - 0.15 && u0 < o.e + 0.15 && y1 > o.y0 - 0.12 && y0 < o.y1 + 0.12)
+      && !out.some((d) => d.side === side && Math.abs(d.u - (u0 + u1) / 2) < (d.w + u1 - u0) / 2 && Math.abs(d.yl - (y0 + y1) / 2) < (d.h + y1 - y0) / 2);
+    const place = (u, y, w, h, kind) => { at(u, y, w, h, kind); Object.assign(out[out.length - 1], { side, u, yl: y }); };
+    // açıklıkların [u0,u1] aralığındaki en yüksek üst kenarı (akıntı ve üst bant yerleşimi için)
+    const topIn = (u0, u1) => ops.reduce((m, o) => (u1 > o.s - 0.15 && u0 < o.e + 0.15 ? Math.max(m, o.y1) : m), 0);
+    const n = Math.round((S.len / (urban ? 3.6 : 9)) * rng.range(0.7, 1.3));
+    let placed = 0;
+    for (let k = 0; k < n * 5 && placed < n; k++) {
+      const kind = pick();
+      let w, h, y;
+      if (kind === 'graffiti') { w = rng.range(1.0, 2.8); h = w * 0.5; y = rng.range(0.3, 1.0) + h / 2; }
+      else if (kind === 'warn' || kind === 'help') { w = rng.range(1.8, 2.8); h = w * 0.4; y = rng.range(0.5, 1.2) + h / 2; }
+      else if (kind === 'posters') { w = rng.range(0.8, 1.4); h = w * rng.range(0.9, 1.1); y = rng.range(0.9, 1.4) + h / 2 - 0.3; }
+      else if (kind === 'streaks') { w = rng.range(0.6, 1.4); h = rng.range(1.2, 2.8); y = 0; }
+      else { w = rng.range(0.8, 1.6); h = w; y = rng.range(0.4, H - 0.6 - h / 2); }
+      const u = rng.range(0.3 + w / 2, S.len - 0.3 - w / 2);
+      const top = topIn(u - w / 2, u + w / 2);
+      if (kind === 'streaks') {
+        // saçaktan aşağı; altındaki pencere/kapının üstünde biter
+        h = Math.min(h, H - 0.25 - (top ? top + 0.15 : 0.1));
+        if (h < 0.6) continue;
+        y = H - 0.25 - h / 2;
+      } else if (top && !free(u - w / 2, u + w / 2, y - h / 2, y + h / 2) && kind !== 'cracks') {
+        // pencere bandına çarptı: pencerelerin üstündeki bantta dene
+        y = top + 0.25 + h / 2;
+        if (y + h / 2 > H - 0.2) continue;
+      }
+      if (free(u - w / 2, u + w / 2, y - h / 2, y + h / 2)) { place(u, y, w, h, kind); placed++; }
+    }
+    for (const o of ops) {
+      // pencere üstünde is (yangın görmüş bina), kapı yanında arama ekibi işareti
+      if (o.win && urban && rng.chance(0.16)) { const w = o.e - o.s + 0.5, h = Math.min(1.3, H - o.y1 - 0.2); if (h > 0.5) place((o.s + o.e) / 2, o.y1 + h / 2 - 0.05, w, h, 'soot'); }
+      if (o.door && urban && rng.chance(0.45)) { const u = o.s - 0.7; if (free(u - 0.45, u + 0.45, 1.1, 2.0)) place(u, 1.55, 0.9, 0.9, 'xcode'); }
+    }
+  }
+  for (const d of out) { delete d.side; delete d.u; delete d.yl; }
+  return out;
 }

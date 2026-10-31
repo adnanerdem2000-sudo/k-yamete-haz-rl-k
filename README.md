@@ -73,9 +73,10 @@ doğrudan `file://` ile açma: tarayıcılar ES modüllerini ve model dosyaları
 ### Testler
 
 ```bash
-npm test             # birim testleri (envanter, ihtiyaçlar, zaman, harita sisi, hava, görev kancaları, kayıt)
-npm run test:e2e     # uçtan uca senaryolar (başsız Chromium + Playwright; önce `npm start`)
-node tools/scenario.mjs tests/e2e/story.mjs   # tek senaryo: hikâye (santral, fener, halatla enkaz çekme, uçak finali…)
+npm test             # birim testleri (envanter, ihtiyaçlar, zaman, animasyon paketi, hareket, parça birleştirme…)
+npm run test:e2e     # tüm uçtan uca senaryolar sırayla (kendi sunucusunu açar; başsız Chromium + Playwright)
+node tools/e2e.mjs story carry-mp             # seçili senaryolar (günlük: /tmp/e2e-<ad>.log)
+node tools/scenario.mjs tests/e2e/story.mjs   # tek senaryo, elle açılmış sunucuya (`npm start`) karşı
 ```
 
 Ayrıntılar: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).

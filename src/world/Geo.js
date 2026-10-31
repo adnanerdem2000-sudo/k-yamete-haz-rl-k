@@ -46,7 +46,12 @@ class Bucket {
 }
 
 export class Geo {
-  constructor() { this.buckets = new Map(); }
+  constructor() {
+    this.buckets = new Map();
+    // isteğe bağlı kir: { key, y0, h, k } — bu malzemenin yüzlerinde köşe rengi zemine yaklaştıkça koyulaşır
+    // (y0'da k kadar koyu, y0+h ve üstünde temiz). Bina dış duvarlarında yağmur sıçraması/is görünümü verir.
+    this.grime = null;
+  }
 
   bucket(key) {
     let b = this.buckets.get(key);
@@ -66,10 +71,11 @@ export class Geo {
     const s = UVS[key] || 0.5;
     const pts = [p0, p1, p2, p3];
     const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);
+    const gr = this.grime && this.grime.key === key && ay < 0.5 ? this.grime : null;
     for (const p of pts) {
       b.pos.push(p[0], p[1], p[2]);
       b.nrm.push(nx, ny, nz);
-      b.col.push(_c.r, _c.g, _c.b);
+      if (gr) { const f = 1 - gr.k * (1 - Math.min(1, Math.max(0, (p[1] - gr.y0) / gr.h))); b.col.push(_c.r * f, _c.g * f, _c.b * f); } else b.col.push(_c.r, _c.g, _c.b);
       let u, v;
       if (uvMode === 'edge') {
         // dörtgen kenarlarına göre (çatı eğimleri)

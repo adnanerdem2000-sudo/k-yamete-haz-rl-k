@@ -72,6 +72,7 @@ hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indiri
 ## Testleri çalıştırma
 ```bash
 npm test
-npm start &            # ayrı terminalde
-npm run test:e2e       # her senaryo tek tek: node tools/scenario.mjs tests/e2e/<senaryo>.mjs
+npm run test:e2e       # tools/e2e.mjs: kendi sunucusunu açar, senaryoları sırayla koşar, özet tablo basar
+node tools/e2e.mjs carry carry-mp    # seçili senaryolar; tam çıktı /tmp/e2e-<ad>.log
+# elle: npm start & ; node tools/scenario.mjs tests/e2e/<senaryo>.mjs
 ```
