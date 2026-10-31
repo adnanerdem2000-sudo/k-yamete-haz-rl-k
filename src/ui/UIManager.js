@@ -85,6 +85,7 @@ export class UIManager {
     this.panel = { name, el, ...opts };
     this.panelLayer.appendChild(el);
     this.panelLayer.classList.add('open');
+    this.root.classList.add('panel-open'); // bildirimler panelin üstüne binmesin (alta iner)
     if (opts.modal) this.panelLayer.classList.add('modal');
     this.game.input.releaseLock();
     this.cancelProgressOnPanel = false;
@@ -96,6 +97,7 @@ export class UIManager {
     this.panel = null;
     p.el.remove();
     this.panelLayer.classList.remove('open', 'modal');
+    this.root.classList.remove('panel-open');
     if (p.onClose) p.onClose();
     if (!silent) this.game.audio.play('close', { vol: 0.3 });
   }
@@ -260,6 +262,7 @@ export class UIManager {
   updateHotbar() { this.hud.hotVer = -1; }
   refreshInventory() { if (this.panel && this.panel.name === 'journal') this.journal.refresh(); if (this.panel && this.panel.name === 'storage') this.panels.renderStorage(); }
   refreshQuests() { this.hud.questKey = null; if (this.panel && this.panel.name === 'journal' && this.journal.tab === 'quests') this.journal.render(); }
+  refreshTimeline() { if (this.panel && this.panel.name === 'journal' && this.journal.tab === 'timeline') this.journal.render(); }
   refreshStorage(id) { this.panels.refreshStorage(id); }
 
   // ======================================================================= ilerleme çubuğu (yeme, tedavi, üretim)

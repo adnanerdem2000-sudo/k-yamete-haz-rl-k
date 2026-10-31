@@ -185,7 +185,7 @@ export class Player {
     this.applyStance('crouch');
     this.mode = 'ground';
     this.avatar.play('roll', this.roll.dur);
-    this.session.audio && this.session.audio.play('swing', { at: this.pos, vol: 0.35, rate: 0.7 });
+    this.session.audio && this.session.audio.play('whoosh', { vol: 0.45, rate: 0.9, vary: 0.15 });
   }
 
   updateRoll(dt) {

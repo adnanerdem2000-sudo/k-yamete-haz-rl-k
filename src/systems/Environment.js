@@ -52,6 +52,8 @@ export class Environment {
     this.weather = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
     this.flash = 0;
     this.doom = 0;
+    this.bloodMoon = false; // Kanlı Ay gecesi (olay)
+    this._blood = 0;
     this.redMist = 0;
     this.regionTint = new THREE.Color(1, 1, 1);
     this.targetTint = new THREE.Color(1, 1, 1);
@@ -125,6 +127,7 @@ export class Environment {
     const lightDir = isNight ? moonDir : this.sunDir;
     this.sun.color.copy(isNight ? _c1.set('#8fa8ff') : k.sunColor);
     this.sun.intensity = isNight ? 0.38 * (1 - overcast * 0.6) : Math.max(0.2, sunI);
+    if (isNight && this._blood > 0.01) { this.sun.color.lerp(_c2.set('#ff5a40'), this._blood * 0.75); this.sun.intensity *= 1 + this._blood * 0.4; }
     const fx = focus ? focus.x : 0, fy = focus ? focus.y : 0, fz = focus ? focus.z : 0;
     // gölge kamerası odakta (texel'e yapıştır, titreme önlenir)
     const snap = 110 / this.sun.shadow.mapSize.x;
@@ -141,7 +144,8 @@ export class Environment {
     sky.uHorizon.value.copy(k.horizon).lerp(grey, overcast * 0.6);
     sky.uBottom.value.copy(k.horizon).multiplyScalar(0.8);
     sky.uSunDir.value.copy(this.sunDir);
-    sky.uSunColor.value.copy(k.sunColor).multiplyScalar(1 - overcast * 0.8);
+    // güneş yönü ufkun 0.05 üstünde sabitlenir; gerçek yükseklik ufkun altına inince disk ve hale söner
+    sky.uSunColor.value.copy(k.sunColor).multiplyScalar((1 - overcast * 0.8) * clamp((elev + 0.03) / 0.09, 0, 1));
     sky.uMoonDir.value.copy(moonDir);
     sky.uStars.value = smoothstep(1250, 1320, minuteOfDay) + (1 - smoothstep(280, 340, minuteOfDay)) * (minuteOfDay < 400 ? 1 : 0);
     sky.uStars.value = clamp(sky.uStars.value, 0, 1) * (1 - overcast);
@@ -149,6 +153,10 @@ export class Environment {
     sky.uCloudColor.value.set(isNight ? '#3a4458' : '#ffffff').lerp(_c1.set('#7d8590'), overcast);
     sky.uTime.value = t;
     sky.uDoom.value = this.doom;
+    // Kanlı Ay: büyük, kızıl ay ve kızıla çalan gece
+    this._blood += ((this.bloodMoon && isNight ? 1 : 0) - this._blood) * Math.min(1, dt * 0.5);
+    sky.uMoonColor.value.setRGB(0.85, 0.9, 1.0).lerp(_c1.set('#ff3b24'), this._blood);
+    sky.uMoonSize.value = 1 + this._blood * 1.6;
     sky.uGlow.value = 1 - overcast;
     if (this.flash > 0) { sky.uTop.value.lerp(_c1.set('#e8ecff'), this.flash); sky.uHorizon.value.lerp(_c1.set('#ffffff'), this.flash); }
     this.world.sky.follow(cam);
@@ -173,6 +181,7 @@ export class Environment {
     gr.uTint.value.copy(this.regionTint);
     if (isNight) gr.uTint.value.multiply(_c1.set('#c8d4ff'));
     if (this.doom > 0) gr.uTint.value.lerp(_c1.set('#ffb0b0'), this.doom * 0.35);
+    if (this._blood > 0.01) gr.uTint.value.lerp(_c1.set('#ff8a7a'), this._blood * 0.4);
     gr.uSaturation.value = 1.15 - overcast * 0.25;
     this.game.gfx.renderer.toneMappingExposure = k.exposure * (1 - overcast * 0.12) + this.flash;
     // su

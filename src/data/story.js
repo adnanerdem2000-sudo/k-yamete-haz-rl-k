@@ -23,39 +23,59 @@ export const NOTES = {
   random_diary: { title: 'Yırtık Günlük Sayfası', src: '—', text: 'Marketteki son su şişesi için iki komşu kavga etti. Kimse kimseye güvenmiyor artık. Geceleri sirenler, sabahları sessizlik.' },
   random_diary2: { title: 'Çocuk Çizimi', src: '—', text: 'Bir aile çizimi: anne, baba, çocuk ve bir köpek. Altında: "Babam dönecek. Söz verdi."' },
   random_diary3: { title: 'Alışveriş Listesi', src: '—', text: 'Su (çok), konserve, pil, ilaç (antibiyotik!), çivi, tahta. Pencereleri kapat. Kapıyı kimseye açma.' },
+  random_diary4: { title: 'Otobüs Bileti', src: '—', text: 'Ada → Anakara, 29.09, sefer 07:30. Arkasına kurşun kalemle yazılmış: "Seferler iptal. Yürüyerek köprüye gidiyoruz. Annem, bekle bizi."' },
+  random_diary5: { title: 'Doğum Günü Kartı', src: '—', text: '"İyi ki doğdun Elif! Yedi yaşına girdin, artık koca kız oldun." Kartın arkasında aceleyle: "Dağ köyüne gidiyoruz, çeşmesi temizmiş."' },
+  random_diary6: { title: 'Nöbet Listesi', src: '—', text: 'Gece nöbeti: 22-02 Emre, 02-06 Sinan. Kural 1: Kapıya üç kez vurulmazsa açma. Kural 2: Isırılan söyler. Kural 3: Kural 2\'ye uymayan… (gerisi kanla silinmiş)' },
+  random_diary7: { title: 'Radyo Notu', src: '—', text: 'Gece 03:00 civarı 147.30\'da bir kadın sesi koordinat okuyor. Sonra hep aynı cümle: "Işık inmeden önce yükseğe çıkın. Işık inmeden önce yükseğe çıkın."' },
+  // ---- genişletilmiş ada: havaalanı, santral, cezaevi, tatil köyü, fener, dağ köyü
+  airfield_log: { title: 'Kargo Manifestosu — KZ-07', src: 'Havaalanı Terminali', text: '26.09 · Özel uçuş KZ-07 · Kargo: "tarım numunesi", soğuk zincir, 6 kutu. Gönderen: Kızılçam Araştırma A.Ş. Alıcı: [karalanmış]. Gümrük: "askerî muafiyet". Kaptan: A. Aydın. Kenara el yazısıyla: "Bu kutular neden tıkırdıyor?"' },
+  tower_log: { title: 'Kule Kayıt Defteri', src: 'Kontrol Kulesi', text: '27.09 23:40 — KZ-08 kalkış izni (kargo: 6 kutu K-7). 23:52 — Pilot: "Arkada bir şey hareket ediyor." 23:55 — Telsiz kesildi; KZ-08 pistin sonuna düştü. 28.09 — Tüm uçuşlar askerî emirle iptal. Pist kapatıldı, araçlar pistin ortasına çekildi.' },
+  pilot_log: { title: 'Yardımcı Pilotun Defteri', src: 'Pist Sonundaki Enkaz', text: 'Kutulardan biri kırıldı. Kargo bölmesinde kızıl bir toz… Yüzbaşı kıpkırmızı gözlerle kokpit kapısına vuruyor. Pisti göremiyorum. Eğer biri bunu bulursa Aydın\'a söyleyin: onu suçlamıyorum. Hangardaki tek motorlu uçak sağlam; yakıt ve pist yeter.' },
+  dam_report: { title: 'Santral Bakım Raporu', src: 'Santral Kontrol Odası', text: '20.09 — Tesisin "soğutma hattı" baraj gölünden besleniyor; dönüş suyu şehir şebekesine karışıyor. Dönüş hattında kırmızı tortu tespit edildi. Mühendis Z. Kaya hattın kapatılmasını talep etti. Yönetim cevabı: "Hat açık kalacak. Konu gizlidir." Not: Şebeke suyu 21.09\'dan beri bu hattan.' },
+  engineer_note: { title: 'Zeynep\'in Çalışma Notu', src: 'Mühendis Ofisi', text: 'Türbin 2\'yi yeniden başlatmak için: 1 motor parçası, 3 kablo, 2 elektronik devre. Sonra kontrol panelinden şebekeye ver. Işıklar gelirse benzin pompaları, fener ve havaalanı da çalışır. Gece santrali yalnız bırakmayın — türbin sesi onları çekiyor.' },
+  prison_log: { title: 'Gardiyan Nöbet Defteri', src: 'Cezaevi İdaresi', text: '15.09 — 12 hükümlü "gönüllü sağlık taraması" için beyaz kamyonlarla tesise götürüldü. Hiçbiri dönmedi. 22.09 — Müdür yeni bir liste imzaladı: 20 kişi daha. 24.09 — B koğuşunda ateşli vakalar. 28.09 — Müdür kaçtı. Kapıları kilitledim. Ben gidersem onları kim besleyecek? — N.' },
+  resort_guestbook: { title: 'Otel Ziyaretçi Defteri', src: 'Otel Mavi Koy', text: '"Mavi Koy harika, denizi masmavi!" — Aile Demir. "Personel çok ilgili." — K.M. … Son sayfada çocuk yazısıyla: "Oda 103. Babam kapıyı dolapla kapattı. Dışarıdakiler misafir değil. Işıklar yanınca gelin. — Defne, 8 yaşında"' },
+  hotel_manager: { title: 'Otel Müdürünün E-postası', src: 'Otel Mavi Koy', text: 'Konu: ACİL — Tesis kiralama. "Kızılçam Araştırma ekibi 40 odayı üç aylığına kapattı. Ekip her akşam numune çantalarıyla dönüyor, havuz bölgesi personele yasak." Cevap: "Sorgulamayın. Ödeme peşin yapıldı."' },
+  lighthouse_log: { title: 'Fener Seyir Defteri', src: 'Bekçi Kulübesi', text: 'Fener 4. gün söndü; jeneratör yandı. Geceleri açıkta bekleyen bir geminin ışıklarını görüyorum. Bize işaret bekliyorlar. Lamba için 4 akü (ya da santralden elektrik) ve 2 sağlam cam lazım. Işık yanarsa gemi kıyıya yaklaşır. — İsmail' },
+  village_note: { title: 'Muhtarlık Duyurusu', src: 'Dağ Köyü', text: 'Köy halkına: Çeşme suyu temizdir, baraj suyunu İÇMEYİN. Ateşi olanları camiye getirin. Antibiyotiği olan muhtarlığa getirsin. Gece kapıları kapalı tutun; çanı duyan meydanda toplansın. — Muhtar Ömer' },
+  kizilcam_origin: { title: 'Eski Çoban Masalı', src: 'Çoban Kulübesi', text: '"Dağda kızıl çamlar biter, kökünde kızıl mantar. Yiyen ölmez ama yaşamaz da; gece kalkar yürür, şafakta toprağa döner." Dedem anlatırdı: 1917 kıtlığında köyün yarısı o mantarı yemiş. Köy mezarlığı bu yüzden kızıl çamlardan uzaktır. Geçen yıl şehirden gelen bilim adamları bu masalı kayda aldı…' },
+  farm_diary: { title: 'Çiftçinin Ajandası', src: 'Ambar', text: 'Eylül sonu: Mısırlar hasada hazır ama kimse tarlaya çıkmıyor. İnekler gece huzursuz, köpekler ormana doğru havlıyor. Traktörün deposunda biraz mazot var. Tohumları sandığa koydum; bahar gelirse biri eksin.' },
+  mainland_broadcast: { title: 'Karantina Bildirisi', src: 'Helikopterden Atılan Bildiri', text: 'KRİZ MASASI DUYURUSU: Ada tam karantina altındadır. Anakara köprüsü 30. gün 21:30\'da kapatılacaktır. Son konvoya yalnızca belirti göstermeyen siviller alınacaktır. Tahliye noktaları: Helikopter Pisti (20:00), Köprü Başı (21:00). Kızıl renkte sis görürseniz yüksek yerlere çıkın.' },
+  cargo_manifest: { title: 'Yanık Kargo Etiketi', src: 'Düşen Uçak', text: 'KZ-09 · İçerik: K-7 türevi serum (deneysel, 2. nesil) · Taşıma: −80°C · Uyarı: Uygulanan denekler 6 saat içinde [yanmış] … "Alıcı teslim almazsa kargoyu imha edin." İmza: Proje Kızılçam Lojistik.' },
+  kaan_confession: { title: 'Dr. Kaan\'ın İtirafı', src: 'Kaçak Bilim İnsanı', text: 'Ben sadece veri girdim. Ama protokolü okudum: Son Işık bir "temizlik" değil, kanıtların imhası. Kızıl sis K-7\'yi öldürmüyor, yalnızca toprağa gömüyor. Bu ada bir deney tahtasıydı; deney bitince silecekler. Gerçek ancak dışarı çıkarsa bir anlam taşır. 147.30 anakara basınına da açık.' },
 };
-export const RANDOM_NOTES = ['random_diary', 'random_diary2', 'random_diary3', 'hospital_records', 'cctv', 'factory_memo', 'bank_note'];
+export const RANDOM_NOTES = ['random_diary', 'random_diary2', 'random_diary3', 'random_diary4', 'random_diary5', 'random_diary6', 'random_diary7', 'hospital_records', 'cctv', 'factory_memo', 'bank_note'];
 
 // ------------------------------------------------------------------ 30 GÜNLÜK TAKVİM
 export const CALENDAR = {
   1: { title: 'Salgın Açıklaması', broadcast: 'Hükümet: "Yaşanan olaylar münferittir. Evlerinizde kalın, musluk suyunu içmeyin."', effects: ['tutorial'] },
   2: { title: 'Marketlerde Panik', broadcast: 'Marketlerde uzun kuyruklar. Bazı mağazalar kapandı.', effects: ['market_panic'] },
   3: { title: 'İlk Yağmalamalar', broadcast: 'Polis yağma olaylarına müdahale edemiyor. Bazı evler boşaltıldı.', effects: ['looting'] },
-  4: { title: 'Elektrik Kesintileri', broadcast: 'Şebeke çöktü. Geceleri sokak lambaları yanmayacak.', effects: ['power_out'] },
+  4: { title: 'Elektrik Kesintileri', broadcast: 'Şebeke çöktü. Geceleri sokak lambaları yanmayacak.', effects: ['power_out', 'dam_call'] },
   5: { title: 'İlk Yardım Çağrıları', broadcast: 'Telsizlerde yardım çağrıları duyuluyor…', effects: ['distress_calls'] },
-  6: { title: 'Hastane Tahliyesi', broadcast: 'Hastane tahliye edildi. Hastaların bir kısmı geride kaldı.', effects: ['hospital_evac'] },
+  6: { title: 'Hastane Tahliyesi', broadcast: 'Hastane tahliye edildi. Hastaların bir kısmı geride kaldı.', effects: ['hospital_evac', 'resort_call'] },
   7: { title: 'İlk Büyük Sürü', broadcast: 'DİKKAT: Şehirden mahallelere doğru büyük bir kalabalık hareket ediyor!', effects: ['horde:1'] },
   8: { title: 'Askerî Kontrol Noktaları', broadcast: 'Ordu kontrol noktaları kurdu. Askerî bölgeye yaklaşmayın.', effects: ['checkpoints'] },
-  9: { title: 'Telsiz Yayınları', broadcast: '[Parazit] …147.30… tekrar ediyorum… tesis… su… bilerek…', effects: ['radio_mystery'] },
+  9: { title: 'Telsiz Yayınları', broadcast: '[Parazit] …147.30… tekrar ediyorum… tesis… su… bilerek…', effects: ['radio_mystery', 'pilot_call'] },
   10: { title: 'Tahliye Duyurusu', broadcast: 'Son gün tahliyesi planlanıyor. Helikopter pisti ve köprü konvoyu — yalnızca kayıtlı siviller.', effects: ['evac_announce'] },
   11: { title: 'Benzin Sıkıntısı', broadcast: 'Yakıt dağıtımı durduruldu. Pompalar ancak jeneratörle çalışır.', effects: ['fuel_shortage'] },
-  12: { title: 'Şehir Merkezinde Çatışmalar', broadcast: 'Şehir merkezinde silah sesleri. Yağmacı grupları ortaya çıktı.', effects: ['city_clashes'] },
+  12: { title: 'Şehir Merkezinde Çatışmalar', broadcast: 'Şehir merkezinde silah sesleri. Yağmacı grupları ortaya çıktı.', effects: ['city_clashes', 'prison_break'] },
   13: { title: 'Yeni Enfekte Türleri', broadcast: 'Gözlem: Bazı enfekteler koşuyor, bazıları geceleri parlıyor!', effects: ['new_types'] },
   14: { title: 'İletişim Ağları Çöktü', broadcast: 'Mobil şebeke kapandı. Takım içi konum takibi için telsiz gerekecek.', effects: ['comms_down'] },
   15: { title: 'Büyük Fırtına', broadcast: 'Meteoroloji: Bu gece şiddetli fırtına bekleniyor.', effects: ['storm'] },
   16: { title: 'Yağmacı Saldırıları', broadcast: 'Silahlı gruplar evlere saldırıyor. Üssünüzü koruyun!', effects: ['raider_attack'] },
   17: { title: 'Gizemli Araştırma Belgeleri', broadcast: 'Sızdırılan belgeler: "Proje Kızılçam" adlı bir araştırmadan bahsediliyor.', effects: ['lab_reveal'] },
-  18: { title: 'Askerî Tesisin Keşfi', broadcast: 'Askerî bölgedeki birlikler geri çekildi. Tesis kısmen boş.', effects: ['military_open'] },
+  18: { title: 'Askerî Tesisin Keşfi', broadcast: 'Askerî bölgedeki birlikler geri çekildi. Tesis kısmen boş.', effects: ['military_open', 'leaflets'] },
   19: { title: 'Su Kaynaklarında Sorun', broadcast: 'Tüm musluk ve göl suları kontamine. Filtre ya da kaynatma şart.', effects: ['water_crisis'] },
   20: { title: 'Büyük Şehirler Boşaltıldı', broadcast: 'Şehir merkezi tamamen düştü. Binlerce enfekte sokakta.', effects: ['city_fall'] },
   21: { title: 'Hava Kötüleşiyor', broadcast: 'Sıcaklıklar düşüyor. Isınma önlemleri alın.', effects: ['cold'] },
-  22: { title: 'Yardım Çağrıları Kesildi', broadcast: '…', effects: ['silence'] },
+  22: { title: 'Yardım Çağrıları Kesildi', broadcast: '…', effects: ['silence', 'lighthouse_hint'] },
   23: { title: 'Büyük Göç', broadcast: 'Hayatta kalanlar kuzeydeki köprüye doğru yürüyor.', effects: ['migration'] },
   24: { title: 'Güvenli Bölgeler Kapandı', broadcast: 'Askerî güvenli bölgeler yeni sivil kabul etmiyor.', effects: ['safezones_closed'] },
-  25: { title: 'Son Tahliye Fırsatları', broadcast: 'Tahliye listesi kapanmak üzere. 147.30 frekansından kayıt olun.', effects: ['last_chance'] },
+  25: { title: 'Son Tahliye Fırsatları', broadcast: 'Tahliye listesi kapanmak üzere. 147.30 frekansından kayıt olun.', effects: ['last_chance', 'ship_rumor'] },
   26: { title: 'Dev Sürü Hareketi', broadcast: 'Uydular adanın doğusunda dev bir sürü tespit etti!', effects: ['horde:2'] },
   27: { title: 'Sığınakların Hazırlanması', broadcast: 'Son üç gün. Sığınaklarınızı hazırlayın.', effects: ['prep'] },
-  28: { title: 'Son Kaynak Toplama', broadcast: 'Gökyüzü kızıla dönüyor. Rüzgâr yön değiştirdi.', effects: ['doom:1'] },
+  28: { title: 'Son Kaynak Toplama', broadcast: 'Gökyüzü kızıla dönüyor. Rüzgâr yön değiştirdi.', effects: ['doom:1', 'bloodmoon'] },
   29: { title: 'Büyük Felaket Yaklaşıyor', broadcast: 'Yarın gece 22:00. Operasyon Son Işık. Tanrı yardımcımız olsun.', effects: ['doom:2', 'horde:2'] },
   30: { title: 'FİNAL — Son Işık', broadcast: 'BU BİR TATBİKAT DEĞİLDİR. 22:00\'de kızıl sis inecek. Tahliye noktalarına gidin!', effects: ['final'] },
 };
@@ -63,19 +83,74 @@ export const CALENDAR = {
 // ------------------------------------------------------------------ NPC'ler
 export const NPCS = {
   hasan: { id: 'hasan', name: 'Hasan Amca', role: 'Komşu', base: 'male', look: { base: 'male', skin: '#e0a07a', hairStyle: 'short', hairColor: '#b0b0b0', beard: 'mustache', hat: 'none', top: { style: 'longsleeve', color: '#7a5c3a' }, pants: { style: 'jeans', color: '#3a3a3a' }, shoes: '#2c2c2c', backpack: 'none', glasses: 'square', build: 1.02, dirt: 0.1 }, home: 'n1', faction: 'neighbors',
-    greet: ['Evladım, dikkatli olun. Bu işin sonu hiç iyi değil.', 'Benim zamanımda böyle şeyler olmazdı…'], trade: true },
+    greet: ['Evladım, dikkatli olun. Bu işin sonu hiç iyi değil.', 'Benim zamanımda böyle şeyler olmazdı…'], trade: true,
+    lore: [
+      { q: 'Mahallede neler oluyor?', a: 'Musluk suyundan içenler önce ateşlendi, sonra… Ben kırk yıl şehir şebekesinde çalıştım evladım. Su eylülün yirmisinden beri tuhaf kokuyordu. Barajdaki santralde bir mühendis kız vardı, Zeynep; o bilir.' },
+      { q: 'Nereye gidebiliriz?', a: 'Batıda çiftlik köyü, onun da ötesinde dağ köyü var. Köyün çeşmesi dağdan gelir, temizdir. Muhtar Ömer iyi adamdır, söyleyin Hasan gönderdi.' },
+    ] },
   ayse: { id: 'ayse', name: 'Ayşe Teyze', role: 'Komşu', look: { base: 'survivor-female', skin: '#f6d0b1', hairStyle: 'bun', hairColor: '#8a8a8a', beard: 'none', hat: 'none', top: { style: 'flannel', color: '#8e44ad', color2: '#5b2c6f' }, pants: { style: 'sweat', color: '#34495e' }, shoes: '#ecf0f1', backpack: 'none', glasses: 'round', build: 0.96, dirt: 0.05 }, home: 's3', faction: 'neighbors',
     greet: ['Torunum Can kayboldu, görürseniz bana getirin!', 'Size börek yapardım ama un kalmadı yavrum.'] },
   can: { id: 'can', name: 'Küçük Can', role: 'Çocuk', look: { base: 'skater-male', skin: '#efb994', hairStyle: 'messy', hairColor: '#6b4226', beard: 'none', hat: 'capBack', hatColor: '#e74c3c', top: { style: 'tshirt', color: '#27ae60' }, pants: { style: 'shorts', color: '#2980b9' }, shoes: '#f1c40f', backpack: 'small', backpackColor: '#e67e22', build: 0.8, height: 0.72, dirt: 0.3 }, faction: 'neighbors',
     greet: ['Abla/abi… çok korkuyorum.', 'Köpeğim Karabaş da kayboldu…'] },
   riza: { id: 'riza', name: 'Tüccar Rıza', role: 'Gezgin Tüccar', look: { base: 'skater-male', skin: '#c98a5e', hairStyle: 'short', hairColor: '#1d1410', beard: 'goatee', hat: 'cowboy', hatColor: '#6b4f2a', top: { style: 'vest', color: '#6b4f2a', color2: '#c0392b' }, pants: { style: 'cargo', color: '#4a4036' }, shoes: '#3b2b1d', backpack: 'hiking', backpackColor: '#8a5a2b', accessory: 'bandolier', build: 1.0, dirt: 0.4 }, faction: 'traders',
-    greet: ['Her şeyin bir fiyatı var dostum. Kıyamette bile.', 'Bugün mallar taze! Yani… çok bozuk değil.'], trade: true },
+    greet: ['Her şeyin bir fiyatı var dostum. Kıyamette bile.', 'Bugün mallar taze! Yani… çok bozuk değil.'], trade: true,
+    lore: [
+      { q: 'Yollarda neler duydun?', a: 'Havaalanında bir pilot kulede mahsurmuş, yaralı. Cezaevinde bir gardiyan kadın tek başına mahkûmları besliyor, cesur kadın. Bir de tatil köyünden telsize çocuk sesi geliyor… Bilgi bedava, yakıt değil.' },
+    ] },
   kemal: { id: 'kemal', name: 'Çavuş Kemal', role: 'Asker', look: { base: 'survivor-male', skin: '#e0a07a', hairStyle: 'short', hairColor: '#1d1410', beard: 'stubble', hat: 'helmet', hatColor: '#4b5320', top: { style: 'uniform', color: '#556b2f', color2: '#3a4a2a' }, pants: { style: 'camo', color: '#556b2f' }, shoes: '#2c2c2c', backpack: 'tactical', backpackColor: '#4b5320', gloves: 'tactical', accessory: 'radio', build: 1.08, dirt: 0.3 }, faction: 'military',
-    greet: ['Sivil! Bölge yasak. …Ama yardıma ihtiyacımız var.', 'Künye getirirsen listeye yazarım. Söz.'] },
+    greet: ['Sivil! Bölge yasak. …Ama yardıma ihtiyacımız var.', 'Künye getirirsen listeye yazarım. Söz.'],
+    lore: [
+      { q: 'Son Işık nedir?', a: 'Bilmemem gereken şeyler… 30. gün 22:00. Kızıl bir sis, alçak yerlerdeki her şeyi yutacak. Yükseğe çıkın ya da adadan çıkın. Daha fazlasını sorma sivil — ben de emir kuluyum.' },
+      { q: 'Köprü neden kapanıyor?', a: 'Anakara kendini koruyor. Son konvoy 21:00\'de geçecek, sonra köprü ayakları… Patlatma denemelerini duymuşsunuzdur. Zırhlı, sağlam bir araçla gelin; yolda durmayın.' },
+    ] },
   selin: { id: 'selin', name: 'Dr. Selin Aydın', role: 'Bilim İnsanı', look: { base: 'survivor-female', skin: '#efb994', hairStyle: 'long', hairColor: '#2c1a10', beard: 'none', hat: 'none', top: { style: 'coat', color: '#ecf0f1', color2: '#2c3e50' }, pants: { style: 'jeans', color: '#2c3e50' }, shoes: '#2c2c2c', backpack: 'none', glasses: 'square', build: 0.95, dirt: 0.5 }, faction: 'neighbors',
-    greet: ['Ben… o tesiste çalışıyordum. Hepsi benim suçum.', 'Numuneyi askerlere ulaştırmalıyız. Tek şans bu.'] },
+    greet: ['Ben… o tesiste çalışıyordum. Hepsi benim suçum.', 'Numuneyi askerlere ulaştırmalıyız. Tek şans bu.'],
+    lore: [
+      { q: 'Bunu kim emretti?', a: 'Kızılçam bir şirket projesiydi ama koruması devletin içinden geliyordu. Kanıtlar adaya dağılmış durumda: kargo manifestoları havaalanında, su raporu santralde, denek listeleri cezaevinde. Hepsini toplarsanız kimse inkâr edemez.' },
+      { q: 'Aşı mümkün mü?', a: 'K-7 ana kültürüyle, iyi bir laboratuvarda, belki… Ama bu ada laboratuvar değil, mezarlık olacak. Numune adadan çıkmalı.' },
+    ] },
   kurt: { id: 'kurt', name: '"Kurt"', role: 'Yağmacı Lideri', look: { base: 'male', skin: '#c98a5e', hairStyle: 'mohawk', hairColor: '#c0392b', beard: 'stubble', hat: 'bandana', hatColor: '#1b1b1b', top: { style: 'vest', color: '#1b1b1b', color2: '#7a2020' }, pants: { style: 'cargo', color: '#2c2c2c' }, shoes: '#1b1b1b', backpack: 'tactical', backpackColor: '#1b1b1b', glasses: 'sunglasses', gloves: 'tactical', accessory: 'bandolier', build: 1.1, dirt: 0.6 }, faction: 'raiders',
     greet: ['Güzel bir üssünüz var. Yazık olur.', 'Yarısını verin, gerisi sizde kalsın. Adil, değil mi?'] },
+
+  // ---- genişletilmiş ada
+  aydin: { id: 'aydin', name: 'Pilot Aydın', role: 'Kargo Pilotu', look: { base: 'male', skin: '#e0a07a', hairStyle: 'short', hairColor: '#6b6b6b', beard: 'stubble', hat: 'none', top: { style: 'jacket', color: '#2c3e50', color2: '#d4af37' }, pants: { style: 'jeans', color: '#2f3640' }, shoes: '#1b1b1b', backpack: 'none', glasses: 'sunglasses', gloves: 'none', accessory: 'watch', build: 1.0, dirt: 0.45 }, faction: 'neighbors',
+    greet: ['Bacağım… Kuleye kadar sürünerek geldim.', 'O kutuları ben uçurdum. Ne taşıdığımı bilmiyordum, yemin ederim.', 'Uçak sağlam. Yakıt ve temiz bir pist olursa sizi buradan çıkarırım.'],
+    lore: [
+      { q: 'Kutularda ne vardı?', a: '"Tarım numunesi" dediler. Soğuk zincir, askerî muafiyet, gümrük yok. KZ-08\'i Yüzbaşı Cem uçuruyordu; kalkıştan on iki dakika sonra telsizde çığlık duydum. Enkaz pistin sonunda. Manifestolar terminaldeki uçuş ofisinde.' },
+      { q: 'Pist neden kapalı?', a: 'Askerler 28\'inde araçları pistin ortasına çektiler, kimse kaçamasın diye. Üç enkaz var. Bir araçla itin ya da halatla aracınıza bağlayıp çekin — yarım ton hurda, elle olmaz.', marker: [236, -770, 'Pist Enkazları', 'quest'] },
+      { q: 'Yakıtı nereden bulacağız?', a: 'Önlükteki beyaz tank uçak yakıtıyla dolu. Bidonları doldurup uçağa taşıyın; 60 litre anakaraya yeter. Pompa elektriksiz çalışmazsa santrali ayağa kaldırmanız gerekir.' },
+    ] },
+  ismail: { id: 'ismail', name: 'Fener Bekçisi İsmail', role: 'Fener Bekçisi', look: { base: 'male', skin: '#c98a5e', hairStyle: 'curly', hairColor: '#e8e8e8', beard: 'full', hat: 'beanie', hatColor: '#1f3a5f', top: { style: 'longsleeve', color: '#1f3a5f', color2: '#ecf0f1' }, pants: { style: 'jeans', color: '#2c2c2c' }, shoes: '#3b2b1d', backpack: 'none', glasses: 'none', accessory: 'scarf', build: 0.98, dirt: 0.2 }, faction: 'neighbors',
+    greet: ['Kırk yıl bu ışığı yaktım. Şimdi karanlıkta bir gemi bekliyor, görüyor musun?', 'Deniz sakin evlat. İnsanlar değil.'],
+    lore: [
+      { q: 'Hangi gemi?', a: 'Açıkta, batıda demirli bir yük gemisi. Her gece üç kez ışık veriyor, cevap bekliyor. Fener yanarsa yaklaşır. Benim yaşımda küreğe bile güvenemem ama sizin tekneniz varsa… Liman\'daki Martı\'yı bilirim, motoru iyidir.' },
+      { q: 'Lamba için ne gerekiyor?', a: 'Dört sağlam akü — ya da santralden elektrik. Bir de iki sağlam cam; mercek kırıldı. Kulenin tepesindeki panelden yakarsınız. İp merdiven sağlamdır, korkmayın.' },
+    ] },
+  zeynep: { id: 'zeynep', name: 'Mühendis Zeynep', role: 'Santral Mühendisi', look: { base: 'female', skin: '#efb994', hairStyle: 'ponytail', hairColor: '#3b2314', beard: 'none', hat: 'hardhat', hatColor: '#f1c40f', top: { style: 'jacket', color: '#e67e22', color2: '#2c3e50' }, pants: { style: 'overalls', color: '#2f4f6f' }, shoes: '#3b2b1d', backpack: 'toolbag', backpackColor: '#8a5a2b', glasses: 'goggles', gloves: 'work', gloveColor: '#d4a256', accessory: 'toolbelt', build: 0.95, dirt: 0.4 }, faction: 'neighbors',
+    greet: ['Türbinler sağlam, sadece kalbi durdu. Onu yeniden çalıştırabiliriz.', 'Raporu yazdım. Kimse dinlemedi.'],
+    lore: [
+      { q: 'Salgının santralle ne ilgisi var?', a: 'Tesisin soğutma hattı baraj gölünden besleniyor; dönüş suyu şehir şebekesine karışıyor. Dönüş suyunda kırmızı tortu buldum. Hattın kapatılmasını istedim; cevap "hat açık kalacak" oldu. Raporun kopyası kontrol odasında.' },
+      { q: 'Elektrik gelirse ne değişir?', a: 'Sokak lambaları, benzin pompaları, fener, havaalanı… Geceler biraz daha az karanlık olur. Ama dikkat: türbin sesi kilometrelerce duyulur, onları buraya çeker.' },
+    ] },
+  omer: { id: 'omer', name: 'Muhtar Ömer', role: 'Köy Muhtarı', look: { base: 'male', skin: '#e0a07a', hairStyle: 'bald', hairColor: '#b0b0b0', beard: 'full', hat: 'none', top: { style: 'flannel', color: '#5b4636', color2: '#2c2c2c' }, pants: { style: 'cargo', color: '#4a4036' }, shoes: '#2c2c2c', backpack: 'none', glasses: 'round', accessory: 'watch', build: 1.08, dirt: 0.2 }, faction: 'neighbors', tradeFlag: 'village_safe',
+    greet: ['Hoş geldiniz evlatlar. Köyümüz küçük ama kapımız açık.', 'Baraj suyunu içmeyin. Çeşmemiz temiz, dağdan gelir.'],
+    lore: [
+      { q: 'Kızıl çam masalı nedir?', a: 'Dedelerimiz kızıl çamların kökündeki mantara "ölü uyandıran" derdi. 1917 kıtlığında yiyenler gece kalkıp yürümüş. Geçen yıl şehirden bilim adamları geldi, masalı dinlediler, kökleri söküp götürdüler. Çoban kulübesinde masalın yazılısı vardır.', note: 'kizilcam_origin' },
+      { q: 'Köyün derdi ne?', a: 'Hastalarımız var; ateşleri düşmüyor. Antibiyotik bulursanız hayat kurtarırsınız. Bir de geceleri köyü saran şu yaratıklar… Yardım ederseniz köyün kilerini sizinle paylaşırız.' },
+    ] },
+  necla: { id: 'necla', name: 'Gardiyan Necla', role: 'Gardiyan', look: { base: 'female', skin: '#c98a5e', hairStyle: 'bun', hairColor: '#1d1410', beard: 'none', hat: 'cap', hatColor: '#2c3e50', top: { style: 'uniform', color: '#34495e', color2: '#2c3e50' }, pants: { style: 'cargo', color: '#2c3e50' }, shoes: '#1b1b1b', backpack: 'none', glasses: 'none', gloves: 'tactical', accessory: 'radio', build: 1.04, dirt: 0.35 }, faction: 'military',
+    greet: ['Durun! …Siz yaşıyorsunuz. Tanrıya şükür.', 'B koğuşunda hâlâ insanlar var. Onları ben besliyorum.'],
+    lore: [
+      { q: 'Mahkûmlara ne oldu?', a: '"Gönüllü sağlık taraması" dediler. Beyaz kamyonlar on iki kişiyi aldı, sonra yirmi kişi daha. Hiçbiri dönmedi. Müdür imzaladı ve ilk kaçan o oldu. Her şey idaredeki nöbet defterinde yazılı.' },
+      { q: 'B koğuşunda kimler var?', a: 'Sekiz kişi. İki hırsız, bir kavgacı, bir de yanlışlıkla içeri atılmış bir öğretmen… Hepsi sağlıklı, ateşlileri ayırdım. Avlu temizlenirse onlarla ne yapacağımıza birlikte karar veririz.' },
+    ] },
+  murat: { id: 'murat', name: 'Murat', role: 'Oto Tamircisi', look: { base: 'male', skin: '#c98a5e', hairStyle: 'messy', hairColor: '#1d1410', beard: 'stubble', hat: 'cap', hatColor: '#c0392b', top: { style: 'tshirt', color: '#2980b9', color2: '#1b1b1b' }, pants: { style: 'jeans', color: '#34495e' }, shoes: '#2c2c2c', backpack: 'small', backpackColor: '#2c2c2c', glasses: 'none', gloves: 'work', gloveColor: '#7a4a2a', accessory: 'none', build: 1.06, dirt: 0.5 }, faction: 'neighbors',
+    greet: ['Sonunda! Üç gündür bu odadayız.', 'Defne\'yi güvenli bir yere götürün, gerisi önemli değil.'],
+    lore: [
+      { q: 'Burada ne oldu?', a: 'Tatile gelmiştik. Otelin yarısını bir "araştırma ekibi" tutmuştu, havuza kimseyi sokmuyorlardı. Bir gece hepsi aynı anda hastalandı. Ben tamirciyim, motordan anlarım — üsse götürürseniz araçlarınıza bakarım.' },
+    ] },
+  defne: { id: 'defne', name: 'Defne', role: 'Çocuk', look: { base: 'female', skin: '#efb994', hairStyle: 'pigtails', hairColor: '#6b4226', beard: 'none', hat: 'none', top: { style: 'tshirt', color: '#e88fb4', color2: '#ffffff' }, pants: { style: 'shorts', color: '#4a6fa5' }, shoes: '#ecf0f1', backpack: 'small', backpackColor: '#8e44ad', build: 0.8, height: 0.74, dirt: 0.2 }, faction: 'neighbors',
+    greet: ['Babam kapıyı dolapla kapattı. Bu resmi sana çizdim.', 'Deniz feneri yanınca gemiler geri gelir mi?'] },
 };
 
 // ------------------------------------------------------------------ GÖREVLER
@@ -89,8 +164,10 @@ export const QUESTS = {
   m5_horde: { kind: 'main', title: 'Sürüye Hazırlan', desc: '7. gün büyük bir sürü bekleniyor. Üs savunmanı 15 puana çıkar ve geceyi atlat.', objs: [{ t: 'flag', flag: 'base_def', count: 15, label: 'Üs savunması 15' }, { t: 'survive', day: 8, label: '7. günün gecesini atlat' }], reward: [['first_aid', 1], ['ammo_9mm', 12]], next: ['m6_radio'] },
   m6_radio: { kind: 'main', title: 'Parazitli Frekans', desc: 'Telsizde garip yayınlar var. Bir telsiz üret ya da bul ve 147.30 frekansını dinle.', objs: [{ t: 'collect', item: 'radio', count: 1, label: 'Telsiz edin' }, { t: 'flag', flag: 'radio_heard', count: 1, label: 'Telsizi kullan (envanterde Kullan)' }], reward: [['battery', 4]], next: ['m7_hospital'] },
   m7_hospital: { kind: 'main', title: 'Hastane Kayıtları', desc: 'Salgının nasıl başladığını öğren. Hastanedeki başhekim odasını araştır.', objs: [{ t: 'goto', poi: 'hospital', r: 30, label: 'Hastaneye git' }, { t: 'flag', flag: 'note:hospital_records', count: 1, label: 'Hastane kayıtlarını bul' }], reward: [['antibiotics', 2]], next: ['m8_lab'] },
-  m8_lab: { kind: 'main', title: 'Proje Kızılçam', desc: 'Tesise girmek için güvenlik kartı lazım. Kart başhekimde, mağaradaki zulada ya da bir kasada olabilir.', objs: [{ t: 'collect', item: 'keycard', count: 1, label: 'Güvenlik kartı bul' }, { t: 'goto', poi: 'lab', r: 25, label: 'Araştırma tesisine gir' }, { t: 'flag', flag: 'note:lab_secret', count: 1, label: 'Proje yöneticisinin kaydını bul' }], reward: [['ammo_rifle', 10]], next: ['m9_escape'], unlockDay: 10 },
+  m8_lab: { kind: 'main', title: 'Proje Kızılçam', desc: 'Tesise girmek için güvenlik kartı lazım. Kart başhekimde, mağaradaki zulada ya da bir kasada olabilir.', objs: [{ t: 'collect', item: 'keycard', count: 1, label: 'Güvenlik kartı bul' }, { t: 'goto', poi: 'lab', r: 25, label: 'Araştırma tesisine gir' }, { t: 'flag', flag: 'note:lab_secret', count: 1, label: 'Proje yöneticisinin kaydını bul' }], reward: [['ammo_rifle', 10]], next: ['m9_escape', 'm_truth'], unlockDay: 10 },
   m9_escape: { kind: 'main', title: 'Kaçış Planı', desc: 'Son Işık 30. gün 22:00\'de. Bir kaçış yolu seç ve hazırlıklarını tamamla (Finaller: Görevler > Kaçış Planları).', objs: [{ t: 'flag', flag: 'ending_ready', count: 1, label: 'En az bir kaçış planını hazır hale getir' }], reward: [], next: [] },
+  m_truth: { kind: 'main', title: 'Gerçeğin Peşinde', desc: 'Kızılçam yalnızca bir laboratuvar değildi. Havaalanından, santralden ve cezaevinden kanıt topla: kim, neyi, neden yaptı?', objs: [{ t: 'flag', flag: 'note:airfield_log', count: 1, label: 'Kargo manifestosu (Havaalanı terminali)' }, { t: 'flag', flag: 'note:dam_report', count: 1, label: 'Santral bakım raporu (Baraj kontrol odası)' }, { t: 'flag', flag: 'note:prison_log', count: 1, label: 'Gardiyan nöbet defteri (Cezaevi idaresi)' }], reward: [['ammo_rifle', 10], ['first_aid', 1]], morale: 10, next: ['m_broadcast'], unlockDay: 12 },
+  m_broadcast: { kind: 'main', title: 'Son Yayın', desc: 'Kanıtlar elinde. Üsse telsiz anteni kur ve 147.30 frekansından gerçeği anakaraya yayınla: Son Işık kanıtları silmeden önce dünya bilmeli.', objs: [{ t: 'flag', flag: 'antenna_built', count: 1, label: 'Üsse telsiz anteni kur' }, { t: 'flag', flag: 'truth_broadcast', count: 1, label: 'Telsizden gerçeği yayınla (envanterde Telsiz > Kullan)' }], reward: [['battery', 4]], morale: 20 },
   // ---- yan görevler
   s_hasan_meds: { kind: 'side', title: 'Hasan Amca\'nın İlacı', giver: 'hasan', desc: 'Hasan Amca\'nın tansiyon ilacı bitti. Eczaneden ya da hastaneden ilaç getir.', objs: [{ t: 'deliver', item: 'antibiotics', count: 1, to: 'hasan', label: 'İlaç kutusunu Hasan Amca\'ya götür', alt: ['painkiller'] }], reward: [['shotgun', 1], ['shells', 6]], rel: ['neighbors', 15] },
   s_ayse_can: { kind: 'side', title: 'Kayıp Torun', giver: 'ayse', desc: 'Ayşe Teyze\'nin torunu Can parkta kaybolmuş. Onu bul ve eve getir.', objs: [{ t: 'talk', npc: 'can', label: 'Can\'ı bul' }, { t: 'flag', flag: 'can_home', count: 1, label: 'Can\'ı Ayşe Teyze\'ye götür' }], reward: [['stew', 2], ['cookie', 4]], rel: ['neighbors', 20], morale: 15 },
@@ -102,11 +179,19 @@ export const QUESTS = {
   s_mountain: { kind: 'side', title: 'Dağdaki Sığınak', desc: 'Dağ kampına erzak taşı: kızıl sis yükseklere çıkamaz.', objs: [{ t: 'flag', flag: 'mountain_food', count: 20, label: 'Kampa 20 yiyecek/içecek bırak' }, { t: 'flag', flag: 'mountain_cabin', count: 1, label: 'Kulübe kapısını güçlendir' }], reward: [], ending: 'mountain' },
   s_bunker: { kind: 'side', title: 'Yeraltı Sığınağı', desc: 'Bahçedeki bodrum kapağından başlayarak 4 aşamalı sığınağı inşa et.', objs: [{ t: 'flag', flag: 'bunker_stage', count: 4, label: 'Sığınak aşamaları' }], reward: [], ending: 'bunker' },
   s_antenna: { kind: 'side', title: 'Frekans 147.30', desc: 'Askerî tahliye listesine girmek için üsse telsiz anteni kur ve askerlerle ilişkini geliştir.', objs: [{ t: 'build', item: 'antenna', count: 1, label: 'Telsiz anteni kur' }, { t: 'flag', flag: 'rel:military', count: 50, label: 'Askerî ilişki 50' }], reward: [], ending: 'military' },
+  s_power: { kind: 'side', title: 'Işıkları Geri Getir', giver: 'zeynep', desc: 'Baraj santralindeki ikinci türbini yeniden çalıştır: sokak lambaları, benzin pompaları, fener ve havaalanı elektriğe kavuşsun.', objs: [{ t: 'collect', item: 'engine_part', count: 1, label: 'Motor parçası bul' }, { t: 'collect', item: 'wire', count: 3, label: 'Kablo bul (3)' }, { t: 'collect', item: 'electronics', count: 2, label: 'Elektronik parça bul (2)' }, { t: 'interact', target: 'dam_control', label: 'Kontrol panelinden türbini başlat' }], reward: [['battery', 4], ['wire', 2]], rel: ['neighbors', 15], morale: 15 },
+  s_lighthouse: { kind: 'side', title: 'Fenerin Işığı', giver: 'ismail', desc: 'Deniz fenerini yeniden yak: açıkta bekleyen gemi işaret bekliyor. Lamba için 4 akü ya da santral elektriği ve 2 cam gerekli.', objs: [{ t: 'collect', item: 'glass', count: 2, label: 'Sağlam cam bul (2)' }, { t: 'interact', target: 'lighthouse', label: 'Kulenin tepesinde lambayı yak (4 akü ya da elektrik)' }], reward: [['fishing_rod', 1], ['bait', 10], ['raw_fish', 3]], rel: ['neighbors', 10], morale: 10 },
+  s_pilot: { kind: 'side', title: 'Yaralı Pilot', giver: 'aydin', desc: 'Pilot Aydın kontrol kulesinde yaralı yatıyor. Bacağındaki yarayı tedavi et; karşılığında hepinizi adadan uçurmayı teklif ediyor.', objs: [{ t: 'deliver', item: 'first_aid', count: 1, to: 'aydin', label: 'Aydın\'a ilk yardım çantası götür', alt: ['antibiotics'] }], reward: [], rel: ['neighbors', 10], next: ['s_plane'], flag: 'pilot_joined' },
+  s_plane: { kind: 'side', title: 'Kanatlar', giver: 'aydin', desc: 'Önlükteki tek motorlu uçağı onar, 60 litre yakıt koy ve pisti enkazlardan temizle. 30. gün 20:00\'den sonra Aydın sizi anakaraya uçurur.', objs: [{ t: 'flag', flag: 'plane_repaired', count: 1, label: 'Uçağı onar (2 motor parçası, 1 tamir seti, 3 kablo)' }, { t: 'flag', flag: 'plane_fuel', count: 60, label: 'Uçağa 60 L yakıt koy (bidonla taşı)' }, { t: 'flag', flag: 'runway_clear', count: 1, label: 'Pisti temizle (enkazları araçla it ya da halatla çek)' }], reward: [], ending: 'plane' },
+  s_village: { kind: 'side', title: 'Köyün Derdi', giver: 'omer', desc: 'Dağ köyünde ateşi düşmeyen hastalar var ve geceleri köyü zombiler sarıyor. Antibiyotik getir, köyün çevresini temizle.', objs: [{ t: 'deliver', item: 'antibiotics', count: 3, to: 'omer', label: 'Muhtar Ömer\'e 3 antibiyotik götür' }, { t: 'kill', count: 10, label: 'Zombileri temizle (10)' }], reward: [['mre', 3], ['honey', 2], ['water_bottle', 4]], rel: ['neighbors', 20], morale: 10, flag: 'village_safe' },
+  s_prison: { kind: 'side', title: 'Kilitli Kapılar', giver: 'necla', desc: 'Gardiyan Necla, B koğuşunda kilitli sekiz mahkûmu tek başına besliyor. Avluyu temizle, sonra mahkûmların kaderine birlikte karar verin.', objs: [{ t: 'kill', count: 12, label: 'Avludaki zombileri temizle (12)' }, { t: 'flag', flag: 'prison_decided', count: 1, label: 'Mahkûmlar için karar ver (Necla ile konuş)' }], reward: [['shotgun', 1], ['shells', 12], ['vest', 1]], rel: ['military', 10] },
+  s_resort: { kind: 'side', title: 'Oda 103', desc: 'Otel Mavi Koy\'dan telsize bir baba ve kızının sesi geliyor. Murat ve Defne\'yi bul, onları sağ salim üsse getir.', objs: [{ t: 'talk', npc: 'murat', label: 'Otelde Murat ve Defne\'yi bul' }, { t: 'flag', flag: 'family_home', count: 1, label: 'Aileyi üsse getir' }], reward: [['repair_kit', 1], ['cookie', 3]], rel: ['neighbors', 15], morale: 20, flag: 'mechanic' },
   s_convoy: { kind: 'side', title: 'Köprü Konvoyu', desc: 'Sağlam, zırhlı ve deposu dolu bir araçla 30. gün 21:00\'de kuzeydoğudaki köprüden geç.', objs: [{ t: 'flag', flag: 'vehicle_ready', count: 1, label: 'Bir aracı hazırla (%60 sağlık, %70 yakıt, zırh)' }], reward: [], ending: 'convoy' },
 };
 
-// ------------------------------------------------------------------ RASTGELE OLAYLAR (20)
-// Her olay: başlık, metin, görsel, koşul (gece/gün, gün aralığı), sahne (oyun içi kurulum) ve seçenekler.
+// ------------------------------------------------------------------ RASTGELE OLAYLAR (45)
+// Her olay: başlık, metin, görsel, koşul (gece/gün, gün aralığı, requires: 'flag:x' | 'noflag:x' | 'quest:id' |
+// 'npc:id'), sahne (oyun içi kurulum) ve seçenekler. Etkiler Events.applyChoice'ta uygulanır.
 export const EVENTS = {
   injured_kid: { title: 'Gece Kapı Çalınıyor', img: 'injured', text: 'Kapıda yaralı bir çocuk ve babası var. Baba, "Lütfen, sadece bir gece!" diye yalvarıyor. Kolundaki yara ısırığa benzemiyor… ama emin olamıyorsun.', night: true, minDay: 2, scene: 'npc_at_door',
     choices: [
@@ -173,13 +258,117 @@ export const EVENTS = {
     ] },
   security_fail: { title: 'Güvenlik Sistemi Arızası', img: 'generator', text: 'Kameralar ve alarmlar bir anda sustu. Bir şey kabloları kemiriyor…', minDay: 8, requires: 'has_security', scene: 'power_fail',
     choices: [{ text: 'Kontrol et', effects: { fixPower: true, spawnNear: 3 }, result: 'Kablolarda bir zombi sıçanı! …Şaka. Ama 3 zombi vardı.' }] },
+
+  // ---- genişletilmiş ada olayları
+  airdrop: { title: 'Havadan Yardım Paketi', img: 'airdrop', text: 'Alçaktan uçan bir kargo uçağı adanın üzerinde tur atıyor. Arkasından paraşütlü bir sandık süzülüyor! Düştüğü yeri herkes görecek — zombiler de.', minDay: 5, repeat: true,
+    choices: [
+      { text: 'Paketin peşine düş!', effects: { airdrop: true }, result: 'Paraşüt haritada işaretlendi. Kırmızı dumanı takip edin — önce siz varın.' },
+      { text: 'Bırak, başkaları uğraşsın', effects: { morale: -2 }, result: 'Paket uzaklara süzüldü. Belki bir başkasının hayatını kurtarır.' },
+    ] },
+  plane_crash: { title: 'Gökyüzünde Alev', img: 'crash', text: 'Motor sesi boğuldu, ardından çığlık gibi bir ıslık… Alevler içindeki küçük bir uçak ağaçların üzerinden alçalıyor! Kargo bölmesinde ne taşıdığını merak ediyorsun.', minDay: 9,
+    choices: [
+      { text: 'Düştüğü yere koş', effects: { planeCrash: true }, result: 'Enkaz haritada. Yangın sönmeden kargoya ulaşın — patlama her yerden zombi çekecek.' },
+      { text: 'Uzak dur', effects: { planeCrash: 'nomark', morale: -2 }, result: 'Uzakta bir patlama ve kapkara bir duman sütunu.' },
+    ] },
+  wolf_night: { title: 'Kurt Uluması', img: 'wolves', text: 'Gecenin sessizliğini bir uluma yırttı, ardından bir tane daha… Açlık kurtları ormandan evlere kadar indirmiş.', night: true, minDay: 4,
+    choices: [
+      { text: 'Ateşi büyüt, nöbet tut (2 tahta)', cost: [['plank', 2]], effects: { morale: 2, wolves: 2 }, result: 'Kurtlar ateşin ışığında gözlerini parlatıp uzak durdu. İkisi yine de yaklaşıyor.' },
+      { text: 'Avlanalım!', effects: { wolves: 4 }, result: 'Sürü sizi fark etti. Sırt sırta verin!' },
+    ] },
+  blood_moon: { title: 'Kanlı Ay', img: 'bloodmoon', text: 'Ay ufukta kıpkırmızı yükseliyor. Köpekler susmuyor, rüzgâr bile duruldu. Yaşlılar böyle gecelerde ölülerin daha aç olduğunu söylerdi…', night: true, minDay: 12,
+    choices: [
+      { text: 'Kapıları kilitle, sabahı bekle', effects: { bloodMoon: true, morale: -3 }, result: 'Bu gece zombiler daha hızlı ve daha kalabalık. Şafağa kadar dayanın.' },
+      { text: 'Bu gece avcı biziz!', effects: { bloodMoon: true, morale: 4 }, result: 'Silahlar dolu, ışıklar kapalı. Kanlı Ay gecesi başladı.' },
+    ] },
+  thick_fog: { title: 'Yoğun Sis', img: 'fog', text: 'Denizden gelen yoğun bir sis adayı yuttu. Göz gözü görmüyor; zombiler de sizi göremiyor ama duyabiliyor.', minDay: 3, repeat: true,
+    choices: [
+      { text: 'İçeride kal', effects: { weather: 'fog', morale: -1 }, result: 'Sis saatlerce sürecek.' },
+      { text: 'Sisi fırsat bil, sessizce yağmala', effects: { weather: 'fog', stealth: 240 }, result: 'Çömelerek ilerleyenleri zombiler zor fark edecek. Gürültü yapmayın.' },
+    ] },
+  leaflets: { title: 'Helikopterden Bildiriler', img: 'radio', text: 'Askerî bir helikopter alçaktan geçerken binlerce kâğıt saçtı. Rüzgâr onları sokaklara, çatılara dağıtıyor.', minDay: 8, maxDay: 24, scene: 'heli_flyby',
+    choices: [{ text: 'Bir tanesini yakala', effects: { note: 'mainland_broadcast' }, result: 'Bildiri günlüğe eklendi: Köprü 30. gün kapanacak.' }] },
+  bandit_toll: { title: 'Yol Kesen Haydutlar', img: 'raiders', text: 'Yolun ortasına devrilmiş bir otobüs ve arkasında silahlı adamlar: "Geçiş ücreti var dostum. Ya öde ya geri dön."', minDay: 10,
+    choices: [
+      { text: 'Öde (80 para)', cost: [['money', 80]], effects: { rel: ['raiders', 10] }, result: '"Akıllı adam." Barikatı açtılar.' },
+      { text: 'Cephane ver (12 mermi)', cost: [['ammo_9mm', 12]], effects: { rel: ['raiders', 6] }, result: 'Mermileri sayıp el salladılar.' },
+      { text: 'Çatış!', effects: { raidersAtPlayer: 4, rel: ['raiders', -20] }, result: 'Silahlar konuştu!' },
+    ] },
+  fever: { title: 'Ateşli Arkadaş', img: 'injured', text: 'Takımdan biri titreyerek uyandı. Ateşi çok yüksek; ısırık yok ama bu adada hiçbir şeyden emin olamazsın.', minDay: 6,
+    choices: [
+      { text: 'Antibiyotik ver', cost: [['antibiotics', 1]], effects: { morale: 4 }, result: 'Ateş birkaç saatte düştü. Rahat bir nefes.' },
+      { text: 'Bol su ve dinlenme (2 su)', cost: [['water_bottle', 2]], effects: { morale: 1, sickChance: 0.35 }, result: 'Belki geçer… belki de geçmez.' },
+      { text: 'Karantinaya al', effects: { morale: -6 }, result: 'Ayrı odada bir gece. Kimse gözünü kırpmadı.' },
+    ] },
+  hidden_cache: { title: 'Zula Haritası', img: 'convoy', text: 'Yerde bulduğun bir ceketin cebinden elle çizilmiş bir harita çıktı. Bir çarpı işareti ve not: "Kimse bilmesin. Kışlık."', minDay: 4,
+    choices: [{ text: 'Haritaya işaretle', effects: { cache: 'hidden_cache' }, result: 'Zulanın yeri haritada.' }] },
+  crying_voice: { title: 'Karanlıkta Ağlama Sesi', img: 'injured', text: 'Gece yarısı uzaktan bir çocuk ağlıyor. Ses kesilip yeniden başlıyor… hep aynı yerden, hep aynı tonda.', night: true, minDay: 11,
+    choices: [
+      { text: 'Sesi takip et', effects: { trap: true }, result: 'Sesin kaynağına yaklaşıyorsun…' },
+      { text: 'Bu bir tuzak. Kıpırdama.', effects: { morale: -4 }, result: 'Ses şafağa kadar sürdü. Sonra kesildi.' },
+    ] },
+  defector: { title: 'Kaçak Bilim İnsanı', img: 'injured', text: 'Laboratuvar önlüklü, titreyen bir adam ellerini kaldırarak yaklaştı: "Ben Dr. Kaan. Tesisten kaçtım. Bana yardım ederseniz bildiğim her şeyi anlatırım."', minDay: 13, scene: 'npc_visit',
+    choices: [
+      { text: 'İlaç ve yemek ver', cost: [['antibiotics', 1], ['canned_food', 1]], effects: { reward: [['note', 1, 'kaan_confession'], ['keycard', 1]], rel: ['neighbors', 10], morale: 4 }, result: 'Kaan bir güvenlik kartı ve itirafını bıraktı: "Gerçeği yayınlayın."' },
+      { text: 'Askerlere teslim et', effects: { rel: ['military', 15], morale: -6 }, result: 'Askerler onu götürdü. Bir daha haber alınamadı.' },
+      { text: 'Git buradan', effects: {}, result: 'Kaan ormana doğru koştu.' },
+    ] },
+  zombie_dogs: { title: 'Kuduz Sürü', img: 'wolves', text: 'Bahçelerden hırıltılar… Gözleri kızarmış bir köpek sürüsü dişlerini göstererek size doğru koşuyor!', minDay: 9,
+    choices: [{ text: 'Silahlara!', effects: { dogs: 4 }, result: 'Hızlılar — kaçmaya çalışmayın, savaşın!' }] },
+  harvest: { title: 'Hasat Zamanı', img: 'farm', text: 'Çiftlik köyünden bir aile tarlada mahsur kaldıklarını, hasada yardım ederseniz ürünü paylaşacaklarını söylüyor.', minDay: 5, maxDay: 22,
+    choices: [
+      { text: 'Yardım et (2 saat sürer)', effects: { advance: 120, reward: [['corn', 4], ['carrot', 4], ['cabbage', 2], ['seeds', 6]], rel: ['neighbors', 10], morale: 5 }, result: 'Sırtlar ağrıdı ama kiler doldu.' },
+      { text: 'Vaktimiz yok', effects: {}, result: 'Aile başını sallayıp tarlaya döndü.' },
+    ] },
+  prison_riot: { title: 'Cezaevinde İsyan', img: 'prison', text: 'Doğudan silah sesleri ve siren! Cezaevinin dış kapısı açılmış; kaçak mahkûmlar ve çevik kuvvet zırhlı enfekteler yollara dağılıyor.', minDay: 10,
+    choices: [{ text: 'Üssü tahkim et', effects: { riot: true }, result: 'Cezaevi haritada işaretlendi. Doğu yolundan uzak durun.' }] },
+  ship_signal: { title: 'Denizden Işık', img: 'lighthouse', text: 'Fenerin ışığı dönerken açıklarda üç kez yanıp sönen bir ışık belirdi. Gemi cevap veriyor!', night: true, minDay: 3, requires: 'flag:lighthouse_lit', avoid: 'flag:ship_contact',
+    choices: [{ text: 'Fenerle cevap ver', effects: { flag: 'ship_contact', morale: 10 }, result: 'Gemi son geceye kadar açıkta bekleyecek. Tekneyle ona ulaşmak yeterli.' }] },
+  transformer_fire: { title: 'Trafo Patladı', img: 'generator', text: 'Şehirde gök gürültüsü gibi bir patlama! Elektrik geri gelince bakımsız bir trafo alev aldı.', minDay: 5, requires: 'flag:power_restored',
+    choices: [{ text: 'Uzak dur', effects: { fireAt: [140, -30], noiseAt: [140, -30] }, result: 'Şehir merkezindeki zombiler alevlere yöneldi.' }] },
+  tremor: { title: 'Sarsıntı', img: 'generator', text: 'Yer bir anda sarsıldı! Raflar devriliyor, camlar titriyor. Uzaktan derin bir gürleme: askerler köprü ayaklarında patlatma deniyor olabilir.', minDay: 7,
+    choices: [{ text: 'Yere çök, başını koru', effects: { tremor: true, morale: -2 }, result: 'Sarsıntı geçti. Üssü kontrol edin.' }] },
+  supply_truck: { title: 'Terk Edilmiş İkmal Kamyonu', img: 'convoy', text: 'Gözcü, yol kenarında devrilmiş bir askerî ikmal kamyonu gördü. Kasası sağlam görünüyor ama etrafında hareket var.', minDay: 6,
+    choices: [{ text: 'Haritaya işaretle', effects: { cache: 'supply_truck', guards: 6 }, result: 'Kamyon haritada. Etrafı temizlemeden kasayı açmayın.' }] },
+  deer_herd: { title: 'Geyik Sürüsü', img: 'farm', text: 'Sabah sisinin içinden bir geyik sürüsü üssün yakınına indi. Taze et için nadir bir fırsat.', minDay: 2,
+    choices: [{ text: 'Sessizce yaklaş', effects: { animals: ['deer', 4] }, result: 'Sürü üssün kuzeyinde otluyor.' }] },
+  refugee_boat: { title: 'Kıyıya Vuran Bot', img: 'injured', text: 'Tatil köyü sahiline bir şişme bot vurdu. İçinde kıpırdayan siluetler var… ama yaşıyorlar mı?', minDay: 8,
+    choices: [
+      { text: 'Kontrol etmeye git', effects: { refugees: true }, result: 'Sahil haritada işaretlendi.' },
+      { text: 'Uzak dur', effects: { morale: -3 }, result: 'Dalgalar botu yeniden denize çekti.' },
+    ] },
+  military_purge: { title: 'Temizlik Operasyonu', img: 'raiders', text: 'Alev makineli askerler şehir merkezinde ev ev ilerliyor. Megafondan: "Bölgede kimse kalmayacak!"', minDay: 15,
+    choices: [
+      { text: 'Askerlere yardım et', effects: { rel: ['military', 12], fireAt: [70, -30], spawnNear: 6 }, result: 'Birlikte bir sokağı temizlediniz. Çavuş Kemal duyunca sevinecek.' },
+      { text: 'Saklan ve izle', effects: { fireAt: [70, -30], noiseAt: [70, -30] }, result: 'Şehir merkezi alevler içinde. Zombiler oraya akıyor.' },
+    ] },
+  cable_thieves: { title: 'Kablo Hırsızları', img: 'dam', text: 'Telsizden Zeynep: "Santralde yabancılar var! Bakır kabloları söküyorlar. Bir şey yapmazsanız elektrik yine gidecek!"', minDay: 8, requires: 'flag:power_restored',
+    choices: [
+      { text: 'Santrale koş!', effects: { raidersAt: [-470, -205, 4] }, result: 'Hırsızlar silahlı. Santrali koruyun!' },
+      { text: 'Bırak gitsin', effects: { powerCut: true, morale: -4 }, result: 'Şebeke yeniden çöktü. Türbini tekrar başlatmak gerekecek (3 kablo).' },
+    ] },
+  hasan_cough: { title: 'Hasan Amca\'nın Öksürüğü', img: 'injured', text: 'Hasan Amca kapınızda, solgun ve terli: "Evladım… musluktan bir bardak içmiştim. Geçer sanmıştım."', minDay: 14, requires: 'npc:hasan',
+    choices: [
+      { text: 'Antibiyotik ver', cost: [['antibiotics', 1]], effects: { rel: ['neighbors', 15], morale: 6 }, result: 'Hasan Amca gözleri dolarak elini sıktı: "Allah razı olsun."' },
+      { text: 'Elimizde yok…', effects: { hasanTurns: true, morale: -8 }, result: 'Hasan Amca başını sallayıp evine döndü. O gece evinden sesler geldi.' },
+    ] },
+  lost_hiker: { title: 'Dağdaki Yürüyüşçü', img: 'radio', text: 'Telsizden zayıf bir ses: "Dağ kampının altında, kayalıklarda mahsur kaldım. Ayağım kırık. Etrafımda… onlar var."', minDay: 7, maxDay: 25,
+    choices: [
+      { text: 'Kurtarmaya git (görev)', effects: { questDyn: 'q_hiker' }, result: 'Dağ kampının altını haritada işaretledik.' },
+      { text: 'Çok uzak', effects: { morale: -4 }, result: 'Ses bir süre sonra kesildi.' },
+    ] },
+  black_market: { title: 'Kara Borsa', img: 'convoy', text: 'Rıza\'nın adamları limanda gizli bir pazar kurmuş: "Silah, ilaç, yakıt… her şey var. Sadece bu gece."', minDay: 11, night: true,
+    choices: [
+      { text: 'Limana git', effects: { trade: 'riza', tradeAt: [330, 296] }, result: 'Rıza tezgâhını limanda açtı.' },
+      { text: 'İlgilenmiyoruz', effects: {}, result: 'Fırsat kaçtı.' },
+    ] },
 };
 
 // ------------------------------------------------------------------ FİNALLER
 export const ENDINGS = {
   bunker: { name: 'Yeraltı Sığınağı', icon: '🛡️', desc: 'Kapakları kapat, sığınağa in ve kızıl sisin geçmesini bekle.', req: 'Sığınak (4 aşama) tamamlanmış, jeneratör çalışıyor, depoda 15+ yiyecek ve su.' },
   military: { name: 'Askerî Tahliye', icon: '🚁', desc: 'Helikopter pistine 20:00\'de ulaş. Listede adın varsa helikoptere bin.', req: 'Telsiz anteni + askerî ilişki 50+. 30. gün 20:00 helikopter pisti.' },
-  sea: { name: 'Deniz Yoluyla Kaçış', icon: '⛵', desc: 'Martı teknesiyle denize açıl.', req: 'Tekne onarılmış, 40 L yakıt, deniz haritası.' },
+  sea: { name: 'Deniz Yoluyla Kaçış', icon: '⛵', desc: 'Martı teknesiyle denize açıl.', req: 'Tekne onarılmış, 40 L yakıt, deniz haritası. (Fener yanar ve gemi cevap verirse: 20 L yeter, harita gerekmez — gemiye ulaşın.)' },
+  plane: { name: 'Uçakla Kaçış', icon: '✈️', desc: 'Pilot Aydın\'la tek motorlu uçağı onar, pisti temizle ve Son Işık\'ın üzerinden anakaraya uç.', req: 'Uçak onarılmış, 60 L yakıt, pist temiz, Pilot Aydın hayatta. 30. gün 20:00\'den sonra uçağa bin.' },
   mountain: { name: 'Dağlara Kaçış', icon: '⛰️', desc: 'Sis yükseklere çıkamaz. Dağ kampında yeni bir hayat.', req: 'Kampa 20 erzak + kulübe güçlendirilmiş. 22:00\'den önce kampa ulaş.' },
   convoy: { name: 'Araçla Kaçış (Köprü)', icon: '🚙', desc: 'Son konvoyla köprüden anakaraya geç.', req: 'Araç: %60+ sağlık, %70+ yakıt, zırh kiti. 30. gün 21:00 köprü.' },
   defense: { name: 'Son Savunma', icon: '🔥', desc: 'Üssünü savun. Şafak sökene kadar dayan.', req: 'Her zaman mümkün. Başarı üs savunmasına bağlı.' },

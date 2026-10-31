@@ -1,6 +1,8 @@
 // Genişletilmiş adanın bölgeleri: çiftlik köyü, deniz feneri, sahil tatil köyü, cezaevi, havaalanı,
 // dağ köyü (cami), baraj ve santral, köprü başı. Prosedürel yapılar Geo ile, çarpışmalar fizik dünyasına.
+import * as THREE from 'three';
 import * as P from './Props.js';
+import { Geo } from './Geo.js';
 import { REGION_BY_ID, RESERVOIR } from './WorldLayout.js';
 import { RNG } from '../core/util.js';
 
@@ -199,28 +201,57 @@ function airfield(W, rng) {
   void rng;
 }
 
-/** Tek motorlu küçük uçak (kutu parçalardan) */
-function plane(W, x, z, a, wrecked) {
-  const g = W.geo, by = W.terrain.heightAt(x, z) + (wrecked ? 0.2 : 1.0);
-  const body = wrecked ? '#9a9a9a' : '#f4f6f7', stripe = wrecked ? '#5a5a5a' : '#c0392b';
-  P.rbox(g, 'metal', x, by, z, a, -0.75, 0, -4.2, 0.75, 1.5, 3.6, body);
-  P.rbox(g, 'metal', x, by, z, a, -0.55, 0.2, 3.6, 0.55, 1.25, 4.6, body);
-  P.rbox(g, 'metal', x, by, z, a, -0.76, 0.6, -4.2, 0.76, 0.85, 3.6, stripe);
-  P.rbox(g, 'glass', x, by, z, a, -0.7, 1.15, 1.2, 0.7, 1.9, 2.8, '#9fd4ef');
-  P.rbox(g, 'metal', x, by, z, a, wrecked ? -3.5 : -5.6, 1.45, 0.6, 5.6, 1.6, 2.2, body);
-  P.rbox(g, 'metal', x, by, z, a, -2.0, 1.0, -4.6, 2.0, 1.12, -3.6, body);
-  P.rbox(g, 'metal', x, by, z, a, -0.06, 1.12, -4.6, 0.06, 2.6, -3.7, stripe);
+/**
+ * Tek motorlu küçük uçak gövdesi: yerel koordinatlarda (burun +Z, tekerlek tabanı y=-1), dönüş a ile
+ * (cx,cy,cz) noktasına yerleştirilir. Hikâye sahneleri (düşen uçak, kalkış) de bunu kullanır.
+ */
+export function planeGeo(g, wrecked, cx = 0, cy = 0, cz = 0, a = 0, colors = null) {
+  const body = colors ? colors.body : wrecked ? '#9a9a9a' : '#f4f6f7', stripe = colors ? colors.stripe : wrecked ? '#5a5a5a' : '#c0392b';
+  const B = (mat, x0, y0, z0, x1, y1, z1, col) => P.rbox(g, mat, cx, cy, cz, a, x0, y0, z0, x1, y1, z1, col);
+  B('metal', -0.75, 0, -4.2, 0.75, 1.5, 3.6, body);
+  B('metal', -0.55, 0.2, 3.6, 0.55, 1.25, 4.6, body);
+  B('metal', -0.76, 0.6, -4.2, 0.76, 0.85, 3.6, stripe);
+  B('glass', -0.7, 1.15, 1.2, 0.7, 1.9, 2.8, '#9fd4ef');
+  B('metal', wrecked ? -3.5 : -5.6, 1.45, 0.6, 5.6, 1.6, 2.2, body);
+  B('metal', -2.0, 1.0, -4.6, 2.0, 1.12, -3.6, body);
+  B('metal', -0.06, 1.12, -4.6, 0.06, 2.6, -3.7, stripe);
   if (!wrecked) {
-    P.rbox(g, 'plain', x, by, z, a, -1.4, 0.65, 4.62, 1.4, 0.85, 4.7, '#2c3e50');
-    for (const s of [-1, 1]) P.rbox(g, 'metal', x, by, z, a, s * 1.2 - 0.12, -1.0, 1.4, s * 1.2 + 0.12, 0, 1.8, '#2c3e50');
-    P.rbox(g, 'metal', x, by, z, a, -0.1, -1.0, 3.8, 0.1, 0, 4.1, '#2c3e50');
+    for (const s of [-1, 1]) B('metal', s * 1.2 - 0.12, -1.0, 1.4, s * 1.2 + 0.12, 0, 1.8, '#2c3e50');
+    B('metal', -0.1, -1.0, 3.8, 0.1, 0, 4.1, '#2c3e50');
   }
-  const L = 9, c = Math.cos(a), s = Math.sin(a);
-  for (let t = -4; t <= 4.5; t += 1.5) W.physics.add({ shape: 'circle', x: x + s * t, z: z + c * t, r: 0.85, minY: by - 1, maxY: by + 1.6, kind: 'vehicle', walkable: true });
-  for (const sd of [-1, 1]) for (let t = 1.5; t <= 5.5; t += 1.5) W.physics.add({ shape: 'circle', x: x + s * 1.4 + c * sd * t, z: z + c * 1.4 - s * sd * t, r: 0.6, minY: by + 1.3, maxY: by + 1.7, kind: 'prop', walkable: true });
-  if (!wrecked) { W.interactable('plane', x, by + 1, z, { name: 'Tek Motorlu Uçak' }); W.plane = { x, z, a, y: by }; }
-  else W.container('body', x + 3, z + 2, { h: 0.3, label: 'Pilotun Cesedi', special: 'pilot_log' });
-  void L;
+}
+
+/** Pervane (yerel; pervane göbeği orijinde, Z ekseni etrafında döner) */
+export function propellerGeo(g) { P.rbox(g, 'plain', 0, 0, 0, 0, -1.4, -0.1, -0.04, 1.4, 0.1, 0.04, '#2c3e50'); P.rbox(g, 'metal', 0, 0, 0, 0, -0.12, -0.12, -0.06, 0.12, 0.12, 0.1, '#95a5a6'); }
+
+/** Tek motorlu küçük uçak. Sağlam uçak ayrı bir grup (kalkış sekansında hareket eder), enkaz statik geometri */
+function plane(W, x, z, a, wrecked) {
+  const by = W.terrain.heightAt(x, z) + (wrecked ? 0.2 : 1.0);
+  const c = Math.cos(a), s = Math.sin(a);
+  const cols = [];
+  for (let t = -4; t <= 4.5; t += 1.5) cols.push(W.physics.add({ shape: 'circle', x: x + s * t, z: z + c * t, r: 0.85, minY: by - 1, maxY: by + 1.6, kind: 'vehicle', walkable: true }));
+  for (const sd of [-1, 1]) for (let t = 1.5; t <= 5.5; t += 1.5) cols.push(W.physics.add({ shape: 'circle', x: x + s * 1.4 + c * sd * t, z: z + c * 1.4 - s * sd * t, r: 0.6, minY: by + 1.3, maxY: by + 1.7, kind: 'prop', walkable: true }));
+  if (wrecked) {
+    planeGeo(W.geo, true, x, by, z, a);
+    W.container('body', x + 3, z + 2, { h: 0.3, label: 'Pilotun Cesedi', special: 'pilot_log' });
+    return;
+  }
+  const grp = new THREE.Group();
+  grp.name = 'plane';
+  const pg = new Geo();
+  planeGeo(pg, false);
+  W.addGeo(pg, grp);
+  const prop = new THREE.Group();
+  const pr = new Geo();
+  propellerGeo(pr);
+  W.addGeo(pr, prop);
+  prop.position.set(0, 0.75, 4.66);
+  grp.add(prop);
+  grp.position.set(x, by, z);
+  grp.rotation.y = a;
+  W.root.add(grp);
+  W.interactable('plane', x, by + 1, z, { name: 'Tek Motorlu Uçak' });
+  W.plane = { x, z, a, y: by, group: grp, prop, colliders: cols };
 }
 
 // ----------------------------------------------------------------------------- DAĞ KÖYÜ

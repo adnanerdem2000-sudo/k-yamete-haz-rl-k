@@ -7,8 +7,9 @@ import { CHARACTERS } from '../entities/CharacterFactory.js';
 import { HOTBAR } from '../systems/Inventory.js';
 import { formatKg, dist } from '../core/util.js';
 import { toolName } from '../systems/Build.js';
+import { TL_KINDS } from '../systems/Timeline.js';
 
-const TABS = [['inventory', 'ENVANTER'], ['crafting', 'ÜRETİM'], ['character', 'KARAKTER'], ['quests', 'GÖREVLER'], ['map', 'HARİTA']];
+const TABS = [['inventory', 'ENVANTER'], ['crafting', 'ÜRETİM'], ['character', 'KARAKTER'], ['quests', 'GÖREVLER'], ['timeline', 'ZAMAN ÇİZELGESİ'], ['map', 'HARİTA']];
 const CAT_ICON = { all: '🗂️', food: '🍖', drink: '💧', weapon: '🗡️', ammo: '🔫', build: '🧱', car: '🚗', med: '➕', wear: '👕', tool: '🔧', misc: '📦' };
 const EQUIP = [['back', 'Sırt'], ['body', 'Gövde'], ['head', 'Baş'], ['body2', 'Dış Giyim'], ['hands', 'Eller']];
 const STAT_LABELS = { health: 'Sağlık', stamina: 'Dayanıklılık', speed: 'Hız', melee: 'Yakın Dövüş', aim: 'Nişancılık', build: 'İnşa', repair: 'Tamir', heal: 'Tedavi', stealth: 'Gizlilik', lockpick: 'Kilit Açma', hunt: 'Avcılık' };
@@ -54,6 +55,7 @@ export class Journal {
     else if (this.tab === 'crafting') this.renderCrafting(body);
     else if (this.tab === 'character') this.renderCharacter(body);
     else if (this.tab === 'quests') this.renderQuests(body);
+    else if (this.tab === 'timeline') this.renderTimeline(body);
     else if (this.tab === 'map') this.renderMap(body);
   }
 
@@ -247,6 +249,62 @@ export class Journal {
       if (st.state === 'active') main.append(h('div.actions', button(Q.tracked === sel ? '★ Takip ediliyor' : 'Takip Et', () => { Q.tracked = sel; S.quests.tracked = sel; this.render(); }, 'green'), wp ? button('Haritada Göster', () => { this.mapFocus = wp; this.tab = 'map'; this.render(); }, 'small') : null));
     }
     body.append(side, main);
+  }
+
+  // ======================================================================= ZAMAN ÇİZELGESİ
+  renderTimeline(body) {
+    const S = this.S, TL = S.timeline, today = S.time.day;
+    const pad = (n) => String(n).padStart(2, '0');
+    const wrap = h('div.timeline');
+    // 30 günlük şerit + ilerleme
+    const strip = h('div.tl-strip');
+    for (let d = 1; d <= 30; d++) {
+      const n = TL.forDay(d).length, c = CALENDAR[d];
+      const cls = (d < today ? '.past' : '') + (d === today ? '.now' : '') + (d === 30 ? '.final' : '') + (this.tlDay === d ? '.sel' : '');
+      strip.append(h('button.tl-day' + cls, { type: 'button', title: d <= today && c ? `${d}. gün — ${c.title}` : `${d}. gün`, on: { click: () => { this.tlDay = this.tlDay === d ? null : d; this.render(); } } }, h('b', String(d)), n ? h('i', String(n)) : null));
+    }
+    const prog = Math.min(1, (S.time.total) / (30 * 1440));
+    const left = Math.max(0, 30 * 1440 - S.time.total - 120);
+    const head = h('div.tl-head', h('div', h('h2', 'Zaman Çizelgesi'), h('small.muted', 'Hikâyenin kronolojisi: takvim, yayınlar, olaylar ve kararlar, görevler, belgeler, keşifler.')),
+      h('div.tl-count', h('b', `${Math.floor(left / 1440)}g ${pad(Math.floor((left % 1440) / 60))}s`), h('small', 'Son Işık\'a')));
+    const bar = h('div.tl-bar', h('div.tl-fill', { style: { width: (prog * 100).toFixed(1) + '%' } }), h('div.tl-mark', { style: { left: '100%' } }, '☢'));
+    const list = h('div.tl-list');
+    const days = this.tlDay ? [this.tlDay] : Array.from({ length: today }, (_, i) => today - i);
+    // gelecekte bilinenler
+    if (!this.tlDay || this.tlDay > today) {
+      const fut = h('div.tl-future', h('div.tl-dayhead', 'YAKLAŞANLAR'));
+      const known = [];
+      for (let d = today + 1; d <= 30; d++) {
+        if (this.tlDay && d !== this.tlDay) continue;
+        const c = CALENDAR[d];
+        if (!c) continue;
+        if (d <= today + 2 || d === 30) known.push([d, c.title]);
+        else if (S.flags.evac_known && (d === 30)) known.push([d, c.title]);
+      }
+      if (S.time.day < 7) known.push([7, 'Büyük sürü bekleniyor (gözcü tahmini)']);
+      if (S.flags.radio_heard && S.time.day < 30) known.push([30, 'Tahliye: helikopter pisti 20:00 · köprü konvoyu 21:00']);
+      known.sort((a, b) => a[0] - b[0]);
+      for (const [d, t] of known) fut.append(h('div.tl-entry.k-future', h('span.tl-time', `${d}. gün`), h('span.tl-ic', d === 30 ? '☢️' : '⏳'), h('div.tl-body', h('b', t))));
+      if (!known.length) fut.append(h('p.muted', 'Gelecek belirsiz…'));
+      list.append(fut);
+    }
+    for (const d of days) {
+      if (d > today) continue;
+      const c = CALENDAR[d];
+      const entries = TL.forDay(d).slice().reverse();
+      list.append(h('div.tl-dayhead' + (d === today ? '.now' : ''), `${d}. GÜN`, c ? h('span', ' — ' + c.title) : null));
+      if (!entries.length) list.append(h('p.muted.tl-empty', 'Bu güne ait kayıt yok.'));
+      for (const e of entries) {
+        const K = TL_KINDS[e.kind] || {};
+        list.append(h('div.tl-entry.k-' + e.kind, h('span.tl-time', `${pad(Math.floor((e.t % 1440) / 60))}:${pad(e.t % 60)}`), h('span.tl-ic', K.icon || '•'),
+          h('div.tl-body', h('b', e.title), K.label ? h('em', K.label) : null, e.text ? h('p', e.text) : null)));
+      }
+    }
+    // istatistik özeti
+    const R = S.results;
+    const stats = h('div.tl-stats', ...[['🧟', R.kills, 'zombi'], ['📜', R.quests, 'görev'], ['🤝', R.rescued, 'kurtarılan'], ['🏗️', R.built, 'yapı'], ['📄', S.quests.notesRead.size, 'belge']].map(([ic, n, l]) => h('div', h('span', ic), h('b', String(n || 0)), h('small', l))));
+    wrap.append(head, bar, strip, stats, list);
+    body.append(wrap);
   }
 
   calendar() {

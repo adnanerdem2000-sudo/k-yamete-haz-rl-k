@@ -264,7 +264,7 @@ export class Net {
     return {
       seed: S.seed, time: S.time.serialize(), flags: S.flags, relations: S.relations, difficulty: S.cfg.difficulty,
       loot: S.loot.serialize(), ground: S.ground.serialize(), build: S.build.serialize(), vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
-      quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(),
+      quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(), story: S.storyWorld.serialize(),
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
       players, you, charId: p ? p.charId : 'mert', name: p ? p.name : 'Oyuncu', look: p ? p.look : {},
     };

@@ -14,6 +14,8 @@ import { HOTBAR } from '../systems/Inventory.js';
 const TRADE_STOCK = {
   hasan: ['canned_food', 'bread', 'water_bottle', 'bandage', 'nails', 'plank', 'seeds', 'rope', 'cloth', 'painkiller', 'hammer', 'tea'],
   riza: ['ammo_9mm', 'shells', 'pistol', 'jerrycan', 'engine_part', 'car_battery', 'tire', 'repair_kit', 'antibiotics', 'first_aid', 'electronics', 'metal_sheet', 'screws', 'duct_tape', 'mre', 'energy_drink', 'backpack_large', 'flashlight', 'battery'],
+  // Dağ köyü (köy kurtarılınca): kiler, kaynak suyu, yün ve av malzemesi
+  omer: ['bread', 'honey', 'cheese', 'apple', 'corn', 'water_bottle', 'warm_jacket', 'leather', 'rope', 'seeds', 'bow', 'arrow', 'lighter', 'sleeping_bag'],
 };
 
 export class GamePanels {
@@ -325,6 +327,7 @@ export class GamePanels {
       h('h1', `${E.icon} ${E.name}`),
       h('p.results-reason', `${E.desc} ${{ escaped: win ? 'Takımınız kaçış planını başarıyla tamamladı.' : '', dawn: win ? 'Şafak söktü — Son Işık geçti ve siz hâlâ ayaktasınız.' : 'Şafak söktü ama kimse ayakta kalamadı.' }[e.reason] || ''}`),
       h('div.rating', h('span', 'Derece'), h('b.rank-' + e.rating, e.rating), h('small', `${e.score} puan`)),
+      e.epilogue && e.epilogue.length ? h('div.epilogue', h('h3', 'Sonrası'), e.epilogue.map((c) => h('p', c))) : null,
       h('div.results-grid',
         ...[['Hayatta kalan', `${e.survivors}/${e.total}`], ['Geçen gün', e.days], ['Üs seviyesi', e.baseLevel], ['Öldürülen zombi', e.kills], ['Aranan yer', e.searched], ['Toplanan kaynak', e.resources], ['Tamamlanan görev', e.quests], ['Kurtarılan kişi', e.rescued], ['İnşa edilen yapı', e.built], ['Yere düşme', e.deaths]].map(([k, v]) => h('div.res-cell', h('small', k), h('b', String(v))))),
       e.vehicles && e.vehicles.length ? h('p.muted', 'Kullanılan araçlar: ' + e.vehicles.join(', ')) : null,

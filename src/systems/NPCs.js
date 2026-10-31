@@ -21,11 +21,12 @@ const ANIMALS = {
 const FISH = { lake: ['Alabalık', 'Sazan', 'Levrek', 'Turna'], sea: ['Lüfer', 'Kefal', 'Somon', 'Levrek'] };
 
 class NPC {
-  constructor(sys, def, x, z) {
+  constructor(sys, def, x, z, y = null) {
     this.sys = sys; this.def = def; this.id = def.id;
     const S = sys.s;
     this.avatar = new Avatar(S.game, def.look, { name: def.name, color: '#ffe0a8' });
-    this.pos = new THREE.Vector3(x, S.world.physics.groundHeight(x, z, 1e9), z);
+    // y verilirse (bina içi) o kattaki zemin, yoksa en üstteki yürünebilir yüzey
+    this.pos = new THREE.Vector3(x, S.world.physics.groundHeight(x, z, y ?? 1e9), z);
     this.home = { x, z };
     this.yaw = Math.random() * 6;
     this.speed = 0;
@@ -104,7 +105,7 @@ export class NPCs {
     this.fishing = null;
     const S = session;
     S.on('npc_state', (p) => S.emit({ k: 'npc_state', ...p }));
-    S.onEvt('npc_state', (e) => { const n = this.byId(e.id); if (!n) return; if (e.visible !== undefined) n.setVisible(e.visible); if (e.follow !== undefined) n.follow = e.follow; if (e.x !== undefined) { n.pos.set(e.x, S.world.physics.groundHeight(e.x, e.z, 1e9), e.z); n.home = { x: e.x, z: e.z }; } if (e.alive === false) { n.alive = false; n.setVisible(false); } });
+    S.onEvt('npc_state', (e) => { const n = this.byId(e.id); if (!n) return; if (e.visible !== undefined) n.setVisible(e.visible); if (e.follow !== undefined) n.follow = e.follow; if (e.x !== undefined) { n.pos.set(e.x, S.world.physics.groundHeight(e.x, e.z, e.y ?? 1e9), e.z); n.home = { x: e.x, z: e.z }; } if (e.alive === false) { n.alive = false; n.setVisible(false); } if (e.stay !== undefined) n.stay = e.stay; });
     S.on('animal_hit', (p, from) => this.hitAnimal(p.id, p.dmg, from));
     S.onEvt('animal_die', (e) => { const a = this.animals.find((x) => x.id === e.id); if (a) { a.dead = true; a.deadT = 0; if (a.view) a.view.die(); } });
   }
@@ -113,7 +114,8 @@ export class NPCs {
     const W = this.s.world;
     const b = (id) => W.buildingById[id];
     const front = (bid, dz = 2) => { const bb = b(bid); const p = bb.frame.pt(bb.tpl.w / 2 - 2, bb.tpl.d + dz); return p; };
-    const add = (id, x, z, vis = true) => { const n = new NPC(this, NPCS[id], x, z); n.setVisible(vis); this.list.push(n); return n; };
+    const add = (id, x, z, vis = true, y = null) => { const n = new NPC(this, NPCS[id], x, z, y); n.setVisible(vis); this.list.push(n); return n; };
+    const inside = (bid, lx, lz) => { const bb = b(bid); const p = bb.frame.pt(lx, lz); return [p.x, p.z, bb.floorY + 1]; };
     const h = front('n1'); add('hasan', h.x, h.z);
     const a = front('s3'); add('ayse', a.x, a.z);
     add('can', -201, 232); // parkta kayıp
@@ -122,12 +124,37 @@ export class NPCs {
     add('selin', -85, -38, false);
     add('kurt', -230, 160, false);
     this.byId('can').zombieTarget = true;
+    // genişletilmiş ada
+    const t = front('tower', 3); add('aydin', t.x, t.z);
+    const k = front('keeper', 2); add('ismail', k.x, k.z);
+    const pp = front('powerplant', 3); add('zeynep', pp.x, pp.z, false);
+    const vc = front('vil_cafe', 3); add('omer', vc.x, vc.z);
+    const pa = front('prison_admin', 2); add('necla', pa.x, pa.z);
+    const [mx, mz, my] = inside('hotel', 17.5, 3.6); add('murat', mx, mz, true, my);
+    const [dx, dz, dy] = inside('hotel', 16.2, 5.0); add('defne', dx, dz, true, dy);
+    this.byId('murat').zombieTarget = true;
+    this.byId('defne').zombieTarget = true;
     // köpek Karabaş (orman kenarı)
     this.spawnDog(-262, 42);
   }
 
   byId(id) { return this.list.find((n) => n.id === id); }
-  spawnAnimal(type, x, z) { this.animals.push(new Animal(this, type, x, z)); }
+  spawnAnimal(type, x, z) { const a = new Animal(this, type, x, z); this.animals.push(a); return a; }
+
+  /** Olaylar: bir noktanın çevresinde sürü (kurt, geyik…). target verilirse sürü saldırır */
+  spawnPack(type, around, n, target = null, r = 35) {
+    const S = this.s;
+    const ang = Math.random() * Math.PI * 2;
+    const cx = around.x + Math.cos(ang) * r, cz = around.z + Math.sin(ang) * r;
+    const group = 'g' + Math.random().toString(36).slice(2, 6);
+    for (let i = 0; i < n; i++) {
+      const x = cx + (i % 3) * 1.8, z = cz + Math.floor(i / 3) * 1.8;
+      if (S.world.terrain.isWater(x, z)) continue;
+      const a = this.spawnAnimal(type, x, z);
+      a.group = group; a.slot = i;
+      if (target) { a.state = 'attack'; a.target = target; }
+    }
+  }
 
   spawnDog(x, z) {
     const S = this.s;
@@ -140,6 +167,7 @@ export class NPCs {
   // ======================================================================= konuşma
   talk(n) {
     const S = this.s;
+    S.timeline.onNpc(n.id);
     const def = n.def;
     const choices = [];
     const greet = def.greet[Math.floor(Math.random() * def.greet.length)];
@@ -164,7 +192,15 @@ export class NPCs {
       if (can && dist(can.pos.x, can.pos.z, n.pos.x, n.pos.z) < 8) choices.push({ text: 'Can\'ı getirdim!', onSelect: () => { S.act('flag', { flag: 'can_home', value: 1 }); S.act('npc_state', { id: 'can', follow: null, x: n.pos.x + 1, z: n.pos.z }); S.results.rescued++; S.ui.closeDialog(); S.ui.toast('Ayşe Teyze gözyaşlarıyla teşekkür etti. (+Moral)', 'good', 4); S.localStats.morale = Math.min(100, S.localStats.morale + 15); } });
     }
     if (n.id === 'can' && S.flags.can_home && !S.flags.dog_found && !S.quests.state('s_can_dog')) choices.push({ text: '📜 Görev: Karabaş', onSelect: () => { S.act('quest_start', { id: 's_can_dog' }); S.ui.closeDialog(); } });
-    if (def.trade) choices.push({ text: '💰 Takas yap', onSelect: () => { S.ui.closeDialog(); S.ui.openTrade(n); } });
+    if (def.trade || (def.tradeFlag && S.flags[def.tradeFlag])) choices.push({ text: '💰 Takas yap', onSelect: () => { S.ui.closeDialog(); S.ui.openTrade(n); } });
+    this.storyChoices(n, choices);
+    for (const L of def.lore || []) {
+      choices.push({ text: '💬 ' + L.q, onSelect: () => {
+        S.ui.openDialog({ speaker: def.name, text: L.a, choices: [{ text: 'Anladım.', onSelect: () => S.ui.closeDialog() }] });
+        if (L.marker) S.map.addMarker(L.marker[0], L.marker[1], L.marker[2], L.marker[3] || 'quest');
+        if (L.note) S.quests.readNoteSilently ? S.quests.readNoteSilently(L.note) : S.act('note_read', { id: L.note });
+      } });
+    }
     if (n.id === 'riza' && S.quests.state('s_riza_fuel') === 'active') {
       const jc = S.inventory.slots.findIndex((s) => s && s.id === 'jerrycan' && s.fuel >= 19);
       if (jc >= 0) choices.push({ text: '⛽ Dolu bidonu ver', onSelect: () => { S.inventory.takeAt(jc, 1); S.act('flag', { flag: 'riza_fuel', value: 1 }); S.ui.closeDialog(); } });
@@ -181,6 +217,55 @@ export class NPCs {
     S.quests.onTalk(n.id);
     n.yaw = Math.atan2(S.local.pos.x - n.pos.x, S.local.pos.z - n.pos.z);
     n.avatar.play('wave', 1.2);
+  }
+
+  /** Genişletilmiş hikâye: NPC'ye özel seçenekler (eskort, kararlar, pilot) */
+  storyChoices(n, choices) {
+    const S = this.s;
+    const def = n.def;
+    // Murat ve Defne: otelden üsse eskort
+    if ((n.id === 'murat' || n.id === 'defne') && !S.flags.family_home) {
+      const m = this.byId('murat'), d = this.byId('defne');
+      const following = m && m.follow;
+      choices.push({ text: following ? 'Burada bekleyin.' : 'Benimle gelin, sizi üsse götüreceğim.', onSelect: () => {
+        for (const x of [m, d]) if (x && x.alive) S.act('npc_state', { id: x.id, follow: following ? null : S.localId });
+        S.quests.onTalk('murat');
+        S.ui.closeDialog();
+        if (!following) S.ui.toast('Murat ve Defne seni takip ediyor. Onları üsse götür!', 'story', 4);
+      } });
+    }
+    // Gardiyan Necla: mahkûmların kaderi
+    if (n.id === 'necla' && S.quests.state('s_prison') === 'active' && !S.flags.prison_decided) {
+      const st = S.quests.st.s_prison;
+      if (st && (st.prog[0] || 0) >= 12) choices.push({ text: '⚖️ Mahkûmlar hakkında karar ver', onSelect: () => this.prisonDecision(n) });
+    }
+    // Pilot Aydın: iyileşince uçağın başına geçer
+    if (n.id === 'aydin' && S.flags.pilot_joined && !n.atPlane) choices.push({ text: '✈️ Uçağın başına geç', onSelect: () => { S.ui.closeDialog(); this.sendPilotToPlane(); } });
+    if (n.id === 'aydin' && S.flags.pilot_joined) choices.push({ text: '🛫 Uçağın durumu?', onSelect: () => { S.ui.closeDialog(); S.endings.usePlane(); } });
+    void def;
+  }
+
+  prisonDecision(n) {
+    const S = this.s;
+    const done = (text, log) => { S.act('flag', { flag: 'prison_decided', value: 1 }); S.results.choices.push(log); S.ui.closeDialog(); S.ui.toast(text, 'story', 6); if (S.isHost) S.timeline.post('choice', 'Cezaevi kararı', log); else S.timeline.add('choice', 'Cezaevi kararı', log); };
+    S.ui.openDialog({
+      speaker: n.def.name,
+      text: 'Avlu temiz. B koğuşunda sekiz kişi var: iki hırsız, bir kavgacı, bir öğretmen… Hepsi sağlıklı. Anahtar bende. Ne yapacağız?',
+      choices: [
+        { text: 'Hepsini serbest bırak — üsse katılsınlar', onSelect: () => { S.act('flag', { flag: 'allies', add: 3 }); S.act('flag', { flag: 'prisoners_free', value: 1 }); S.act('rel', { faction: 'raiders', delta: 15 }); S.act('team_morale', { amount: 8 }); S.results.rescued += 8; done('Kapılar açıldı. Üçü üsse katıldı, gerisi yollara dağıldı.', 'Mahkûmlar serbest bırakıldı'); } },
+        { text: 'Kilitli kalsınlar, askerlere teslim edilsinler', onSelect: () => { S.act('rel', { faction: 'military', delta: 15 }); S.act('team_morale', { amount: -6 }); done('Necla başını eğdi: "Emir emirdir." Askerler yarın gelecek.', 'Mahkûmlar askerlere bırakıldı'); } },
+        { text: 'Öğretmeni ve hastaları çıkar (2 antibiyotik)', onSelect: () => { if (!S.inventory.has('antibiotics', 2)) { S.ui.toast('2 antibiyotik gerekli.', 'warn'); return; } S.inventory.remove('antibiotics', 2); S.act('rel', { faction: 'neighbors', delta: 10 }); S.act('team_morale', { amount: 6 }); S.results.rescued += 3; done('Öğretmen Seda ve iki hasta kurtarıldı. Diğerleri Necla\'nın gözetiminde.', 'Öğretmen ve hastalar kurtarıldı'); } },
+      ],
+    });
+  }
+
+  sendPilotToPlane() {
+    const S = this.s;
+    const P = S.world.plane;
+    if (!P) return;
+    // pervanenin önünde (burun yönünde 7 m)
+    S.act('npc_state', { id: 'aydin', x: P.x + Math.sin(P.a) * 7, z: P.z + Math.cos(P.a) * 7, follow: null, stay: true });
+    S.ui.toast('Aydın topallayarak uçağın yanına geçti.', 'info', 3);
   }
 
   /** Tüccar takas fiyatları (para) */
@@ -299,7 +384,7 @@ export class NPCs {
       this._schedT = (this._schedT || 0) - dt;
       if (this._schedT <= 0) {
         this._schedT = 2;
-        const want = { kemal: day >= 8, selin: day >= 17, riza: (day >= 2 && day % 3 === 2 && hour >= 9 && hour < 17) || !!S.flags.trader_here };
+        const want = { kemal: day >= 8, selin: day >= 17, riza: (day >= 2 && day % 3 === 2 && hour >= 9 && hour < 17) || !!S.flags.trader_here, zeynep: day >= 4 || !!S.quests.state('s_power') };
         for (const [id, v] of Object.entries(want)) { const n = this.byId(id); if (n && n.alive && n.visible !== v) S.applyAction('npc_state', { id, visible: v }, null); }
       }
     }
@@ -324,6 +409,21 @@ export class NPCs {
       } else n.speed = 0;
       n.avatar.root.position.copy(n.pos);
       n.avatar.update(dt, { mode: 'ground', speed: n.speed, yaw: n.yaw, pitch: 0 });
+      // Murat ve Defne üsse vardığında
+      if (n.id === 'murat' && n.follow && !S.flags.family_home && S.isHost && S.isInBase(n.pos)) {
+        const h = S.world.home.frame.pt(15, 18);
+        // görev henüz gelmediyse (telsiz çağrısından önce bulundular) şimdi başlat ve say
+        if (!S.quests.state('s_resort')) S.applyAction('quest_start', { id: 's_resort' }, null);
+        S.applyAction('flag', { flag: 'family_home', value: 1 }, null);
+        S.quests.onTalk('murat');
+        for (const [id, dx] of [['murat', 0], ['defne', 1.2]]) S.applyAction('npc_state', { id, follow: null, x: h.x + dx, z: h.z }, null);
+        S.results.rescued += 2;
+        S.emit({ k: 'toast', text: 'Murat ve Defne üsse ulaştı! Murat araçlarınıza bakacak (tamir %50 daha etkili).', kind: 'good', dur: 6 });
+        S.timeline.post('rescue', 'Oda 103 kurtarıldı', 'Murat ve kızı Defne otelden kurtarılıp üsse getirildi.');
+      }
+      // Pilot Aydın: iyileştikten sonra uçağa geçer (host)
+      if (n.id === 'aydin' && S.isHost && S.flags.pilot_joined && !n.atPlane && !n.stay && S.world.plane) { n.atPlane = true; this.sendPilotToPlane(); }
+      if (n.id === 'aydin' && n.stay) n.atPlane = true;
       // Can eve vardığında
       if (n.id === 'can' && n.follow && !S.flags.can_home) {
         const ay = this.byId('ayse');
@@ -506,12 +606,12 @@ export class NPCs {
   }
 
   serialize() {
-    return { npcs: this.list.map((n) => ({ id: n.id, x: n.pos.x, z: n.pos.z, vis: n.visible, alive: n.alive, follow: n.follow })), dog: this.dog ? { x: this.dog.x, z: this.dog.z, found: this.dog.found } : null };
+    return { npcs: this.list.map((n) => ({ id: n.id, x: n.pos.x, y: Math.round(n.pos.y * 100) / 100, z: n.pos.z, vis: n.visible, alive: n.alive, follow: n.follow, stay: n.stay || undefined })), dog: this.dog ? { x: this.dog.x, z: this.dog.z, found: this.dog.found } : null };
   }
   load(o) {
     if (!this.list.length) this.init();
     if (!o) return;
-    for (const d of o.npcs || []) { const n = this.byId(d.id); if (!n) continue; n.pos.set(d.x, this.s.world.physics.groundHeight(d.x, d.z, 1e9), d.z); n.setVisible(d.vis); n.alive = d.alive; n.follow = d.follow; if (!d.alive) n.setVisible(false); }
+    for (const d of o.npcs || []) { const n = this.byId(d.id); if (!n) continue; n.pos.set(d.x, this.s.world.physics.groundHeight(d.x, d.z, d.y !== undefined ? d.y + 0.6 : 1e9), d.z); n.setVisible(d.vis); n.alive = d.alive; n.follow = d.follow; n.stay = d.stay; if (d.stay) n.atPlane = true; if (!d.alive) n.setVisible(false); }
     if (o.dog && this.dog) { this.dog.x = o.dog.x; this.dog.z = o.dog.z; this.dog.found = o.dog.found; this.dog.follow = o.dog.found; }
   }
   dispose() {

@@ -180,6 +180,7 @@ export class MapSystem {
       const reg = S.region;
       if (reg && !(this.seenRegions || (this.seenRegions = new Set())).has(reg.id)) {
         this.seenRegions.add(reg.id);
+        S.timeline && S.timeline.onRegion(reg.id);
         if (reg.id !== 'mahalle') S.ui.regionBanner && S.ui.regionBanner(reg.name, reg.desc, reg.danger);
       }
     }

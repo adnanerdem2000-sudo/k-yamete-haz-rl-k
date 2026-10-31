@@ -8,7 +8,7 @@ import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): insan tabanları ve hayvanlar
 const RIGGED = ['male', 'female', 'wolf', 'deer', 'stag', 'husky', 'fox', 'shiba'];
-const SOUNDS = ['ambience', 'break', 'engine', 'engine-motorcycle', 'fall', 'impact', 'jump_a', 'land', 'pickup', 'placement-a', 'placement-b', 'removal-a', 'rotate', 'skid', 'toggle', 'walking', 'weapon_change'];
+const SOUNDS = ['ambience', 'break', 'engine', 'engine-motorcycle', 'fall', 'impact', 'jump_a', 'land', 'pickup', 'placement-a', 'placement-b', 'removal-a', 'rotate', 'skid', 'toggle', 'walking', 'weapon_change', 'step_hard', 'hurt', 'whoosh', 'downed', 'revive'];
 
 export class Assets {
   constructor(base = '') {

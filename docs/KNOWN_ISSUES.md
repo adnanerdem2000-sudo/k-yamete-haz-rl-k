@@ -14,6 +14,9 @@
 - Takas dükkânının stok bilgisi her oyuncunun kendi tarayıcısında tutulur (stoklar oyuncular arasında
   eşitlenmez).
 - Sesli sohbet yakınlık (3B) sesi değil, takım telsizi gibi her yerden duyulur.
+- Fiziksel nesneler (variller, pist enkazları, paraşütlü paket) her istemcide yerel simüle edilir; pist
+  enkazının son konumu hareket ettiren oyuncudan eşitlenir, ara konumlar istemciler arasında farklı görünebilir.
+- Vahşi hayvanlar (olaylardaki kurt sürüsü ve geyikler dahil) yalnızca oda sahibinde simüle edilir.
 
 ## Oynanış
 - Yapay zekâ takım arkadaşları basit davranışlara sahiptir (takip, savaş, kaldırma, kendini besleme);
@@ -24,6 +27,7 @@
   bir süre takılı kalabilir.
 - "Kapılı Duvar" yapısının açılır kanadı basit bir model kullanır.
 - Mobil/dokunmatik kontrol desteği yoktur (masaüstü klavye + fare hedeflendi).
+- Uçak kalkışı ve düşen uçak sahneleri kendi kamerasını kullanmaz; oyuncu kamerası sahneyi uzaktan izler.
 
 ## Görsel / performans
 - Şehir merkezi ve sanayi bölgesinde kare başına ~1000 çizim çağrısı, 1–1,5 milyon üçgen çizilir. Zayıf

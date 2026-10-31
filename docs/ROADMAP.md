@@ -1,8 +1,14 @@
 # Yol Haritası — Sonraki Aşamalar
 
-## Aşama 1 (bu sürüm): Oynanabilir web prototipi ✅
+## Aşama 1: Oynanabilir web prototipi ✅
 Tüm ana sistemler, 6 karakter, açık dünya ada, 30 günlük takvim, 20 rastgele olay, 6 final,
 2–6 oyunculu co-op (P2P), yapay zekâ takım arkadaşları, kayıt/yükleme, tüm arayüz ekranları.
+
+## Aşama 1.5 (bu sürüm): Derinleştirme ✅
+Rapier 3D fizik motoru, iskeletli karakter ve hayvan modelleri, yeni zombi türleri, 2 km'lik genişletilmiş
+ada (8 yeni bölge), 45 olay, 14 NPC, 29 görev, 7 final (uçak), zaman çizelgesi ekranı, epilog,
+hikâye dünyası (halatla çekilen pist enkazları, fener ve gemi, elektrik şebekesi, paraşütlü paket,
+düşen uçak, sarsıntı, Kanlı Ay), HRTF/oklüzyon/yankı ile 3B ses, zemine göre ayak sesleri.
 
 ## Aşama 2: Masaüstü `.exe` sürümü
 Oyun derleme gerektirmeyen statik bir web uygulaması olduğu için doğrudan paketlenebilir:
@@ -29,7 +35,8 @@ Oyun derleme gerektirmeyen statik bir web uygulaması olduğu için doğrudan pa
 - Yakınlık tabanlı 3B sesli sohbet ve telsiz eşyası ile kanal seçimi.
 
 ## Aşama 4: İçerik ve cila
-- Elle modellenmiş kahraman karakterler (konsept görsellere birebir), yüz ifadeleri, klip tabanlı animasyonlar.
+- Elle modellenmiş kahraman karakterler (konsept görsellere birebir), yüz ifadeleri.
+- Hikâye sahneleri için ara sinematikler (uçak kalkışında kokpit kamerası, fener yanarken yakın plan).
 - Daha fazla bina içi, yer altı otoparkı, metro tüneli, laboratuvarın gizli katı.
 - Yeni zombi davranışları (tırmanan, çığlık atan), patron savaşı (sürü lideri evrimi).
 - Gelişmiş YZ arkadaşlar: yağma görevleri, inşa yardımı, nöbet vardiyası.

@@ -294,8 +294,14 @@ export class Avatar {
     const g = this.gait;
     const runW = smoothstep(1.9, 3.0, s);
     const cycleDist = (g.walk + (g.run - g.walk) * runW) * (1 + 0.45 * smoothstep(4.3, 7, s));
+    const prevCycle = this.cycle;
     this.cycle = (this.cycle + dt * s / cycleDist) % 1;
     const idleW = 1 - smoothstep(0.12, 0.55, s);
+    // ayak sesi: ayak yere bastığında (döngünün iki temas noktası) oturuma bildir
+    if (idleW < 0.6 && (mode === 'ground' || mode === 'crouch') && this.game.session && this.game.session.onAvatarStep) {
+      const cross = (a, b, t) => (a <= b ? t > a && t <= b : t > a || t <= b);
+      if (cross(prevCycle, this.cycle, 0.02) || cross(prevCycle, this.cycle, 0.52)) this.game.session.onAvatarStep(this, s, mode);
+    }
     const moveW = 1 - idleW;
     const ang = this.angSm;
     let fw = Math.max(0, Math.cos(ang)), bw = Math.max(0, -Math.cos(ang)), lw = Math.max(0, Math.sin(ang)), rw = Math.max(0, -Math.sin(ang));

@@ -145,7 +145,7 @@ export class Zombies {
         if (zn.pop + activeHere + zn.killed < target) zn.pop = Math.max(0, target - zn.killed - activeHere);
         // aynı anda etrafta dolaşan sayısı: bölge yoğunluğu, gün ve gece ile ölçeklenir (1. gün sakin başlar)
         const dens = Math.min(2.2, 0.6 + (zn.base / 14) * 0.5);
-        const want = Math.round((4 + zn.r * 0.05) * (0.5 + day * 0.035) * (night ? 1.4 : 1) * dens * S.diff.zombies);
+        const want = Math.round((4 + zn.r * 0.05) * (0.5 + day * 0.035) * (night ? 1.4 : 1) * (this.frenzy ? 1.5 : 1) * dens * S.diff.zombies);
         if (activeHere >= want || zn.pop <= 0) continue;
         // görüş dışında, 55-110 m mesafede bir nokta
         for (let tries = 0; tries < 6; tries++) {
@@ -350,6 +350,9 @@ export class Zombies {
       const d = dist(p.x, p.z, zb.x, zb.z);
       let sight = def.sight * sightMul * (p.crouch ? 0.55 : 1) * (p.light && night ? 1.6 : 1) * (p.vehicle ? 1.5 : 1);
       if (p.id === S.localId && S.localProfile.stats.stealth) sight /= Math.sqrt(S.localProfile.stats.stealth);
+      // sis fırsatı (olay): çömelen oyuncular yarı mesafeden fark edilir; Kanlı Ay'da zombiler daha keskin
+      if (p.crouch && S.storyWorld && S.storyWorld.stealth) sight *= 0.5;
+      if (this.frenzy) sight *= 1.2;
       let score = 0;
       if (d < sight) {
         const ang = Math.abs(wrapAngle(Math.atan2(p.x - zb.x, p.z - zb.z) - zb.yaw));
@@ -392,7 +395,7 @@ export class Zombies {
     zb.attackCd -= dt;
     if (zb.stagger > 0) { zb.stagger -= dt; zb.speed = 0; this.moveBy(zb, (zb.kx || 0) * dt, (zb.kz || 0) * dt); zb.kx = (zb.kx || 0) * 0.85; zb.kz = (zb.kz || 0) * 0.85; return; }
     const night = S.time.isNight;
-    const speedMul = (def.nightOnly ? (night ? 1.25 : 0.75) : 1) * (zb.boost || 1) * (1 - zb.slow);
+    const speedMul = (def.nightOnly ? (night ? 1.25 : 0.75) : 1) * (zb.boost || 1) * (1 - zb.slow) * (this.frenzy ? 1.2 : 1);
     zb.boost = 1; zb.slow = Math.max(0, zb.slow - dt);
     let goal = null, run = false;
     // çığlıkçı: hedefi görünce çığlık atar (sesle tüm çevreyi çağırır), sonra mesafeyi korur

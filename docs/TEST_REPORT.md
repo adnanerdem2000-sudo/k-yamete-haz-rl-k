@@ -1,4 +1,4 @@
-# Test Raporu — v0.1 (web prototipi)
+# Test Raporu — v0.2 (web prototipi)
 
 Tarih: 31 Ekim 2026 · Ortam: Linux, Node 22, başsız Chromium (Playwright, SwiftShader yazılım GPU'su)
 
@@ -12,6 +12,21 @@ Tarih: 31 Ekim 2026 · Ortam: Linux, Node 22, başsız Chromium (Playwright, Swi
 | Uçtan uca: oynanış (`gameplay.mjs`) | Konteyner arama + depo paneli + hepsini al, yeme, bandaj üretimi, inşa hayaleti + barikat inşası (savunma puanı), zombi doğurma + YZ arkadaş savaşı (öldürme sayısı), araca binip sürme, gece, uyku oylaması (zaman x40), 2. gün takvim yayını, rastgele olay kartı + seçim, kayıt (yuva + otomatik), yaralı arkadaşı sırtlama/bırakma/kaldırma, harita | ✅ 0 hata |
 | Uçtan uca: çok oyunculu (`multiplayer-local.mjs`) | İki sekme (BroadcastChannel taşıyıcısı): oda kur, katıl, karakter seç, hazır, başlat; iki tarafta oyuncu listesi; konum eşitleme; istemcinin yağma eylemi host'ta işlenip eşyaların istemciye verilmesi; konteynerin host'ta boşalması; zombi anlık görüntülerinin istemciye ulaşması; sohbet; istemcinin ayrılması | ✅ 0 hata |
 | Uçtan uca: final (`ending.mjs`) | 30. gün akşamı, kaçış hazırlık durumları (6 final), sığınak kaçışı → sonuç ekranı (ad, derece, istatistikler) → ana menüye dönüş ve oturumun temizlenmesi | ✅ 0 hata |
+
+## v0.2 eklemeleri (hikâye, zaman çizelgesi, hikâye dünyası, ses)
+
+| Senaryo | Kapsam | Sonuç |
+|---|---|---|
+| `tests/e2e/story.mjs` | Yeni NPC'lerin yerleri (otel içindekiler kat zemininde: y = 3,8 = kat), 12 hikâye belgesinin doğru binalara/odalara düşmesi, santral (elektrik → sokak lambaları + pompalar), fener (huzme + gemi), Kanlı Ay (kızıl ay, zombi hızı/yoğunluğu), **pist enkazını halatla araca bağlayıp çekme**, pist temiz kararı, paraşütlü paket, düşen uçak, sarsıntı, 7 yeni olay kartı, kayıt, zaman çizelgesi, uçakla kaçış (taksi → kalkış koşusu → havalanma) ve epilog | ✅ |
+| `tests/e2e/audio.mjs` | Ses bağlamı + HRTF, zemine göre ayak sesleri (çim / asfalt / ahşap zemin), iç mekân yankısı, duvar arkası oklüzyon (kapalı/açık), savaş teması aç-kapa | ✅ 0 hata |
+| `tools/event-art.mjs` | 9 yeni olay görselinin oyun sahnelerinden çizimi | ✅ |
+
+Ölçümler (hikâye testi, sabit 1/60 sn adım):
+- Halatla çekme: 520 kg enkaz, arazi aracı (2000 kg) 7 sn gaz → enkaz **20,9 m** çekildi, pistten çıktı; host 2 sn içinde "pist temiz" kararı verdi.
+- Yardım paketi: 115 m'den paraşütle **10 sn**'de yere indi, rüzgârla hedef noktaya **9 m** yakına süzüldü; konteyner sandığın son konumunu izliyor.
+- Düşen uçak: 8,5 sn dalış → patlama, enkaz, 90 sn yangın alanı, kargo bölmesi konteyneri.
+- Uçak finali: hazırlık (onarım/60 L/pist/pilot) ✓ → kalkış: taksi + kalkış koşusu, x = 299'da havalandı; oyuncu kaçtı, sonuç ekranında 4 satırlık epilog.
+- Ayak sesleri: 2 sn yürüyüşte 7 adım (çim), 2 sn koşuda 7 adım (asfalt), evde ahşap zemin.
 
 ## Ölçülen değerler (oynanış testinden)
 - Yeme: açlık 40 → 80 · Üretim: 4 kumaş → 2 bandaj · Barikat inşası → savunma puanı 3
@@ -51,8 +66,8 @@ hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indiri
 - PeerJS (WebRTC) ile gerçek internet üzerinden bağlantı ve sesli sohbet: geliştirme ortamının ağ kısıtı
   nedeniyle çalıştırılamadı. Protokol aynı olduğundan yerel taşıyıcı testleri mantığı doğrular; NAT/TURN
   kaynaklı sorunlar `KNOWN_ISSUES.md`'de.
-- Gerçek GPU'da kare hızı, ses çıkışı (başsız tarayıcıda ses aygıtı yok) ve fare işaretçi kilidi
-  (başsız modda desteklenmez; savaş girdisi kilit gerektirir).
+- Gerçek GPU'da kare hızı, hoparlörden duyulan ses (başsız tarayıcıda ses grafiği çalışır ama dinlenemez)
+  ve fare işaretçi kilidi (başsız modda desteklenmez; savaş girdisi kilit gerektirir).
 
 ## Testleri çalıştırma
 ```bash

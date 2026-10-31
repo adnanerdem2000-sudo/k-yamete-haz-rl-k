@@ -1,6 +1,8 @@
 // Ses yöneticisi: Web Audio. Kanallar: genel, müzik, efekt, ortam, sesli sohbet.
 // CC0 Kenney sesleri + prosedürel sentez (silah, zombi, kapı, cam, siren, rüzgâr, yağmur, ateş, jeneratör)
-// + dinamik prosedürel müzik (sakin → keşif → tehlike → savaş).
+// + dinamik prosedürel müzik (sakin → keşif → tehlike → savaş) + çatışmada CC0 savaş teması.
+// Konumsal ses: HRTF (baş ilişkili aktarım) ile yön, kendi mesafe eğrimizle kazanç, mesafeyle tiz kaybı
+// (hava sönümü), görüş hattı kapalıysa boğuklaşma (oklüzyon), iç mekânda daha güçlü yankı (konvolüsyon).
 import { Settings } from '../core/Settings.js';
 
 const SCALE = [57, 60, 62, 64, 67, 69, 72, 74, 76]; // A minör pentatonik (MIDI)
@@ -18,6 +20,9 @@ export class AudioManager {
     this.intensity = 0; this.targetIntensity = 0;
     this.musicMode = 'menu';
     this.enabled = true;
+    this.occluder = null; // (at) → görüş hattı kapalı mı (oturum bağlar)
+    this.occBudget = 0;
+    this.indoor = false;
     Settings.onChange((p) => { if (p === '*' || p.startsWith('audio')) this.applyVolumes(); });
   }
 
@@ -34,6 +39,13 @@ export class AudioManager {
     this.bus = {};
     for (const k of ['music', 'sfx', 'ambient', 'voice']) { this.bus[k] = c.createGain(); this.bus[k].connect(this.comp); }
     this.applyVolumes();
+    this.hrtf = typeof c.createPanner === 'function';
+    // yankı: üretilmiş darbe yanıtı (erken yansımalar + üstel sönüm); efekt kanalından gönderme
+    this.verb = c.createConvolver();
+    this.verb.buffer = this.makeIR(2.0, 3.0);
+    this.verbSend = c.createGain(); this.verbSend.gain.value = 0.05;
+    const vlp = c.createBiquadFilter(); vlp.type = 'lowpass'; vlp.frequency.value = 4500;
+    this.bus.sfx.connect(this.verbSend); this.verbSend.connect(this.verb); this.verb.connect(vlp); vlp.connect(this.comp);
     // gürültü tamponu
     const len = c.sampleRate * 2;
     this.noise = c.createBuffer(1, len, c.sampleRate);
@@ -58,7 +70,79 @@ export class AudioManager {
     this.bus.voice.gain.value = a.voice;
   }
 
-  setListener(x, y, z, yaw) { this.listener.x = x; this.listener.y = y; this.listener.z = z; this.listener.yaw = yaw; }
+  setListener(x, y, z, yaw) {
+    const L = this.listener;
+    L.x = x; L.y = y; L.z = z; L.yaw = yaw;
+    this.occBudget = 6; // kare başına en fazla 6 oklüzyon ışını
+    const c = this.ctx;
+    if (!c) return;
+    const al = c.listener, fx = Math.sin(yaw), fz = Math.cos(yaw);
+    if (al.positionX) {
+      const t = c.currentTime;
+      al.positionX.setValueAtTime(x, t); al.positionY.setValueAtTime(y, t); al.positionZ.setValueAtTime(z, t);
+      al.forwardX.setValueAtTime(fx, t); al.forwardY.setValueAtTime(0, t); al.forwardZ.setValueAtTime(fz, t);
+      al.upX.setValueAtTime(0, t); al.upY.setValueAtTime(1, t); al.upZ.setValueAtTime(0, t);
+    } else if (al.setPosition) { al.setPosition(x, y, z); al.setOrientation(fx, 0, fz, 0, 1, 0); }
+  }
+
+  /** İç mekân: yankı daha güçlü (küçük oda), dışarıda hafif */
+  setEnvironment(indoor) {
+    if (!this.ctx || indoor === this.indoor) return;
+    this.indoor = indoor;
+    this.verbSend.gain.setTargetAtTime(indoor ? 0.3 : 0.05, this.ctx.currentTime, 0.35);
+  }
+
+  /** Darbe yanıtı: stereo, erken yansımalar + üstel sönen gürültü kuyruğu */
+  makeIR(seconds, decay) {
+    const c = this.ctx, rate = c.sampleRate, len = Math.floor(rate * seconds);
+    const buf = c.createBuffer(2, len, rate);
+    for (let ch = 0; ch < 2; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) { const t = i / len; d[i] = (Math.random() * 2 - 1) * Math.pow(1 - t, decay) * 0.6; }
+      for (let k = 0; k < 7; k++) { const i = Math.floor(rate * (0.008 + k * 0.011 + Math.random() * 0.006)); if (i < len) d[i] += (Math.random() < 0.5 ? -1 : 1) * (0.8 - k * 0.09); }
+    }
+    return buf;
+  }
+
+  /** Görüş hattı kapalı mı (kare başına sınırlı ışın) */
+  occluded(at) {
+    if (!this.occluder || this.occBudget <= 0) return false;
+    this.occBudget--;
+    try { return !!this.occluder(at); } catch { return false; }
+  }
+
+  /** Panner: konum ayarı (eski tarayıcılar için setPosition) */
+  setPannerPos(p, at) {
+    const y = at.y ?? this.listener.y;
+    if (p.positionX) { const t = this.ctx.currentTime; p.positionX.setValueAtTime(at.x, t); p.positionY.setValueAtTime(y, t); p.positionZ.setValueAtTime(at.z, t); } else p.setPosition(at.x, y, at.z);
+  }
+
+  /**
+   * Konumsal yönlendirme: kaynak → [alçak geçiren: hava sönümü / oklüzyon] → kazanç → HRTF panner → kanal.
+   * Dönüş: kaynağın bağlanacağı düğüm.
+   */
+  route(bus, gainV, at, sp, o = {}) {
+    const c = this.ctx;
+    const g = c.createGain(); g.gain.value = gainV;
+    let head = g;
+    const range = o.range || 45;
+    if (sp.d > 2.5) {
+      const occl = sp.d > 4 && this.occluded(at);
+      const cut = (17000 - Math.min(1, sp.d / range) * 13000) * (occl ? 0.1 : 1);
+      if (cut < 15000) { const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = Math.max(260, cut); f.Q.value = 0.5; f.connect(g); head = f; }
+      if (occl) g.gain.value = gainV * 0.55;
+    }
+    if (this.hrtf) {
+      const p = c.createPanner();
+      p.panningModel = 'HRTF'; p.distanceModel = 'linear'; p.rolloffFactor = 0; p.refDistance = 1; p.maxDistance = 10000;
+      this.setPannerPos(p, at);
+      g.connect(p); p.connect(this.bus[bus]);
+    } else {
+      const pn = c.createStereoPanner ? c.createStereoPanner() : null;
+      if (pn) { pn.pan.value = sp.pan; g.connect(pn); pn.connect(this.bus[bus]); } else g.connect(this.bus[bus]);
+    }
+    return head;
+  }
 
   /** Konumsal kazanç ve pan */
   spatial(at, range = 40) {
@@ -73,6 +157,8 @@ export class AudioManager {
   }
 
   out(bus, gainV, pan) {
+    const cur = this._cur;
+    if (cur) return this.route(cur.bus || bus, gainV, cur.at, cur.sp, cur.o);
     const c = this.ctx;
     const g = c.createGain(); g.gain.value = gainV;
     const p = c.createStereoPanner ? c.createStereoPanner() : null;
@@ -92,12 +178,27 @@ export class AudioManager {
       const src = this.ctx.createBufferSource();
       src.buffer = this.buffers[name];
       src.playbackRate.value = (o.rate || 1) * (1 + (Math.random() - 0.5) * (o.vary ?? 0.1));
-      src.connect(this.out(bus, vol, sp.pan));
+      src.connect(o.at ? this.route(bus, vol, o.at, sp, o) : this.out(bus, vol, sp.pan));
       src.start();
       return src;
     }
     const fn = this.synth[name];
-    if (fn) fn.call(this, vol, sp.pan, o);
+    if (fn) {
+      // sentez sesleri out() üzerinden bağlanır: konumluysa aynı HRTF/süzgeç yolundan geçsin
+      this._cur = o.at ? { at: o.at, sp, o } : null;
+      try { fn.call(this, vol, sp.pan, o); } finally { this._cur = null; }
+    }
+  }
+
+  /** Ayak sesi: zemine göre örnek ya da sentez; koşarken yüksek, çömelirken kısık */
+  footstep(at, surface, speed, crouch) {
+    if (!this.ctx) return;
+    const vol = (crouch ? 0.1 : speed > 4.2 ? 0.32 : 0.2);
+    if ((surface === 'hard' || surface === 'tile' || surface === 'metal') && this.buffers.step_hard) {
+      this.play('step_hard', { at, vol: vol * 1.15, rate: surface === 'metal' ? 1.3 : surface === 'tile' ? 1.12 : 0.92, vary: 0.14, range: 26 });
+      if (surface === 'metal') this.play('step', { at, vol: vol * 0.5, surface: 'metal', range: 26 });
+    } else this.play('step', { at, vol, surface, range: 22 });
+    if (surface === 'water') this.play('splash', { at, vol: vol * 1.3, range: 24 });
   }
 
   env(g, t0, a, peak, dec, end = 0.0001) {
@@ -165,7 +266,17 @@ export class AudioManager {
     S.door = (v, p) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.6); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 18; f.frequency.setValueAtTime(600, t); f.frequency.linearRampToValueAtTime(900 + Math.random() * 400, t + 0.45); const g = c.createGain(); self.env(g, t, 0.05, v * 0.6, 0.45); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.6); };
     S.bash = (v, p) => { S.hit(v * 1.2, p); const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g = c.createGain(); self.env(g, t, 0.002, v * 0.7, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.3); };
     S.glass = (v, p) => { const c = self.ctx, t = c.currentTime; for (let i = 0; i < 6; i++) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 2500 + Math.random() * 4000; const g = c.createGain(); self.env(g, t + i * 0.02, 0.001, v * 0.12, 0.3 + Math.random() * 0.4); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t + i * 0.02); o.stop(t + 1); } const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 3000; const g = c.createGain(); self.env(g, t, 0.001, v * 0.6, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t); n.stop(t + 0.3); };
-    S.step = (v, p, o = {}) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.1); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.surface === 'wood' ? 900 : o.surface === 'hard' ? 2400 : 600; const g = c.createGain(); self.env(g, t, 0.002, v * 0.35, 0.07); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random() * 1.5); n.stop(t + 0.1); };
+    // ayak sesi: zemine göre süzgeç/uzunluk; ahşapta boğuk tok ses, metalde çınlama, kumda/çimde hışırtı
+    const STEP = { grass: ['bandpass', 1900, 0.8, 0.09, 0], dirt: ['lowpass', 1000, 0.7, 0.07, 70], gravel: ['bandpass', 2600, 1.2, 0.08, 60], sand: ['highpass', 2400, 0.6, 0.12, 0], wood: ['lowpass', 750, 1.1, 0.06, 110], hard: ['lowpass', 2400, 0.8, 0.05, 90], tile: ['bandpass', 3000, 1.4, 0.04, 120], metal: ['bandpass', 3400, 9, 0.12, 0], water: ['bandpass', 1300, 1.0, 0.16, 0], snow: ['lowpass', 1400, 0.7, 0.1, 0] };
+    S.step = (v, p, o = {}) => {
+      const c = self.ctx, t = c.currentTime;
+      const [type, fq, q, dur, thump] = STEP[o.surface] || STEP.grass;
+      const n = self.noiseSrc(dur + 0.05); const f = c.createBiquadFilter(); f.type = type; f.frequency.value = fq * (0.85 + Math.random() * 0.3); f.Q.value = q;
+      const g = c.createGain(); self.env(g, t, 0.003, v * 0.4, dur);
+      const dst = self.out('sfx', 1, p);
+      n.connect(f); f.connect(g); g.connect(dst); n.start(t, Math.random() * 1.5); n.stop(t + dur + 0.05);
+      if (thump) { const o2 = c.createOscillator(); o2.type = 'sine'; o2.frequency.setValueAtTime(thump * 1.6, t); o2.frequency.exponentialRampToValueAtTime(thump * 0.6, t + 0.06); const g2 = c.createGain(); self.env(g2, t, 0.002, v * 0.35, 0.07); o2.connect(g2); g2.connect(dst); o2.start(t); o2.stop(t + 0.1); }
+    };
     S.click = (v) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'triangle'; o.frequency.setValueAtTime(900, t); o.frequency.exponentialRampToValueAtTime(600, t + 0.05); const g = c.createGain(); self.env(g, t, 0.001, v * 0.25, 0.06); o.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.08); };
     S.success = (v) => { const c = self.ctx; [0, 4, 7, 12].forEach((s, i) => { const t = c.currentTime + i * 0.07; const o = c.createOscillator(); o.type = 'triangle'; o.frequency.value = midi(72 + s); const g = c.createGain(); self.env(g, t, 0.005, v * 0.22, 0.35); o.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.4); }); };
     S.alert = (v) => { const c = self.ctx; [0, 0.25].forEach((d) => { const t = c.currentTime + d; const o = c.createOscillator(); o.type = 'square'; o.frequency.value = 880; const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2000; const g = c.createGain(); self.env(g, t, 0.01, v * 0.18, 0.18); o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, 0)); o.start(t); o.stop(t + 0.2); }); };
@@ -194,8 +305,17 @@ export class AudioManager {
     if (!L) {
       const c = this.ctx;
       const g = c.createGain(); g.gain.value = 0;
-      const pan = c.createStereoPanner ? c.createStereoPanner() : null;
-      if (pan) { g.connect(pan); pan.connect(this.bus[o.bus || 'sfx']); } else g.connect(this.bus[o.bus || 'sfx']);
+      let pan = null, hp = null, lp = null;
+      if (o.at && this.hrtf) {
+        // konumsal döngü: kazanç → alçak geçiren (hava/oklüzyon) → HRTF panner → kanal
+        lp = c.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 16000;
+        hp = c.createPanner(); hp.panningModel = 'HRTF'; hp.distanceModel = 'linear'; hp.rolloffFactor = 0; hp.refDistance = 1; hp.maxDistance = 10000;
+        this.setPannerPos(hp, o.at);
+        g.connect(lp); lp.connect(hp); hp.connect(this.bus[o.bus || 'sfx']);
+      } else {
+        pan = c.createStereoPanner ? c.createStereoPanner() : null;
+        if (pan) { g.connect(pan); pan.connect(this.bus[o.bus || 'sfx']); } else g.connect(this.bus[o.bus || 'sfx']);
+      }
       let src;
       if (kind === 'engine' || kind === 'engine-motorcycle') {
         src = c.createBufferSource(); src.buffer = this.buffers[kind] || this.buffers.engine; src.loop = true; src.connect(g); src.start();
@@ -214,13 +334,23 @@ export class AudioManager {
         src = c.createBufferSource(); src.buffer = this.buffers.ambience; src.loop = true; src.connect(g); src.start();
       } else return null;
       L = L || { g, pan, src };
+      L.pan = pan; L.hp = hp; L.lp = lp;
       L.kind = kind;
       this.loops.set(id, L);
     }
     const sp = this.spatial(o.at, o.range || 40);
-    const target = (o.vol ?? 1) * sp.gain;
-    L.g.gain.setTargetAtTime(target, this.ctx.currentTime, 0.12);
-    if (L.pan) L.pan.pan.setTargetAtTime(sp.pan, this.ctx.currentTime, 0.1);
+    let target = (o.vol ?? 1) * sp.gain;
+    const now = this.ctx.currentTime;
+    if (L.hp && o.at) {
+      this.setPannerPos(L.hp, o.at);
+      // oklüzyon: en fazla 0.35 sn'de bir ışın
+      if (!(L.occT > now - 0.35)) { L.occT = now; L.occl = sp.gain > 0.01 && sp.d > 4 && this.occluded(o.at); }
+      const cut = (17000 - Math.min(1, sp.d / (o.range || 40)) * 12000) * (L.occl ? 0.12 : 1);
+      L.lp.frequency.setTargetAtTime(Math.max(300, cut), now, 0.15);
+      if (L.occl) target *= 0.6;
+    }
+    L.g.gain.setTargetAtTime(target, now, 0.12);
+    if (L.pan) L.pan.pan.setTargetAtTime(sp.pan, now, 0.1);
     if (o.rate && L.src.playbackRate) L.src.playbackRate.setTargetAtTime(o.rate, this.ctx.currentTime, 0.08);
     if (kind === 'fire' && L.f) L.f.frequency.value = 600 + Math.random() * 900;
     return L;
@@ -249,6 +379,36 @@ export class AudioManager {
     this.nextBar = c.currentTime + 0.2;
     this.bar = 0;
     this.musicTimer = setInterval(() => this.scheduleMusic(), 200);
+    // çatışma teması (CC0, "Battle Theme A" — cynicmusic): akış olarak çalınır, sürü/savaşta açılır
+    try {
+      const el = new Audio(`${this.game.assets.base || ''}assets/audio/music/battle_theme_a.mp3`);
+      el.loop = true; el.preload = 'none';
+      this.battleEl = el;
+      this.battleGain = c.createGain(); this.battleGain.gain.value = 0;
+      c.createMediaElementSource(el).connect(this.battleGain);
+      this.battleGain.connect(this.bus.music);
+      this.battleHi = 0; this.battleLo = 0;
+    } catch { this.battleEl = null; }
+  }
+
+  /** Savaş teması: yoğunluk 3 sn yüksek kalırsa açılır, 10 sn düşük kalırsa söner */
+  updateBattle(I) {
+    const el = this.battleEl, c = this.ctx;
+    if (!el) return;
+    const fight = this.musicMode !== 'menu' && I > 0.68;
+    this.battleHi = fight ? this.battleHi + 0.2 : 0;
+    this.battleLo = !fight ? this.battleLo + 0.2 : 0;
+    if (this.battleHi > 3 && !this.battleOn) {
+      this.battleOn = true;
+      el.play().catch(() => { this.battleOn = false; });
+      this.battleGain.gain.setTargetAtTime(0.85, c.currentTime, 1.2);
+      this.musicGain.gain.setTargetAtTime(0.25, c.currentTime, 1.5);
+    } else if (this.battleOn && this.battleLo > 10) {
+      this.battleOn = false;
+      this.battleGain.gain.setTargetAtTime(0, c.currentTime, 1.6);
+      this.musicGain.gain.setTargetAtTime(1, c.currentTime, 2);
+      setTimeout(() => { if (!this.battleOn) el.pause(); }, 7000);
+    }
   }
 
   scheduleMusic() {
@@ -256,6 +416,7 @@ export class AudioManager {
     if (!c || c.state !== 'running') return;
     this.intensity += (this.targetIntensity - this.intensity) * 0.08;
     const I = this.intensity;
+    this.updateBattle(I);
     const barLen = this.musicMode === 'menu' ? 4.8 : I > 0.7 ? 2.0 : I > 0.35 ? 3.2 : 4.4;
     while (this.nextBar < c.currentTime + 0.6) {
       const t = this.nextBar;

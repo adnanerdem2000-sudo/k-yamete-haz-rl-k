@@ -369,7 +369,8 @@ export class Vehicles {
       case 'repair': {
         const kits = v.wrecked ? 2 : 1;
         if (inv.count('repair_kit') < kits) { S.ui.toast(`${kits} tamir seti gerekli.`, 'warn'); return; }
-        const mul = S.localProfile.stats.repair || 1;
+        // Tamirci Murat üsse kurtarıldıysa onarımlar %50 daha etkili
+        const mul = (S.localProfile.stats.repair || 1) * (S.flags.mechanic ? 1.5 : 1);
         S.interact.startHold('Araç tamir ediliyor…', 3.5 / mul, () => {
           inv.remove('repair_kit', kits);
           const nh = v.wrecked ? v.maxHealth * 0.4 : Math.min(v.maxHealth, v.health + v.maxHealth * 0.35 * mul);

@@ -30,6 +30,9 @@ import { Weather } from './systems/Weather.js';
 import { Bots } from './systems/Bots.js';
 import { SaveSystem } from './systems/SaveSystem.js';
 import { Crafting } from './systems/Crafting.js';
+import { Timeline } from './systems/Timeline.js';
+import { StoryWorld } from './systems/StoryWorld.js';
+import { BIOME } from './world/Terrain.js';
 
 export const DIFFICULTY = {
   easy: { name: 'Kolay', zombies: 0.7, dmg: 0.65, needs: 0.8, loot: 1.3 },
@@ -97,7 +100,12 @@ export class Session {
     this.bots = new Bots(this);
     this.saves = new SaveSystem(this);
     this.crafting = new Crafting(this);
+    this.timeline = new Timeline(this);
+    this.storyWorld = new StoryWorld(this);
     this.registerCore();
+    this.storyWorld.init();
+    // ses oklüzyonu: dinleyici ile kaynak arasında görüşü kesen yapı var mı
+    this.audio.occluder = (at) => { const L = this.audio.listener; return !this.world.physics.lineOfSight(L.x, L.y, L.z, at.x, (at.y ?? L.y) + 0.8, at.z); };
     this.players.set(this.localId, { id: this.localId, name: prof.name, charId: cdef.id, look, isLocal: true, token: this.token, pos: this.local.pos, summary: null });
     // ---- başlangıç
     if (cfg.save && this.isHost) {
@@ -180,7 +188,7 @@ export class Session {
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); });
     this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
     this.onEvt('revived', (e) => {
-      if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
+      if (e.target === this.localId) { this.audio.play('revive', { vol: 0.7 }); this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
       if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
     });
     this.onEvt('time', (e) => { this.time.set(e.total); });
@@ -280,6 +288,7 @@ export class Session {
     this.bots.update(dt);
     this.ground.update(dt);
     this.props.update(dt);
+    this.storyWorld.update(dt);
     this.fx.update(dt);
     this.quests.update(dt);
     this.events.update(dt);
@@ -320,6 +329,7 @@ export class Session {
     this.world.instancer.cull(cam.position, Settings.get('graphics.viewDistance'));
     this.updateRoofs();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - pl.pos.x, cam.position.z - pl.pos.z) + Math.PI);
+    this.audio.setEnvironment(!!pl.inside);
     this.updateAmbience(dt);
   }
 
@@ -395,6 +405,7 @@ export class Session {
     const st = this.localStats;
     if (st.downed || this.local.mode === 'sleep' && kind === 'internal') return;
     const res = st.damage(amount * this.diff.dmg, kind);
+    if (amount >= 3 && this.t - (this._hurtT || -9) > 0.6) { this._hurtT = this.t; this.audio.play('hurt', { vol: Math.min(0.8, 0.35 + amount / 40), vary: 0.18 }); }
     this.onLocalDamaged(amount, kind);
     if (res.bleed) this.ui.toast('Kanıyorsun! Bandaj kullan.', 'danger');
     if (res.infected) this.ui.toast('Isırık enfekte olabilir…', 'danger');
@@ -412,6 +423,8 @@ export class Session {
   onDowned() {
     if (this._downNotified) return;
     this._downNotified = true;
+    this.audio.play('downed', { vol: 0.8 });
+    this.timeline.onDowned(this.localProfile.name);
     this.local.mode = 'downed';
     if (this.local.carrying) this.act('carry', { target: this.local.carrying, drop: true });
     this.results.deaths++;
@@ -618,8 +631,53 @@ export class Session {
     this.emit({ k: 'sleep', ff: ok ? 40 : 1, votes: this.sleepVotes.size, need });
   }
 
+  // ======================================================================= ayak sesleri
+  /** Her karakterin (oyuncu, uzak oyuncu, YZ arkadaş, NPC) ayağı yere bastığında */
+  onAvatarStep(av, speed, mode) {
+    const p = av.root.position, L = this.audio.listener;
+    if (Math.abs(p.x - L.x) > 32 || Math.abs(p.z - L.z) > 32) return;
+    const local = av === this.local.avatar;
+    this.audio.footstep(local ? null : { x: p.x, y: p.y + 0.1, z: p.z }, this.surfaceAt(p, local ? this.local.inside : null), speed, mode === 'crouch');
+  }
+
+  /** Zombi ayak sesi: sürüklenen, düzensiz adımlar (yalnızca yakındakiler, kare başına en fazla 3) */
+  onZombieStep(view, speed, crawl) {
+    const p = view.root.position, L = this.audio.listener;
+    if (Math.abs(p.x - L.x) > 20 || Math.abs(p.z - L.z) > 20) return;
+    if (this._zsFrame !== this.t) { this._zsFrame = this.t; this._zsN = 0; }
+    if (++this._zsN > 3) return;
+    const surface = this.surfaceAt(p);
+    this.audio.play('step', { at: { x: p.x, y: p.y + 0.1, z: p.z }, vol: (crawl ? 0.08 : 0.1) + Math.min(0.12, speed * 0.025), surface: surface === 'grass' ? 'dirt' : surface, range: 20 });
+  }
+
+  /** Zemin türü: bina zemini, yapı, yol, su, biyom (çim/kum/toprak/kaya/kar) */
+  surfaceAt(p, inside = null) {
+    const T = this.world.terrain;
+    const th = T.heightAt(p.x, p.z);
+    if (p.y - th > 0.35) {
+      const b = inside || this.world.buildingAt(p.x, p.z);
+      if (b) { const f = b.tpl && b.tpl.style && b.tpl.style.floor; return f === 'woodfloor' || f === 'wood' ? 'wood' : f === 'tiles' ? 'tile' : 'hard'; }
+      return p.y - th > 1.2 ? 'metal' : 'wood'; // araç tavanı, iskele, yapı platformu
+    }
+    if (T.waterLevelAt(p.x, p.z) > th + 0.05) return 'water';
+    const ix = Math.round((p.x + T.half) / T.cell), iz = Math.round((p.z + T.half) / T.cell);
+    const k = T.idx(Math.max(0, Math.min(T.N, ix)), Math.max(0, Math.min(T.N, iz)));
+    const rm = T.roadMask[k];
+    if (rm >= 1) return 'hard';
+    if (rm > 0) return 'gravel';
+    switch (T.biome[k]) {
+      case BIOME.SAND: return 'sand';
+      case BIOME.ROCK: return 'hard';
+      case BIOME.SNOW: return 'snow';
+      case BIOME.URBAN: return 'hard';
+      case BIOME.DIRT: case BIOME.FIELD: return 'dirt';
+      default: return 'grass';
+    }
+  }
+
   // ======================================================================= zaman olayları
   onTime(type, d) {
+    if (type === 'day') this.timeline.onDayStart(d.day);
     if (!this.isHost) return;
     if (type === 'hour') {
       if (this.net.active) this.net.broadcast({ t: 'evt', e: { k: 'time', total: this.time.total } });
@@ -696,7 +754,7 @@ export class Session {
       players, hostToken: this.token,
       loot: this.loot.serialize(), ground: this.ground.serialize(), build: this.build.serialize(), zombies: this.zombies.serialize(),
       vehicles: this.vehicles.serialize(), npcs: this.npcs.serialize(), quests: this.quests.serialize(), events: this.events.serialize(),
-      map: this.map.serialize(), weather: this.weather.serialize(), bots: this.bots.serialize(), doors: this.serializeDoors(),
+      map: this.map.serialize(), weather: this.weather.serialize(), bots: this.bots.serialize(), doors: this.serializeDoors(), timeline: this.timeline.serialize(), story: this.storyWorld.serialize(),
     };
   }
 
@@ -734,6 +792,11 @@ export class Session {
     this.weather.load(data.weather);
     this.bots.load(data.bots);
     this.loadDoors(data.doors);
+    this.timeline.load(data.timeline);
+    this.storyWorld.load(data.story);
+    // takvim ortam durumu (elektrik kesintisi, kızıllaşan gökyüzü)
+    this.env.streetPower = this.time.day < 4 || !!this.flags.power_restored;
+    this.env.doom = this.time.day >= 30 ? 0.9 : this.time.day >= 29 ? 0.75 : this.time.day >= 28 ? 0.4 : 0;
     this.selectHotbar(0);
     this.ui.toast(`Kayıt yüklendi: ${this.time.day}. gün`, 'good');
   }
@@ -779,6 +842,7 @@ export class Session {
     this.events.load(w.events);
     this.weather.load(w.weather);
     this.loadDoors(w.doors);
+    this.storyWorld.load(w.story);
     if (w.env) { this.env.streetPower = w.env.streetPower !== false; this.env.doom = w.env.doom || 0; this.env.redMist = w.env.redMist || 0; }
     this.zombies.initClient();
     for (const p of w.players || []) if (p.id !== this.localId) this.addRemotePlayer(p);
@@ -787,7 +851,9 @@ export class Session {
 
   dispose() {
     this.disposed = true;
-    for (const sys of [this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    this.audio.occluder = null;
+    this.audio.setEnvironment(false);
+    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
     for (const p of this.players.values()) if (p.avatar && !p.isLocal) p.avatar.dispose();
     this.local.dispose();
     this.game.phys.clearDynamic();
@@ -797,7 +863,7 @@ export class Session {
     for (const w of this.world.windows) this.interact.applyWindowState(w, { broken: false, barricade: 0, hp: w.maxHp }, true);
     for (const b of this.world.buildings) b.roof.visible = true;
     this.env.weather = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
-    this.env.doom = 0; this.env.redMist = 0; this.env.streetPower = true;
+    this.env.doom = 0; this.env.redMist = 0; this.env.streetPower = true; this.env.bloodMoon = false;
     this.env.extraLights.length = 0;
   }
 }

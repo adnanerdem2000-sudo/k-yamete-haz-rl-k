@@ -3,11 +3,34 @@
 > 30 günün kaldı. Arkadaşlarını topla. Hazırlan. Hayatta kal.
 
 2–6 oyunculu, üçüncü şahıs kameralı, açık dünya **co-op hayatta kalma** oyunu. Bir ada, 30 gün sonra
-"Son Işık" denen felaketle yutulacak. Takımınla kaynak topla, evini bir kaleye çevir, gizemi çöz ve altı
-kaçış yolundan birini hazırla. Oyun **tarayıcıda** çalışır (kurulum gerekmez); masaüstü `.exe` sürümü
+"Son Işık" denen felaketle yutulacak. Takımınla kaynak topla, evini bir kaleye çevir, Proje Kızılçam'ın
+gizemini çöz ve yedi kaçış yolundan birini hazırla. Oyun **tarayıcıda** çalışır (kurulum gerekmez); masaüstü `.exe` sürümü
 için yol haritası `docs/ROADMAP.md` içinde.
 
 ![Konsept](assets/img/keyart.jpg)
+
+## ✨ Neler var?
+
+- **2 × 2 km ada, 18 bölge:** mahalle, şehir merkezi, hastane, liman, sanayi, askerî bölge, laboratuvar, orman,
+  dağ kampı ve yeni eklenen **çiftlik köyü, deniz feneri, sahil tatil köyü, cezaevi, havaalanı, dağ köyü
+  (cami), baraj ve santral, anakara köprüsü**. Göller, baraj gölü, boğaz ve anakara kıyısı.
+- **Hikâye:** 30 günlük takvim, **45 rastgele olay** (paraşütlü yardım paketi, alevler içinde düşen uçak,
+  Kanlı Ay, kurt sürüsü, sis, sarsıntı, cezaevi isyanı, kaçak bilim insanı, kablo hırsızları…), **14 NPC**
+  (Pilot Aydın, Fener Bekçisi İsmail, Mühendis Zeynep, Muhtar Ömer, Gardiyan Necla, Murat ve Defne…) ile
+  sohbet konuları ve ahlaki kararlar, 29 görev, 38 belge. Ana hikâye "Gerçeğin Peşinde" ve "Son Yayın" ile
+  Kızılçam'ın sırrını anakaraya duyurmaya kadar uzanır; sonuç ekranında kararlarınıza göre bir **epilog** çıkar.
+- **Zaman çizelgesi (J → Zaman Çizelgesi):** 30 günlük şerit; her günün olayları, kararlar, görevler,
+  keşifler, kurtarmalar, sürüler ve kaçış hazırlıkları kronolojik olarak; yaklaşan takvim olayları ve Son Işık'a geri sayım.
+- **Fizik (Rapier 3D):** sabit 60 Hz adım + enterpolasyon, kinematik karakter denetleyicisi, ışın tabanlı
+  araç süspansiyonu (tutunma sınırlı direksiyon, fren, devrilme), itilebilir/patlayan nesneler, savrulan
+  cesetler, kırılan kapı ve pencere enkazı, **halatla araç arkasına bağlanıp çekilen pist enkazları**,
+  rüzgârla süzülen paraşütlü paketler, sarsıntıda zıplayan eşyalar.
+- **Karakterler ve yaratıklar:** iskeletli Quaternius insan modelleri (klip + prosedürel katmanlı animasyon,
+  takla, eğilme, yüzme, sürünme, tırmanma), iskeletli hayvanlar (kurt, geyik, erkek geyik, tilki, köpekler),
+  yeni zombi türleri (sürünen, çığlıkçı, şişkin, çevik kuvvet) ve sürü taktikleri.
+- **Ses:** HRTF 3B konumlandırma, duvar arkası boğuklaşma (oklüzyon), mesafeyle tiz kaybı, iç mekânda
+  yankı, zemine göre ayak sesleri (çim, toprak, çakıl, kum, asfalt, ahşap, fayans, metal, su), dinamik
+  prosedürel müzik + çatışmada CC0 savaş teması.
 
 ---
 
@@ -52,6 +75,7 @@ doğrudan `file://` ile açma: tarayıcılar ES modüllerini ve model dosyaları
 ```bash
 npm test             # birim testleri (envanter, ihtiyaçlar, zaman, harita sisi, hava, görev kancaları, kayıt)
 npm run test:e2e     # uçtan uca senaryolar (başsız Chromium + Playwright; önce `npm start`)
+node tools/scenario.mjs tests/e2e/story.mjs   # tek senaryo: hikâye (santral, fener, halatla enkaz çekme, uçak finali…)
 ```
 
 Ayrıntılar: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md).
@@ -82,8 +106,14 @@ kur → gece uyuyarak zamanı hızlandır (takımın yarısı yatmalı) → takv
 sürülere hazırlan → 30. gün 22:00'ye kadar bir kaçış yolu hazırla.
 
 **Finaller (Görevler → Kaçış Planları):** Yeraltı sığınağı · Askerî helikopter (30. gün 20:00) ·
-Martı teknesi · Dağ kampı · Köprüden araç konvoyu (30. gün 21:00) · Son savunma. Sonuç ekranında
-hayatta kalanlar, üs seviyesi, kararlarınız ve S–D derecesi gösterilir.
+Martı teknesi (fener yanarsa açıktaki yük gemisine) · Dağ kampı · Köprüden araç konvoyu (30. gün 21:00) ·
+**Uçakla kaçış** (Pilot Aydın'ı iyileştir, uçağı onar, 60 L yakıt taşı, pisti enkazlardan temizle) ·
+Son savunma. Sonuç ekranında hayatta kalanlar, üs seviyesi, kararlarınız, S–D derecesi ve epilog gösterilir.
+
+**Yan hikâyeler:** Santralde türbini yeniden çalıştırıp adaya elektriği geri getir (sokak lambaları,
+benzin pompaları) · Deniz fenerini yak, açıktaki gemiyle haberleş · Otel Mavi Koy'daki baba-kızı üsse
+eskort et (tamirci Murat araç onarımını güçlendirir) · Dağ köyünü hastalıktan kurtar (köy pazarı açılır) ·
+Cezaevindeki mahkûmların kaderine karar ver · Kanıtları toplayıp 147.30'dan gerçeği yayınla.
 
 ---
 
@@ -97,14 +127,16 @@ src/
   core/                    grafik (Three.js + son işlem), giriş, ayarlar, varlık yükleyici, yardımcılar
   world/                   ada arazisi, yollar, köprü, girilebilir binalar + iç mekân, bitki örtüsü, su, gökyüzü,
                            çarpışma dünyası, yol bulma ızgarası (A*)
-  entities/                karakter üretimi (doku boyama + aksesuar), prosedürel animasyon, oyuncu, zombi görünümü
+  physics/                 Rapier 3D dünyası: sabit adım, enterpolasyon, karakter denetleyicisi, dinamik nesneler
+  entities/                iskeletli karakterler (klip + prosedürel katmanlar), oyuncu, zombi ve hayvan görünümleri
   systems/                 envanter, ihtiyaçlar, zaman, ortam/hava, yağma, üretim, inşa, zombiler, savaş, araçlar,
-                           NPC/hayvanlar, görevler, olaylar, finaller, harita, YZ takım arkadaşları, kayıt, ses
+                           NPC/hayvanlar, görevler, olaylar, finaller, harita, YZ takım arkadaşları, kayıt, ses,
+                           zaman çizelgesi, hikâye dünyası (pist enkazları, uçak, fener, gemi, paket, düşen uçak)
   net/                     oda/lobi, taşıyıcılar (PeerJS + BroadcastChannel), sesli sohbet
   ui/                      arayüz yöneticisi, menüler, HUD, günlük (envanter/üretim/karakter/görevler/harita), paneller
   data/                    eşyalar, tarifler, yapılar, yağma tabloları, zombiler, hikâye (takvim, olaylar, görevler)
 assets/                    CC0 modeller (GLB kitleri), sesler, yazı tipleri, konsept görselleri
-vendor/                    three.js r187 (MIT), PeerJS 1.5.5 (MIT)
+vendor/                    three.js r187 (MIT), PeerJS 1.5.5 (MIT), Rapier 3D (Apache-2.0), meshoptimizer çözücü (MIT)
 tests/unit, tests/e2e      birim + uçtan uca testler
 tools/                     yerel sunucu, varlık paketleyici, senaryo koşucu, ekran görüntüsü aracı
 docs/                      mimari, test raporu, bilinen sorunlar, yol haritası

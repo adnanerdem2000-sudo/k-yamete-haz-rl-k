@@ -47,7 +47,14 @@ export class Quests {
       this.st[e.id] = { state: e.state, prog: e.prog };
       const def = QUESTS[e.id] || this.dyn[e.id];
       if (!def) return;
-      if (!was && e.state === 'active') { S.ui.questBanner('YENİ GÖREV', def.title); S.audio.play('success', { vol: 0.4 }); if (!this.tracked || def.kind === 'main') this.tracked = e.id; }
+      if (!was && e.state === 'active') {
+        S.ui.questBanner('YENİ GÖREV', def.title); S.audio.play('success', { vol: 0.4 }); if (!this.tracked || def.kind === 'main') this.tracked = e.id;
+        // görev başlamadan önce gerçekleşmiş bayrak hedefleri (okunmuş belge, kurulmuş anten…) hemen sayılır
+        if (S.isHost) {
+          const recheck = () => { for (const o of def.objs) if (o.t === 'flag') this.onFlag(o.flag); };
+          if (S.later) S.later(0, recheck); else recheck(); // bir sonraki karede (çizelgede "başladı" önce görünsün)
+        }
+      }
       if (e.state === 'done' && (!was || was.state !== 'done')) { S.ui.questBanner('GÖREV TAMAMLANDI', def.title, 'good'); S.audio.play('success', { vol: 0.7 }); if (this.tracked === e.id) this.tracked = this.firstActive(); }
       S.ui.refreshQuests && S.ui.refreshQuests();
     });
@@ -81,6 +88,7 @@ export class Quests {
       S.applyAction('quest_start', { id: nx }, null);
     }
     if (def.ending) S.applyAction('flag', { flag: 'ending_ready', value: 1 }, null);
+    if (def.flag) S.applyAction('flag', { flag: def.flag, value: 1 }, null);
   }
 
   // ======================================================================= ilerleme kancaları

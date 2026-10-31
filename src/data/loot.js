@@ -68,4 +68,11 @@ export const SPECIAL_LOOT = {
   lab_sample: [['lab_sample', 1], ['note', 1, { noteId: 'lab_final' }]],
   ambulance: [['first_aid', 2], ['bandage', 4], ['antibiotics', 1], ['note', 1, { noteId: 'hospital_evac' }]],
   fuel: [['jerrycan', 1, { fuel: 20 }]],
+  // genişletilmiş ada ve olaylar
+  pilot_log: [['note', 1, { noteId: 'pilot_log' }], ['first_aid', 1], ['pistol', 1, { ammo: 4 }], ['ammo_9mm', 8]],
+  airdrop: [['mre', 3], ['water_bottle', 4], ['first_aid', 1], ['antibiotics', 2], ['ammo_9mm', 24], ['battery', 4], ['bandage', 3]],
+  crash_cargo: [['note', 1, { noteId: 'cargo_manifest' }], ['antibiotics', 2], ['first_aid', 1], ['ammo_rifle', 8], ['electronics', 2], ['engine_part', 1]],
+  hidden_cache: [['canned_food', 4], ['water_bottle', 3], ['warm_jacket', 1], ['lighter', 1], ['shells', 8], ['money', 120]],
+  supply_truck: [['mre', 4], ['ammo_9mm', 30], ['shells', 10], ['vest', 1], ['first_aid', 1], ['jerrycan', 1, { fuel: 20 }], ['radio', 1]],
+  hiker_pack: [['rope', 2], ['sleeping_bag', 1], ['binoculars', 1], ['chocolate', 3], ['note', 1, { noteId: 'random_diary7' }]],
 };

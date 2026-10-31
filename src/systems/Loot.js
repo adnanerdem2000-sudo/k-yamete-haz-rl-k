@@ -5,6 +5,25 @@ import { ITEMS } from '../data/items.js';
 import { RANDOM_NOTES } from '../data/story.js';
 import { RNG } from '../core/util.js';
 
+// belge taşıyabilen konteynerler (oda belgeleri için)
+const DOC_HOLDERS = new Set(['desk', 'filing_cabinet', 'radio_desk', 'server']);
+// şablon odası docs etiketi → belge (nesne: bina ya da oda kimliğine göre)
+const ROOM_DOCS = {
+  hospital: 'hospital_records', military: 'military_orders', lab: 'lab_doc1', lab_secret: 'lab_secret', factory: 'factory_memo', port: 'port_log', checkpoint: 'checkpoint_note',
+  airfield: { terminal: 'airfield_log', tower: 'tower_log' }, dam: { control: 'dam_report', office: 'engineer_note' },
+};
+// bina kimliği → belge(ler) (types yoksa binadaki ilk aranan konteyner)
+const BUILDING_DOCS = {
+  police: [{ doc: 'cctv', types: ['desk'] }],
+  bank: [{ doc: 'bank_note', types: ['desk'], extra: [['vault_code', 1]] }],
+  prison_admin: [{ doc: 'prison_log', types: ['desk', 'filing_cabinet', 'bookshelf'] }],
+  hotel: [{ doc: 'hotel_manager', types: ['desk', 'filing_cabinet', 'bookshelf'] }, { doc: 'resort_guestbook' }],
+  keeper: [{ doc: 'lighthouse_log' }],
+  vil_cafe: [{ doc: 'village_note' }],
+  vil3: [{ doc: 'kizilcam_origin' }],
+  barn: [{ doc: 'farm_diary' }],
+};
+
 export class Loot {
   constructor(session) {
     this.s = session;
@@ -104,6 +123,9 @@ export class Loot {
       for (const [id, n, data] of SPECIAL_LOOT[c.special]) put(id, n, data);
       return { searched: false, slots, locked: c.locked || 0 };
     }
+    // hikâye belgeleri: boş çıkma zarından önce (belge odası tek konteynerliyse de bulunsun)
+    const story = this.storyDocs(c);
+    for (const [id, n, data] of story) put(id, n, data);
     const T = LOOT[c.type] || LOOT.crate;
     const danger = this.regionDanger(c);
     const day = S.time.day;
@@ -134,19 +156,32 @@ export class Loot {
       if (ITEMS[id].spoil) data.t0 = Math.round(S.time.total - rng.next() * ITEMS[id].spoil * 0.5 * 1440);
       put(id, qty, data);
     }
-    // bölgesel hikâye notları
-    if (c.room && this.s.world.buildingById[c.building]) {
-      const b = this.s.world.buildingById[c.building];
-      if (b.docRoom === c.room && c.type === 'desk' || c.type === 'filing_cabinet' && b.docRoom) {
-        const docs = { hospital: 'hospital_records', military: 'military_orders', lab: 'lab_doc1', lab_secret: 'lab_secret', factory: 'factory_memo', port: 'port_log', checkpoint: 'checkpoint_note' };
-        const room = b.tpl.rooms.find((r) => r.id === c.room);
-        const doc = room && docs[room.docs];
-        if (doc && !this.s.flags['placed:' + doc]) { this.s.flags['placed:' + doc] = 1; put('note', 1, { noteId: doc }); if (doc === 'hospital_records') put('keycard', 1); if (doc === 'port_log') put('sea_map', 1); }
-      }
-    }
-    if (c.building === 'police' && c.type === 'desk' && !this.s.flags['placed:cctv']) { this.s.flags['placed:cctv'] = 1; put('note', 1, { noteId: 'cctv' }); }
-    if (c.building === 'bank' && c.type === 'desk' && !this.s.flags['placed:bank']) { this.s.flags['placed:bank'] = 1; put('vault_code', 1); put('note', 1, { noteId: 'bank_note' }); }
     return { searched: false, slots, locked: c.locked || 0 };
+  }
+
+  /**
+   * Bu konteynere düşen hikâye belgeleri (her belge oyunda bir kez yerleşir).
+   * Oda belgeleri: şablonda docs etiketi olan odadaki masa/dosya dolabı/telsiz masası/sunucu.
+   * Bina belgeleri: belirli binalardaki ilk uygun konteyner.
+   */
+  storyDocs(c) {
+    const S = this.s, out = [];
+    const once = (doc, extra = []) => {
+      if (!doc || S.flags['placed:' + doc]) return;
+      S.flags['placed:' + doc] = 1;
+      out.push(['note', 1, { noteId: doc }], ...extra);
+    };
+    const b = c.building && S.world.buildingById[c.building];
+    if (b && c.room && DOC_HOLDERS.has(c.type)) {
+      const room = b.tpl.rooms.find((r) => r.id === c.room);
+      let doc = room && ROOM_DOCS[room.docs];
+      if (doc && typeof doc === 'object') doc = doc[c.building] || doc[c.room];
+      if (doc) once(doc, doc === 'hospital_records' ? [['keycard', 1]] : doc === 'port_log' ? [['sea_map', 1]] : []);
+    }
+    for (const bd of (c.building && BUILDING_DOCS[c.building]) || []) {
+      if (!bd.types || bd.types.includes(c.type)) { const n = out.length; once(bd.doc, bd.extra || []); if (out.length > n) break; }
+    }
+    return out;
   }
 
   get(id) { return this.state.get(id); }

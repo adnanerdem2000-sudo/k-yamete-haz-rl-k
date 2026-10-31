@@ -239,6 +239,10 @@ export class Interact {
       case 'mountain_camp': return { label: 'Dağ Kampı: Erzak Bırak / Durum', holdTime: 0 };
       case 'bed': return { label: 'Uyu (Yatak)' };
       case 'bridge_end': return { label: 'Anakaraya Köprü — Konvoy Durumu' };
+      case 'lighthouse': return S.storyWorld.lighthouseInfo(it);
+      case 'dam_control': return S.storyWorld.damInfo(it);
+      case 'tow_point': return S.storyWorld.towInfo(it);
+      case 'plane': return S.storyWorld.flight ? null : { label: 'Tek Motorlu Uçak — Onar / Yakıt / Durum', range: 4.5 };
       default: return { label: it.name || it.type };
     }
   }
@@ -429,6 +433,10 @@ export class Interact {
       }
       case 'mountain_camp': S.endings.useMountainCamp(it); break;
       case 'bed': S.trySleep({ x: it.x, y: it.y, z: it.z, rot: it.rot || 0 }); break;
+      case 'lighthouse': S.storyWorld.useLighthouse(it); break;
+      case 'dam_control': S.storyWorld.useDam(it); break;
+      case 'tow_point': S.storyWorld.useTow(it); break;
+      case 'plane': S.endings.usePlane(it); break;
       case 'bridge_end': { const r = S.endings.readiness().convoy; S.ui.toast(S.time.day >= 30 && S.time.hour >= 21 ? (r.ok ? 'Köprü açık! Hazır bir araçla buradan anakaraya geç.' : 'Köprüden geçmek için hazır bir araç gerekli: ' + r.detail) : `Konvoy 30. gün 21:00'de köprüden geçecek. Araç: ${r.detail}`, r.ok ? 'good' : 'info', 6); break; }
       default: break;
     }

@@ -68,7 +68,13 @@ export class ZombieView {
     this.t += dt;
     const def = this.def;
     const run = Math.min(1, Math.max(0, (s.speed - 1.6) / 2.5));
+    const prevPhase = this.phase;
     this.phase += s.speed * dt * (def.crawl ? 2.6 : 2.1);
+    // sürüklenen ayak sesi (yakındaysa; oturum kare başına sınırlar)
+    if (!s.dead && !this.animal && s.speed > 0.35 && Math.floor(prevPhase / Math.PI) !== Math.floor(this.phase / Math.PI)) {
+      const S = this.game.session;
+      if (S && S.onZombieStep) S.onZombieStep(this, s.speed, !!def.crawl);
+    }
     this.visYaw = dampAngle(this.visYaw, s.yaw, 10, dt);
     if (this.animal) { this.updateDog(dt, s); return; }
     if (!this.corpse) this.root.rotation.y = this.visYaw;

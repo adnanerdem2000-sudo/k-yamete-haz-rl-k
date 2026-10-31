@@ -22,6 +22,8 @@ async function newPage(name = 'p' + pages.length, w = 960, h = 540, sameContext 
   const page = await ctx.newPage();
   page.on('console', (m) => { const t = `[${name}:${m.type()}] ${m.text()}`; logs.push(t); if (m.type() === 'error') errors.push(t); });
   page.on('pageerror', (e) => { const t = `[${name}:pageerror] ${e.message}\n${(e.stack || '').split('\n').slice(0, 4).join('\n')}`; logs.push(t); errors.push(t); });
+  // sekme çökmesi (ör. yazılım GPU'sunda bellek) başarısızlık sayılır
+  page.on('crash', () => { const t = `[${name}:error] sekme çöktü (renderer crash)`; logs.push(t); errors.push(t); });
   // grafik ayarlarını hafiflet (yazılım GPU)
   await page.addInitScript(() => {
     try {
@@ -47,7 +49,10 @@ try {
   ok = false;
   logs.push('[scenario-error] ' + e.message + '\n' + e.stack);
 }
-console.log(logs.slice(-120).join('\n'));
+// önemli satırların hepsi (log/hata/görüntü), diğerlerinden yalnızca son 40'ı
+const key = /^\[(log|shot|shot-fail|eval-error|scenario-error|p\d+:pageerror|p\d+:error)\]/;
+const rest = logs.filter((l) => !key.test(l)).slice(-40);
+console.log(logs.filter((l) => key.test(l) || rest.includes(l)).join('\n'));
 console.log(`\n== ${ok && !errors.length ? 'OK' : 'HATA'} · ${errors.length} hata`);
 await browser.close();
 process.exit(ok && !errors.length ? 0 : 1);

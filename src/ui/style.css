@@ -596,3 +596,39 @@ input[type=range] { width: 200px; accent-color: var(--orange); }
   .hud-quest { top: 300px; width: 230px; }
   .chat-log, .chat-input { left: 14px; bottom: 200px; }
 }
+
+/* ---- Zaman Çizelgesi */
+.timeline { display: flex; flex-direction: column; gap: 10px; width: 100%; min-height: 0; overflow-y: auto; padding-right: 6px; }
+.tl-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; }
+.tl-head h2 { margin: 0; }
+.tl-count { text-align: right; } .tl-count b { display: block; font: 26px var(--title); color: #ff8a5c; } .tl-count small { color: #cfd4db; }
+.tl-bar { position: relative; height: 10px; border-radius: 6px; background: rgba(255,255,255,0.08); border: 1px solid var(--line); }
+.tl-fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, #f1c40f, #e67e22 60%, #c0392b); }
+.tl-mark { position: absolute; top: -9px; transform: translateX(-50%); font-size: 16px; }
+.tl-strip { display: grid; grid-template-columns: repeat(30, 1fr); gap: 3px; }
+.tl-day { position: relative; padding: 4px 0; border-radius: 6px; border: 1px solid var(--line); background: rgba(255,255,255,0.04); color: #cfd4db; cursor: pointer; font-size: 11px; }
+.tl-day b { font: 13px var(--title); } .tl-day i { position: absolute; top: -6px; right: -4px; min-width: 14px; height: 14px; border-radius: 7px; background: #2e86c1; color: #fff; font: 9px/14px sans-serif; font-style: normal; }
+.tl-day.past { background: rgba(46,134,193,0.18); } .tl-day.now { background: #e67e22; color: #fff; border-color: #f39c12; }
+.tl-day.final { border-color: #c0392b; color: #ff6b6b; } .tl-day.sel { outline: 2px solid #f1c40f; }
+.tl-stats { display: flex; gap: 8px; } .tl-stats > div { flex: 1; text-align: center; padding: 6px; border-radius: 8px; background: rgba(255,255,255,0.05); border: 1px solid var(--line); }
+.tl-stats span { font-size: 18px; } .tl-stats b { display: block; font: 20px var(--title); } .tl-stats small { color: #cfd4db; font-size: 11px; }
+.tl-list { display: flex; flex-direction: column; gap: 4px; }
+.tl-dayhead { margin-top: 8px; padding: 4px 8px; border-left: 4px solid #2e86c1; font: 15px var(--title); color: #e8eef2; background: rgba(46,134,193,0.12); border-radius: 0 6px 6px 0; }
+.tl-dayhead.now { border-left-color: #e67e22; background: rgba(230,126,34,0.15); } .tl-dayhead span { font: 13px var(--body, sans-serif); color: #cfd4db; }
+.tl-entry { display: grid; grid-template-columns: 52px 26px 1fr; gap: 6px; align-items: start; padding: 5px 8px; border-radius: 6px; background: rgba(255,255,255,0.035); margin-left: 10px; border-left: 2px solid rgba(255,255,255,0.12); }
+.tl-time { color: #9fb3c8; font: 12px monospace; padding-top: 2px; } .tl-ic { font-size: 16px; }
+.tl-body b { color: #fff; } .tl-body em { margin-left: 6px; font-size: 10px; color: #9fb3c8; font-style: normal; text-transform: uppercase; letter-spacing: 0.5px; }
+.tl-body p { margin: 2px 0 0; color: #cfd4db; font-size: 12px; line-height: 1.35; }
+.tl-entry.k-horde, .tl-entry.k-danger { border-left-color: #c0392b; } .tl-entry.k-questDone, .tl-entry.k-rescue { border-left-color: #27ae60; }
+.tl-entry.k-calendar, .tl-entry.k-broadcast { border-left-color: #f1c40f; } .tl-entry.k-ending { border-left-color: #9b59b6; } .tl-entry.k-future { opacity: 0.8; border-left-style: dashed; }
+.tl-future { padding-bottom: 4px; }
+
+/* Sonuç ekranı: epilog */
+.epilogue { width: min(700px, 90vw); margin-top: 10px; padding: 10px 14px; border-left: 3px solid #f0a040; background: rgba(0,0,0,0.35); border-radius: 6px; }
+.epilogue h3 { margin: 0 0 6px; color: #f0c070; font-size: 15px; letter-spacing: 1px; }
+.epilogue p { margin: 4px 0; color: #e8e2d6; font-size: 13.5px; line-height: 1.45; }
+
+/* panel açıkken bildirimler ekranın altına iner (paneli kapatmasın) */
+.panel-open .toasts { top: auto; bottom: 14px; }
+.panel-open .toast { opacity: 0.92; font-size: 13px; padding: 6px 12px; }
+.tl-entry.k-world { border-left-color: #3fa7d6; } .tl-entry.k-choice { border-left-color: #e67e22; background: rgba(230,126,34,0.07); }

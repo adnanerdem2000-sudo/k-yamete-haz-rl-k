@@ -73,5 +73,9 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
   // 11) harita
   await S(() => window.__game.ui.openJournal('map')); await wait(1500); await shot(page, '/tmp/g-map.png');
   await S(() => window.__game.ui.closePanel());
+  // 12) zaman çizelgesi
+  await S(() => window.__game.ui.openJournal('timeline')); await wait(1200); await shot(page, '/tmp/g-timeline.png');
+  log('çizelge', await S(() => { const T = window.__game.session.timeline; return { n: T.list.length, kinds: [...new Set(T.list.map((e) => e.kind))], days: [...new Set(T.list.map((e) => e.day))], dom: document.querySelectorAll('.tl-entry').length }; }));
+  await S(() => window.__game.ui.closePanel());
   await wait(500); await shot(page, '/tmp/g-hud.png');
 };

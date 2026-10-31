@@ -6,13 +6,13 @@ export class Sky {
     this.uniforms = {
       uTop: { value: new THREE.Color('#3f8fe0') }, uHorizon: { value: new THREE.Color('#bfe3ff') }, uBottom: { value: new THREE.Color('#d9e8f2') },
       uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunColor: { value: new THREE.Color('#fff2d6') }, uMoonDir: { value: new THREE.Vector3(0, -1, 0) },
-      uStars: { value: 0 }, uCloud: { value: 0.45 }, uCloudColor: { value: new THREE.Color('#ffffff') }, uTime: { value: 0 }, uGlow: { value: 1 }, uDoom: { value: 0 },
+      uStars: { value: 0 }, uCloud: { value: 0.45 }, uCloudColor: { value: new THREE.Color('#ffffff') }, uTime: { value: 0 }, uGlow: { value: 1 }, uDoom: { value: 0 }, uMoonColor: { value: new THREE.Color(0.85, 0.9, 1.0) }, uMoonSize: { value: 1 },
     };
     const mat = new THREE.ShaderMaterial({
       uniforms: this.uniforms, side: THREE.BackSide, depthWrite: false, fog: false,
       vertexShader: /* glsl */`varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
       fragmentShader: /* glsl */`
-        uniform vec3 uTop, uHorizon, uBottom, uSunDir, uSunColor, uMoonDir, uCloudColor; uniform float uStars, uCloud, uTime, uGlow, uDoom;
+        uniform vec3 uTop, uHorizon, uBottom, uSunDir, uSunColor, uMoonDir, uCloudColor; uniform float uStars, uCloud, uTime, uGlow, uDoom, uMoonSize; uniform vec3 uMoonColor;
         varying vec3 vDir;
         float hash(vec3 p){ p = fract(p*0.3183099+.1); p *= 17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
         float h2(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
@@ -27,7 +27,8 @@ export class Sky {
           col += uSunColor * (pow(sd, 900.0) * 18.0 + pow(sd, 18.0) * 0.35 * uGlow + pow(sd, 3.0) * 0.12 * uGlow);
           // ay
           float md = max(dot(d, normalize(uMoonDir)), 0.0);
-          col += vec3(0.85, 0.9, 1.0) * (smoothstep(0.9993, 0.9996, md) * 1.6 + pow(md, 60.0) * 0.12) * uStars;
+          float mr = 1.0 - (1.0 - 0.9993) * uMoonSize * uMoonSize;
+          col += uMoonColor * (smoothstep(mr, mr + 0.0003 * uMoonSize, md) * 1.6 + pow(md, 60.0 / uMoonSize) * 0.12 * uMoonSize) * uStars;
           // yıldızlar
           if (uStars > 0.01 && y > 0.0) {
             vec3 sp = floor(d * 260.0);
