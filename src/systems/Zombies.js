@@ -51,7 +51,7 @@ export class Zombies {
     const q = Settings.get('graphics.quality');
     this.cap = q === 'low' ? 26 : q === 'medium' ? 38 : 50;
     const S = session;
-    S.on('zombie_hit', (p, from) => this.hit(p.id, p.dmg, p.dir, from, p.kind));
+    S.on('zombie_hit', (p, from) => this.hit(p.id, p.dmg, p.dir, from, p.kind, p.force));
     S.onEvt('zdie', (e) => this.onDieEvt(e));
     S.onEvt('zfx', (e) => { const v = this.views.get(e.id); if (!v) return; if (e.a === 'attack') v.attack(); if (e.a === 'flinch') v.flinch(); });
   }
@@ -208,10 +208,11 @@ export class Zombies {
   }
 
   // ======================================================================= hasar
-  hit(id, dmg, dir, from, kind) {
+  hit(id, dmg, dir, from, kind, force = 0) {
     const zb = this.list.get(id);
     if (!zb || zb.dead) return;
     zb.hp -= dmg;
+    zb.lastHit = { kind, dir: dir || null, force: force || 0 };
     zb.stagger = Math.max(zb.stagger, kind === 'melee' ? 0.35 * (1 - (zb.def.knockResist || 0)) : 0.15);
     if (dir && kind === 'melee') { zb.kx = dir[0] * 3 * (1 - (zb.def.knockResist || 0)); zb.kz = dir[1] * 3 * (1 - (zb.def.knockResist || 0)); }
     // saldırganı hedefle
@@ -233,7 +234,8 @@ export class Zombies {
     else if (zb.type === 'special') drop = ['antibiotics', 1];
     else if (zb.type === 'leader') drop = ['first_aid', 1];
     else if (r < 0.06) drop = this.rng.pick([['bandage', 1], ['ammo_9mm', 4], ['battery', 1], ['canned_food', 1], ['cloth', 1], ['medal', 1]]);
-    S.emit({ k: 'zdie', id: zb.id, x: zb.x, y: zb.y, z: zb.z, type: zb.type, by: from });
+    const lh = zb.lastHit || {};
+    S.emit({ k: 'zdie', id: zb.id, x: zb.x, y: zb.y, z: zb.z, type: zb.type, by: from, hk: lh.kind || null, hd: lh.dir ? [Math.round(lh.dir[0] * 100) / 100, Math.round(lh.dir[1] * 100) / 100] : null, hf: Math.round((lh.force || 0) * 10) / 10 });
     if (drop) S.applyAction('ground_drop', { stack: { id: drop[0], qty: drop[1] }, x: zb.x, y: zb.y, z: zb.z }, from);
     if (zb.def.toxic) S.emit({ k: 'toast', text: 'Zehirli bulut! Uzak dur!', kind: 'danger' });
     if (zb.def.leader) { S.emit({ k: 'toast', text: 'Sürü lideri öldü! Sürü dağılıyor!', kind: 'good', dur: 5 }); for (const z of this.list.values()) if (z.horde && !z.dead && this.rng.chance(0.6)) { z.horde = false; z.state = 'wander'; z.target = null; } }
@@ -243,7 +245,11 @@ export class Zombies {
   onDieEvt(e) {
     const v = this.views.get(e.id);
     const S = this.s;
-    if (v) { v.state.dead = true; v.deadAt = S.t; }
+    if (v) {
+      v.state.dead = true; v.deadAt = S.t;
+      // araç çarpması / patlama: ceset fizikle savrulur
+      if ((e.hk === 'vehicle' || e.hk === 'explosion') && e.hd && e.hf > 1.5) S.props.launchCorpse(v, e.hd, e.hf);
+    }
     S.fx.death(e.x, e.y, e.z);
     S.audio.play(ZOMBIE_TYPES[e.type]?.dog ? 'bark' : 'zdeath', { at: e, vol: 0.9 });
     if (ZOMBIE_TYPES[e.type]?.toxic) {
@@ -566,7 +572,7 @@ export class Zombies {
         v.pos.lerp(v.target, Math.min(1, dt * 10));
         if (v.state.dead && S.t - (v.deadAt || S.t) > 25) { v.dispose(); this.views.delete(id); continue; }
       }
-      v.root.position.copy(v.pos);
+      if (!v.corpse) v.root.position.copy(v.pos);
       const d = Math.hypot(v.pos.x - cam.x, v.pos.z - cam.z);
       v.root.visible = d < 150;
       if (!v.root.visible) continue;

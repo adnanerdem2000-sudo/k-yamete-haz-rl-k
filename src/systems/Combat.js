@@ -221,6 +221,10 @@ export class Combat {
         if (Settings.get('gameplay.damageNumbers')) S.fx.text(end.x, end.y + 0.5, end.z, head ? `${dmg}!` : String(dmg), head ? '#ffd23f' : '#ffffff');
       } else if (res.npc) {
         S.npcs.shotHit(res.npc, g.dmg);
+      } else if (res.prop) {
+        S.fx.hit(end.x, end.y, end.z, res.prop.def.shape === 'cyl' ? 'metal' : 'wood');
+        if (res.prop.def.shape === 'cyl') S.fx.sparks(end.x, end.y, end.z);
+        S.props.shoot(res.prop, end, dir, (g.dmg / 30) / pellets);
       } else if (res.collider) {
         S.fx.hit(end.x, end.y, end.z, res.collider.kind === 'wall' ? 'stone' : res.collider.kind === 'window' ? 'metal' : 'wood');
         if (res.collider.kind === 'window' && res.collider.owner) S.act('window_damage', { id: res.collider.owner.id, dmg: 100 });
@@ -254,7 +258,10 @@ export class Combat {
       }
     }
     const n = S.npcs.rayHit(o, d, best);
-    if (n) res = n;
+    if (n) { res = n; best = n.dist ?? best; }
+    // fiziksel nesneler (varil, kasa, çöp kutusu)
+    const ph = S.props.rayHit(o, d, best);
+    if (ph && ph.dist > 1.2 && ph.dist < best) res = { dist: ph.dist, prop: ph.prop, point: ph.point };
     return res;
   }
 

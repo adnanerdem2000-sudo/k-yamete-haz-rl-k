@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Model önizleme</title>
+<style>body{margin:0;background:#202630;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js",
+        "rapier": "../../vendor/rapier/rapier.mjs","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const names = (new URLSearchParams(location.search).get('m') || 'adventurer,hooded_adventurer,soldier,astronaut,zombie,rogue,pirate,worker').split(',');
+const clipName = new URLSearchParams(location.search).get('clip') || 'Idle';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#3b4757');
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 2.5); dl.position.set(3, 6, 5); scene.add(dl);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+const mixers = []; const info = [];
+const loader = new GLTFLoader();
+let x = -(names.length - 1) * 1.1;
+for (const n of names) {
+  const g = await loader.loadAsync(`_preview/${n}.glb`);
+  const o = g.scene; const box = new THREE.Box3().setFromObject(o); const h = box.max.y - box.min.y;
+  const s = 1.8 / h; o.scale.setScalar(s); o.position.set(x, -box.min.y * s, 0); scene.add(o); x += 2.2;
+  const clip = g.animations.find((a) => a.name.endsWith(clipName) || a.name.includes(clipName)) || g.animations[0];
+  if (clip) { const m = new THREE.AnimationMixer(o); m.clipAction(clip).play(); mixers.push(m); }
+  let tris = 0; o.traverse((c) => { if (c.isMesh) tris += c.geometry.index ? c.geometry.index.count / 3 : c.geometry.attributes.position.count / 3; });
+  info.push(`${n}: h=${h.toFixed(2)} tris=${Math.round(tris)} clip=${clip ? clip.name : '-'}`);
+}
+window.__info = info;
+cam.position.set(0, 1.4, names.length * 1.25 + 2.5); cam.lookAt(0, 0.95, 0);
+const clock = new THREE.Clock();
+(function loop() { const dt = clock.getDelta(); for (const m of mixers) m.update(dt); r.render(scene, cam); requestAnimationFrame(loop); })();
+</script></body></html>

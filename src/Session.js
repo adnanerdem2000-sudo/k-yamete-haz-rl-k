@@ -14,6 +14,7 @@ import { ITEMS, makeStack } from './data/items.js';
 import { CHARACTERS } from './entities/CharacterFactory.js';
 import { Loot } from './systems/Loot.js';
 import { GroundItems } from './systems/GroundItems.js';
+import { PhysProps } from './systems/PhysProps.js';
 import { Interact } from './systems/Interact.js';
 import { Effects } from './systems/Effects.js';
 import { Combat } from './systems/Combat.js';
@@ -81,6 +82,7 @@ export class Session {
     this.fx = new Effects(this);
     this.loot = new Loot(this);
     this.ground = new GroundItems(this);
+    this.props = new PhysProps(this);
     this.build = new Build(this);
     this.zombies = new Zombies(this);
     this.vehicles = new Vehicles(this);
@@ -178,7 +180,7 @@ export class Session {
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); });
     this.onEvt('dmg_player', (e) => this.damageLocal(e.amount, e.kind, e.from));
     this.onEvt('revived', (e) => {
-      if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
+      if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
       if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
     });
     this.onEvt('time', (e) => { this.time.set(e.total); });
@@ -247,6 +249,10 @@ export class Session {
     if (pl.vault) pl.stepVault(dt);
     else if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.updateLocalDriving(dt, input, blocking);
     else pl.update(dt, input, blocking);
+    // sabit adımlı fizik (oyuncu kapsülü, araçlar, dinamik nesneler) + enterpolasyonlu çizim
+    this.game.phys.update(dt);
+    if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.postPhysicsLocal(dt);
+    else pl.postPhysics(dt);
     if (pl.carriedBy) this.followCarrier(pl);
     this.local.inside = this.world.buildingAt(pl.pos.x, pl.pos.z, pl.pos.y);
     this.combat.update(dt, input, blocking);
@@ -260,6 +266,7 @@ export class Session {
     this.npcs.update(dt);
     this.bots.update(dt);
     this.ground.update(dt);
+    this.props.update(dt);
     this.fx.update(dt);
     this.quests.update(dt);
     this.events.update(dt);
@@ -277,6 +284,7 @@ export class Session {
     if (!cpos || !this.localStats.downed) {
       pl.carriedBy = null;
       if (pl.mode === 'carried') pl.mode = this.localStats.downed ? 'downed' : 'ground';
+      if (pl.body) { pl.body.setEnabled(true); pl.pos.y = this.world.physics.groundHeight(pl.pos.x, pl.pos.z, pl.pos.y + 0.5); pl.syncBody(); }
       return;
     }
     const yaw = c.anim ? c.anim.yaw || 0 : c.isLocal ? this.local.yaw : 0;
@@ -285,6 +293,8 @@ export class Session {
     pl.root.position.copy(pl.pos);
     pl.yaw = yaw + Math.PI / 2;
     pl.mode = 'carried';
+    if (pl.body && pl.body.enabled) pl.body.setEnabled(false); // taşıyanı itmesin
+    pl.updateCamera(1 / 60);
   }
 
   renderOnly(dt) {
@@ -576,7 +586,7 @@ export class Session {
     if (this.time.minuteOfDay > 7 * 60 && this.time.minuteOfDay < 19 * 60 && this.localStats.energy > 40) { this.ui.toast('Henüz uykun yok.', 'info'); return; }
     this.local.mode = 'sleep';
     this.sleepBed = bed;
-    if (bed) { this.local.pos.set(bed.x, bed.y, bed.z); this.local.root.position.copy(this.local.pos); this.local.yaw = bed.rot || 0; }
+    if (bed) { this.local.pos.set(bed.x, bed.y, bed.z); this.local.root.position.copy(this.local.pos); this.local.yaw = bed.rot || 0; this.local.syncBody(); }
     this.act('sleep_vote', { on: true });
     this.ui.showSleep();
   }
@@ -764,9 +774,10 @@ export class Session {
 
   dispose() {
     this.disposed = true;
-    for (const sys of [this.zombies, this.vehicles, this.npcs, this.ground, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    for (const sys of [this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
     for (const p of this.players.values()) if (p.avatar && !p.isLocal) p.avatar.dispose();
-    this.local.avatar.dispose();
+    this.local.dispose();
+    this.game.phys.clearDynamic();
     this.game.gfx.grade.uDanger.value = 0; this.game.gfx.grade.uBlur.value = 0; this.game.gfx.grade.uDesat.value = 0;
     // dünyayı sıfırla (kapılar, pencereler)
     for (const d of this.world.doors) this.interact.applyDoorState(d, { target: 0, broken: false, barricade: 0, locked: d.origLocked ?? d.locked, hp: d.maxHp }, true);

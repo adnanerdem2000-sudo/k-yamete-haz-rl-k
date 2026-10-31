@@ -32,6 +32,8 @@ export function forestMask(x, z) {
 export class Terrain {
   constructor() {
     this.N = N;
+    this.cell = CELL;
+    this.half = HALF;
     this.h = new Float32Array(V * V);
     this.biome = new Uint8Array(V * V);
     this.roadMask = new Float32Array(V * V);
@@ -163,8 +165,9 @@ export class Terrain {
     const fx = gx - i, fz = gz - j;
     const h = this.h;
     const h00 = h[j * V + i], h10 = h[j * V + i + 1], h01 = h[(j + 1) * V + i], h11 = h[(j + 1) * V + i + 1];
-    if (fz >= fx) return h00 + (h11 - h01) * fx + (h01 - h00) * fz;
-    return h00 + (h10 - h00) * fx + (h11 - h10) * fz;
+    // ters köşegen (10–01) üçgenleme: Rapier yükseklik alanıyla birebir aynı
+    if (fx + fz <= 1) return h00 + (h10 - h00) * fx + (h01 - h00) * fz;
+    return h11 + (h01 - h11) * (1 - fx) + (h10 - h11) * (1 - fz);
   }
 
   normalAt(x, z, out = new THREE.Vector3()) {
@@ -258,9 +261,9 @@ export class Terrain {
     let p = 0;
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
       const a = j * V + i, b = j * V + i + 1, c = (j + 1) * V + i, d = (j + 1) * V + i + 1;
-      // (00, 01, 11) ve (00, 11, 10)
-      idx[p++] = a; idx[p++] = c; idx[p++] = d;
-      idx[p++] = a; idx[p++] = d; idx[p++] = b;
+      // (00, 01, 10) ve (10, 01, 11) — fizik yükseklik alanıyla aynı köşegen
+      idx[p++] = a; idx[p++] = c; idx[p++] = b;
+      idx[p++] = b; idx[p++] = c; idx[p++] = d;
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));

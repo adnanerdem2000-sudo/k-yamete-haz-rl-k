@@ -158,7 +158,7 @@ export class Build {
     if (st.light) { const i = this.s.env.extraLights.indexOf(st.light); if (i >= 0) this.s.env.extraLights.splice(i, 1); }
     this.structures.delete(id);
     if (this.fires.has(id)) this.setFire({ id, fuel: 0 });
-    if (destroyed) { this.s.fx.hit(st.x, st.y + 1, st.z, 'wood'); this.s.fx.dust(st.x, st.y, st.z, 10); this.s.audio.play('break', { at: st, vol: 1 }); this.s.ui.toast(`${BUILDABLES[st.type].name} yıkıldı!`, 'danger', 2.5); }
+    if (destroyed) { this.s.fx.hit(st.x, st.y + 1, st.z, 'wood'); this.s.fx.dust(st.x, st.y, st.z, 10); this.s.props.burst(st.x, st.y + 1, st.z, 'wood', 8); this.s.audio.play('break', { at: st, vol: 1 }); this.s.ui.toast(`${BUILDABLES[st.type].name} yıkıldı!`, 'danger', 2.5); }
     else this.s.audio.play('removal-a', { at: st, vol: 0.7 });
     this.refreshPower();
   }

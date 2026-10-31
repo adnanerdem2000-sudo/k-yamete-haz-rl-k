@@ -1,21 +1,23 @@
-// Araçlar: arcade fiziği (arazi takibi, kayma, çarpışma), yakıt, hasar, bagaj, tamir, geliştirme,
-// farlar, korna, zombilere çarpma. Sürücü istemci aracın hareketinde otoritedir; host durumu yayar.
+// Araçlar: Rapier ışınlı süspansiyon fiziği (motor, fren, el freni, hıza duyarlı direksiyon, yol dışı tutunma,
+// devrilme önleyici, çarpışma hasarı), yakıt, bagaj, tamir, geliştirme, farlar, korna, zombilere çarpma.
+// Sürücü istemci aracın fiziğinde otoritedir; diğerleri aracı ağdan kinematik olarak izler.
 import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
-import { clamp, damp, dampAngle, wrapAngle, dist, uid } from '../core/util.js';
+import { clamp, damp, dampAngle, wrapAngle, dist, uid, lerp } from '../core/util.js';
+import { G, ALL, groups, quatYaw, yawOf } from '../physics/PhysicsWorld.js';
 
 export const VEHICLE_TYPES = {
-  sedan: { name: 'Aile Arabası', model: 'sedan', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 16, hp: 100, grip: 1.0, offroad: 0.55, seats: 4, len: 4.2, wid: 2.2 },
-  pickup: { name: 'Pikap', model: 'vehicle-truck-red', scale: 1.75, maxSpeed: 25, accel: 7.5, fuelCap: 60, trunk: 30, hp: 140, grip: 0.95, offroad: 0.85, seats: 2, len: 4.6, wid: 2.3, needs: [['tire', 1], ['engine_part', 1]] },
-  police: { name: 'Polis Arabası', model: 'police-car', scale: 1.65, maxSpeed: 31, accel: 9, fuelCap: 50, trunk: 14, hp: 110, grip: 1.05, offroad: 0.5, seats: 4, len: 4.6, wid: 2.2, siren: true },
-  ambulance: { name: 'Ambulans', model: 'ambulance', scale: 1.75, maxSpeed: 24, accel: 6.5, fuelCap: 60, trunk: 30, hp: 140, grip: 0.95, offroad: 0.6, seats: 4, len: 5.2, wid: 2.4, siren: true },
-  van: { name: 'Minibüs', model: 'van', scale: 1.85, maxSpeed: 22, accel: 5.8, fuelCap: 70, trunk: 40, hp: 150, grip: 0.9, offroad: 0.6, seats: 6, len: 5.6, wid: 2.6 },
-  rv: { name: 'Karavan', model: 'citroen-old-van', scale: 1.6, maxSpeed: 19, accel: 4.6, fuelCap: 80, trunk: 50, hp: 160, grip: 0.85, offroad: 0.5, seats: 4, len: 5.4, wid: 2.8 },
-  offroad: { name: 'Arazi Aracı', model: 'suv', scale: 1.75, maxSpeed: 25, accel: 8.2, fuelCap: 60, trunk: 24, hp: 170, grip: 1.0, offroad: 1.0, seats: 4, len: 4.7, wid: 2.4, needs: [['engine_part', 1], ['car_battery', 1]] },
-  motorcycle: { name: 'Motosiklet', model: 'vehicle-motorcycle', scale: 1.3, maxSpeed: 33, accel: 12, fuelCap: 15, trunk: 4, hp: 60, grip: 1.1, offroad: 0.7, seats: 2, len: 3.0, wid: 1.2, bike: true, sound: 'engine-motorcycle' },
-  military: { name: 'Askerî Kamyon', model: 'vehicle-truck-green', scale: 2.0, maxSpeed: 23, accel: 6.5, fuelCap: 90, trunk: 40, hp: 260, grip: 0.95, offroad: 1.0, seats: 6, len: 5.4, wid: 2.7, armor: 0.3 },
-  armored: { name: 'Zırhlı Minibüs', model: 'delivery-truck', scale: 1.85, maxSpeed: 20, accel: 5, fuelCap: 80, trunk: 30, hp: 320, grip: 0.9, offroad: 0.7, seats: 6, len: 5.8, wid: 2.7, armor: 0.5, needs: [['car_battery', 1], ['engine_part', 2]] },
-  boat: { name: 'Martı Teknesi', model: 'boat-large', scale: 3.4, maxSpeed: 15, accel: 4, fuelCap: 60, trunk: 20, hp: 100, grip: 0.6, offroad: 0, seats: 6, len: 6, wid: 3, water: true, needs: [['engine_part', 1], ['repair_kit', 1]] },
+  sedan: { name: 'Aile Arabası', mass: 1250, drive: 'fwd', model: 'sedan', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 16, hp: 100, grip: 1.0, offroad: 0.55, seats: 4, len: 4.2, wid: 2.2 },
+  pickup: { name: 'Pikap', mass: 1700, drive: 'rwd', model: 'vehicle-truck-red', scale: 1.75, maxSpeed: 25, accel: 7.5, fuelCap: 60, trunk: 30, hp: 140, grip: 0.95, offroad: 0.85, seats: 2, len: 4.6, wid: 2.3, needs: [['tire', 1], ['engine_part', 1]] },
+  police: { name: 'Polis Arabası', mass: 1450, drive: 'rwd', model: 'police-car', scale: 1.65, maxSpeed: 31, accel: 9, fuelCap: 50, trunk: 14, hp: 110, grip: 1.05, offroad: 0.5, seats: 4, len: 4.6, wid: 2.2, siren: true },
+  ambulance: { name: 'Ambulans', mass: 2900, drive: 'rwd', model: 'ambulance', scale: 1.75, maxSpeed: 24, accel: 6.5, fuelCap: 60, trunk: 30, hp: 140, grip: 0.95, offroad: 0.6, seats: 4, len: 5.2, wid: 2.4, siren: true },
+  van: { name: 'Minibüs', mass: 2300, drive: 'rwd', model: 'van', scale: 1.85, maxSpeed: 22, accel: 5.8, fuelCap: 70, trunk: 40, hp: 150, grip: 0.9, offroad: 0.6, seats: 6, len: 5.6, wid: 2.6 },
+  rv: { name: 'Karavan', mass: 3200, drive: 'rwd', model: 'citroen-old-van', scale: 1.6, maxSpeed: 19, accel: 4.6, fuelCap: 80, trunk: 50, hp: 160, grip: 0.85, offroad: 0.5, seats: 4, len: 5.4, wid: 2.8 },
+  offroad: { name: 'Arazi Aracı', mass: 2000, drive: 'awd', susp: 0.42, model: 'suv', scale: 1.75, maxSpeed: 25, accel: 8.2, fuelCap: 60, trunk: 24, hp: 170, grip: 1.0, offroad: 1.0, seats: 4, len: 4.7, wid: 2.4, needs: [['engine_part', 1], ['car_battery', 1]] },
+  motorcycle: { name: 'Motosiklet', mass: 280, drive: 'rwd', susp: 0.3, model: 'vehicle-motorcycle', scale: 1.3, maxSpeed: 33, accel: 12, fuelCap: 15, trunk: 4, hp: 60, grip: 1.1, offroad: 0.7, seats: 2, len: 3.0, wid: 1.2, bike: true, sound: 'engine-motorcycle' },
+  military: { name: 'Askerî Kamyon', mass: 6200, drive: 'awd', susp: 0.45, model: 'vehicle-truck-green', scale: 2.0, maxSpeed: 23, accel: 6.5, fuelCap: 90, trunk: 40, hp: 260, grip: 0.95, offroad: 1.0, seats: 6, len: 5.4, wid: 2.7, armor: 0.3 },
+  armored: { name: 'Zırhlı Minibüs', mass: 5600, drive: 'awd', susp: 0.4, model: 'delivery-truck', scale: 1.85, maxSpeed: 20, accel: 5, fuelCap: 80, trunk: 30, hp: 320, grip: 0.9, offroad: 0.7, seats: 6, len: 5.8, wid: 2.7, armor: 0.5, needs: [['car_battery', 1], ['engine_part', 2]] },
+  boat: { name: 'Martı Teknesi', mass: 1800, model: 'boat-large', scale: 3.4, maxSpeed: 15, accel: 4, fuelCap: 60, trunk: 20, hp: 100, grip: 0.6, offroad: 0, seats: 6, len: 6, wid: 3, water: true, needs: [['engine_part', 1], ['repair_kit', 1]] },
 };
 
 export const UPGRADES = {
@@ -32,6 +34,8 @@ export const UPGRADES = {
 const PAINTS = ['#c0392b', '#2980b9', '#27ae60', '#f39c12', '#8e44ad', '#2c3e50', '#ecf0f1', '#556b2f', '#d35400', '#e88fb4'];
 
 const _res = { x: 0, z: 0, hit: false, hits: [] };
+const UP = new THREE.Vector3(0, 1, 0);
+const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _ax = new THREE.Vector3(), _qq = new THREE.Quaternion();
 
 class Vehicle {
   constructor(session, spec) {
@@ -54,7 +58,14 @@ class Vehicle {
     this.pitch = 0; this.roll = 0;
     this.wrecked = this.health <= 0;
     this.water = !!this.def.water;
+    this.quat = new THREE.Quaternion().setFromAxisAngle(UP, this.yaw);
+    if (spec.q) this.quat.set(spec.q[0], spec.q[1], spec.q[2], spec.q[3]);
+    this.prevPos = this.pos.clone(); this.prevQuat = this.quat.clone();
+    this.vis = this.pos.clone();
+    this.inThr = 0; this.inSteer = 0; this.inHB = false;
+    this.upsideT = 0;
     this.build();
+    this.setupPhysics();
   }
 
   get maxFuel() { return this.def.fuelCap * (this.upgrades.tank ? 1.5 : 1); }
@@ -75,17 +86,27 @@ class Vehicle {
     this.wheels = [];
     const wheelNodes = [];
     m.traverse((o) => { if (o.isMesh && /wheel/i.test(o.name + (o.parent ? o.parent.name : ''))) wheelNodes.push(o); });
+    // lastik + jant gibi aynı tekerleğe ait parçaları konuma göre grupla (her tekerlek tek fizik tekerleği)
+    const wgroups = [];
     for (const w of wheelNodes) {
       const wc = new THREE.Box3().setFromObject(w).getCenter(new THREE.Vector3());
+      const gw = wgroups.find((x) => x.c.distanceTo(wc) < 0.4);
+      if (gw) gw.meshes.push(w); else wgroups.push({ c: wc, meshes: [w] });
+    }
+    for (const gw of wgroups) {
+      const wb = new THREE.Box3();
+      for (const w of gw.meshes) wb.expandByObject(w);
+      const wc = wb.getCenter(new THREE.Vector3());
       const pivot = new THREE.Group();
       pivot.position.copy(wc);
       g.add(pivot);
       const spin = new THREE.Group();
       pivot.add(spin);
       g.updateMatrixWorld(true);
-      spin.attach(w);
-      this.wheels.push({ pivot, spin, front: wc.z > 0, mesh: w });
+      for (const w of gw.meshes) spin.attach(w);
+      this.wheels.push({ pivot, spin, front: wc.z > 0, mesh: gw.meshes[0], local: wc.clone(), radius: Math.max(0.2, (wb.max.y - wb.min.y) / 2), base: wc.y });
     }
+    this.modelH = box.max.y - box.min.y;
     m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.model = m;
     this.bodyMats = [];
@@ -131,11 +152,84 @@ class Vehicle {
   }
 
   sync() {
-    this.root.position.copy(this.pos);
-    this.root.rotation.set(0, 0, 0);
-    this.root.rotateY(this.yaw);
-    this.root.rotateX(-this.pitch);
-    this.root.rotateZ(this.roll);
+    this.root.position.copy(this.vis || this.pos);
+    if (this.quat) this.root.quaternion.copy(this.visQuat || this.quat);
+    else { this.root.rotation.set(0, 0, 0); this.root.rotateY(this.yaw); }
+    this.root.updateMatrixWorld(true);
+  }
+
+  /** Rapier gövdesi: kara araçlarında ışınlı süspansiyonlu araç denetleyicisi, teknede kinematik gövde */
+  setupPhysics() {
+    const pw = this.s.game.phys;
+    if (!pw) return;
+    const R = pw.R, d = this.def;
+    const H = this.modelH || 1.6;
+    this.mass = d.mass || 1400;
+    const q = { x: this.quat.x, y: this.quat.y, z: this.quat.z, w: this.quat.w };
+    if (this.water) {
+      this.body = pw.w.createRigidBody(R.RigidBodyDesc.kinematicPositionBased().setTranslation(this.pos.x, this.pos.y, this.pos.z).setRotation(q));
+      this.col = pw.w.createCollider(R.ColliderDesc.cuboid(d.wid * 0.45, H * 0.3, d.len * 0.48).setTranslation(0, H * 0.3, 0).setCollisionGroups(groups(G.VEHICLE)), this.body);
+      return;
+    }
+    const lift = d.susp ?? 0.34;
+    this.body = pw.w.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(this.pos.x, this.pos.y + 0.05, this.pos.z).setRotation(q)
+      .setLinearDamping(0.04).setAngularDamping(0.85).setCcdEnabled(true).setCanSleep(true));
+    const hy = Math.max(0.22, H * 0.27);
+    this.col = pw.w.createCollider(R.ColliderDesc.cuboid(d.wid * 0.46, hy, d.len * 0.47).setTranslation(0, H * 0.24 + hy, 0)
+      .setMass(this.mass).setFriction(0.35).setRestitution(0.04).setCollisionGroups(groups(G.VEHICLE)), this.body);
+    const ctrl = pw.w.createVehicleController(this.body);
+    ctrl.indexUpAxis = 1;
+    ctrl.setIndexForwardAxis = 2;
+    // fizik tekerlekleri görsel tekerleklerden; bulunamazsa ölçülerden
+    let ws = this.wheels.map((w) => ({ x: w.local.x, y: w.local.y, z: w.local.z, r: w.radius, front: w.front, vis: w }));
+    if (ws.length < 2) ws = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz]) => ({ x: sx * d.wid * 0.4, y: 0.4, z: sz * d.len * 0.33, r: 0.4, front: sz > 0, vis: null }));
+    if (d.bike) ws = ws.flatMap((w) => [{ ...w, x: -0.3 }, { ...w, x: 0.3, vis: null }]); // motosiklet: dengeleyici çift tekerlek
+    this.pw = [];
+    for (const w of ws) {
+      ctrl.addWheel({ x: w.x, y: w.y + lift * 0.75, z: w.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, lift, w.r);
+      this.pw.push(w);
+    }
+    const k = clamp(this.mass / 1400, 0.4, 5);
+    for (let i = 0; i < ws.length; i++) {
+      ctrl.setWheelSuspensionStiffness(i, 26 + 6 * Math.min(k, 3));
+      ctrl.setWheelSuspensionCompression(i, 3.0);
+      ctrl.setWheelSuspensionRelaxation(i, 2.4);
+      ctrl.setWheelMaxSuspensionTravel(i, lift * 0.85);
+      ctrl.setWheelMaxSuspensionForce(i, this.mass * 45);
+      ctrl.setWheelFrictionSlip(i, 2.3 * d.grip);
+      ctrl.setWheelSideFrictionStiffness(i, 1.0);
+    }
+    this.ctrl = ctrl;
+    let zMin = Infinity, zMax = -Infinity;
+    for (const w of ws) { zMin = Math.min(zMin, w.z); zMax = Math.max(zMax, w.z); }
+    this.wheelbase = clamp(zMax - zMin, 1.2, 5);
+    this.driveIdx = ws.map((w, i) => (d.drive === 'awd' || (d.drive === 'fwd' ? w.front : !w.front) ? i : -1)).filter((i) => i >= 0);
+    pw.vehicleBodies = pw.vehicleBodies || new Set();
+    pw.vehicleBodies.add(this.body);
+    this.lastVel = { x: 0, y: 0, z: 0 };
+  }
+
+  /** Aracı doğrudan yerleştir (hızlar sıfırlanır) */
+  teleport(x, y, z, yaw = this.yaw) {
+    this.yaw = yaw;
+    this.quat.setFromAxisAngle(UP, yaw);
+    this.pos.set(x, y, z);
+    this.prevPos.copy(this.pos); this.prevQuat.copy(this.quat); this.vis.copy(this.pos);
+    if (this.body) {
+      this.body.setTranslation({ x, y, z }, true);
+      this.body.setRotation({ x: this.quat.x, y: this.quat.y, z: this.quat.z, w: this.quat.w }, true);
+      if (!this.body.isKinematic()) { this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true); }
+    }
+    if (this.lastVel) { this.lastVel.x = 0; this.lastVel.y = 0; this.lastVel.z = 0; }
+    this.sync();
+  }
+
+  /** Gövde türü: yerel sürücü/park = dinamik, uzak sürücü = kinematik (ağdan izlenir) */
+  setRemote(remote) {
+    if (!this.body || this.water) return;
+    const R = this.s.game.phys.R;
+    const want = remote ? R.RigidBodyType.KinematicPositionBased : R.RigidBodyType.Dynamic;
+    if (this.body.bodyType() !== want) this.body.setBodyType(want, true);
   }
 
   /** Model üzerindeki koltuk konumları (yerel) */
@@ -155,6 +249,8 @@ class Vehicle {
 
   dispose() {
     this.s.game.scene.remove(this.root);
+    const pw = this.s.game.phys;
+    if (pw && this.body) { try { pw.w.removeRigidBody(this.body); } catch { /* zaten silinmiş */ } if (pw.vehicleBodies) pw.vehicleBodies.delete(this.body); this.body = null; }
   }
 }
 
@@ -164,6 +260,8 @@ export class Vehicles {
     this.list = [];
     this.local = null; // sürülen araç
     const S = session;
+    const pw = S.game.phys;
+    if (pw) { pw.addHook((h) => this.physicsStep(h)); pw.addAfter(() => this.afterStep()); }
     S.on('vehicle_enter', (p, from) => {
       const v = this.byId(p.id);
       if (!v) return;
@@ -194,7 +292,17 @@ export class Vehicles {
     S.onEvt('veh_state', (e) => { const v = this.byId(e.id); if (v && v !== this.local) this.applyState(v, e); });
     S.onEvt('veh_set', (e) => {
       const v = this.byId(e.id); if (!v) return;
-      if (e.health !== undefined) { v.health = e.health; if (v.health <= 0 && !v.wrecked) { v.wrecked = true; S.fx.fire(v.pos.x, v.pos.y + 1, v.pos.z, 30, 1.2); S.audio.play('explosion', { at: v.pos, vol: 1 }); if (v === this.local) { this.exitLocal(); S.ui.toast('Araç kullanılamaz hale geldi!', 'danger'); } } }
+      if (e.health !== undefined) {
+        v.health = e.health;
+        if (v.health <= 0 && !v.wrecked) {
+          v.wrecked = true;
+          if (v === this.local) { this.exitLocal(); S.ui.toast('Araç kullanılamaz hale geldi!', 'danger'); }
+          // yakıt deposu tutuşur: patlama, itki ve uzun süreli yangın
+          S.fx.fire(v.pos.x, v.pos.y + 1, v.pos.z, 30, 1.2);
+          if (!v.def.water && v.fuel > 0.5) S.props.explosion(v.pos.x, v.pos.y + 0.6, v.pos.z, 6);
+          else S.audio.play('explosion', { at: v.pos, vol: 0.8 });
+        }
+      }
       if (e.fuel !== undefined) v.fuel = e.fuel;
       if (e.broken !== undefined) v.broken = e.broken;
       if (e.upgrades) { v.upgrades = e.upgrades; v.updateUpgradeVisuals(); }
@@ -311,8 +419,15 @@ export class Vehicles {
     if (!v) return;
     const prev = v.seats[e.seat];
     v.seats[e.seat] = e.player;
+    if (e.seat === 0) {
+      // sürücü uzaktaysa gövde ağdan izlenir; yerel sürücü ya da boş araç dinamik
+      const remote = !!e.player && e.player !== S.localId;
+      v.setRemote(remote);
+      if (!remote) v.netTarget = null;
+    }
     if (e.player === S.localId) {
       this.local = v;
+      if (S.local.body) S.local.body.setEnabled(false);
       S.local.vehicle = v;
       S.local.mode = e.seat === 0 ? 'drive' : 'seat';
       S.local.seat = e.seat;
@@ -339,6 +454,8 @@ export class Vehicles {
     let ex = v.pos.x + Math.cos(v.yaw) * (v.def.wid * 0.5 + 0.8) * side, ez = v.pos.z - Math.sin(v.yaw) * (v.def.wid * 0.5 + 0.8) * side;
     if (S.world.physics.overlapsBox(ex - 0.3, ez - 0.3, ex + 0.3, ez + 0.3, v.pos.y + 0.2, v.pos.y + 1.8)) { ex = v.pos.x - Math.cos(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; ez = v.pos.z + Math.sin(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; }
     if (v.water) { const dock = S.world.interactables.find((i) => i.type === 'boat_dock'); if (dock) { ex = dock.x; ez = dock.z - 3; } }
+    v.inThr = 0; v.inSteer = 0; v.inHB = false;
+    S.audio.stopLoop('skid_local');
     S.local.spawnAt(ex, S.world.physics.groundHeight(ex, ez, v.pos.y + 2) + 0.05, ez, v.yaw);
     S.local.camYaw = v.yaw + Math.PI;
     S.local.mode = 'ground';
@@ -349,7 +466,7 @@ export class Vehicles {
     S.selectHotbar(S.hotbarIndex);
   }
 
-  /** Sürücü/yolcu güncellemesi (yerel) */
+  /** Sürücü/yolcu: girdi → niyet (fizik adımında uygulanır) */
   updateLocalDriving(dt, input, blocking) {
     const S = this.s;
     const v = this.local;
@@ -371,12 +488,23 @@ export class Vehicles {
         if (input.wasPressed('quickHeal')) { S.audio.play('horn', { at: v.pos, vol: 1 }); S.act('noise', { x: v.pos.x, z: v.pos.z, r: 60, src: 'horn' }); }
         if (input.wasPressed('flashlight')) { v.lights = !v.lights; S.audio.play('click', { vol: 0.5 }); }
       }
-      this.drive(v, dt, thr, st, hb);
-      // ağ: araç durumu
+      v.inThr = thr; v.inSteer = st; v.inHB = hb;
       this._sendT = (this._sendT || 0) - dt;
-      if (this._sendT <= 0) { this._sendT = 1 / 12; if (S.net.active) S.act('vehicle_state', this.stateOf(v)); }
+      if (this._sendT <= 0) { this._sendT = 1 / 15; if (S.net.active) S.act('vehicle_state', this.stateOf(v)); }
+      // devrilmiş araç: yavaşça düzelt (oyunda kilitlenme olmasın)
+      if (v.upsideT > 2.5 && Math.abs(v.speed) < 1.5) this.flipUpright(v);
     }
-    pl.pos.copy(v.pos);
+    if (input.wasPressed('interact') && !blocking) this.exitLocal();
+  }
+
+  /** Fizik sonrası (yerel sürücü/yolcu): koltuk, kamera, motor sesi */
+  postPhysicsLocal(dt) {
+    const S = this.s;
+    const v = this.local;
+    const pl = S.local;
+    if (!v) { pl.postPhysics(dt); return; }
+    this.syncVisual(v, S.game.phys.alpha);
+    pl.pos.copy(v.vis);
     v.seatPlayer(pl.avatar, pl.seat);
     pl.yaw = v.yaw;
     pl.avatar.visYaw = v.yaw;
@@ -384,123 +512,222 @@ export class Vehicles {
     pl.updateCamera(dt);
     const sp = Math.abs(v.speed);
     S.audio.loop('engine_local', v.def.sound || 'engine', { vol: v.broken || v.fuel <= 0 ? 0 : 0.35 + sp / v.def.maxSpeed * 0.4, rate: 0.6 + sp / v.def.maxSpeed * 1.4 });
-    if (input.wasPressed('interact') && !blocking) this.exitLocal();
+    if (v.skid > 0.4 && sp > 6) S.audio.loop('skid_local', 'skid', { vol: Math.min(0.5, (v.skid - 0.4) * 0.8), rate: 1 });
+    else S.audio.stopLoop('skid_local');
+    S.local.noise = sp > 2 ? 18 : 6;
   }
 
-  drive(v, dt, thr, steerIn, handbrake) {
+  /** Bir fizik adımı: tüm araçlar */
+  physicsStep(h) {
+    for (const v of this.list) {
+      if (!v.body) continue;
+      if (v.water) this.stepBoat(v, h);
+      else if (v.body.isKinematic()) this.stepRemote(v, h);
+      else this.stepCar(v, h);
+    }
+  }
+
+  /** Kara aracı: motor, fren, direksiyon, tutunma, dengeleme, hasar */
+  stepCar(v, h) {
     const S = this.s;
     const d = v.def;
+    const ctrl = v.ctrl;
     const T = S.world.terrain;
-    const canRun = !v.broken && !v.wrecked && v.fuel > 0;
+    const local = v === this.local && S.local.mode === 'drive';
+    const t = v.body.translation();
+    const inWater = T.heightAt(t.x, t.z) < T.waterLevelAt(t.x, t.z) - 1.0 && t.y < T.waterLevelAt(t.x, t.z) - 0.2;
+    const canRun = local && !v.broken && !v.wrecked && v.fuel > 0 && !inWater;
+    const speed = ctrl.currentVehicleSpeed();
+    v.speed = speed;
     const hpF = v.health / v.maxHealth;
     const maxSp = d.maxSpeed * (v.upgrades.engine ? 1.15 : 1) * (hpF < 0.3 ? 0.6 : 1);
-    const accel = d.accel * (v.upgrades.engine ? 1.2 : 1);
-    // arazi tipi
-    const onRoad = !!S.world.roads && !v.water && T.roadMask[T.idx(Math.round((v.pos.x + 640) / 4), Math.round((v.pos.z + 640) / 4))] > 0;
-    const rough = v.water ? 1 : onRoad ? 1 : 0.6 + 0.4 * (d.offroad + (v.upgrades.tires ? 0.25 : 0));
-    // hız
-    if (canRun && thr > 0) v.speed += accel * thr * rough * dt * (v.speed < 0 ? 2.2 : 1);
-    else if (canRun && thr < 0) v.speed += (v.speed > 0.5 ? -accel * 2.2 : -accel * 0.6) * dt;
-    v.speed -= v.speed * (handbrake ? 1.4 : 0.35) * dt;
-    v.speed -= Math.sign(v.speed) * Math.min(Math.abs(v.speed), 0.8 * dt);
-    v.speed = clamp(v.speed, -maxSp * 0.35, maxSp * rough);
-    // direksiyon
-    v.steer = damp(v.steer, steerIn, 6, dt);
-    const sf = clamp(Math.abs(v.speed) / 6, 0, 1) * (1 - clamp(Math.abs(v.speed) / (maxSp * 1.4), 0, 0.55));
-    const grip = d.grip * (v.upgrades.tires ? 1.1 : 1) * (S.env.weather.rain > 0.3 ? 0.85 : 1) * (handbrake ? 0.55 : 1);
-    v.yaw += v.steer * 1.9 * sf * Math.sign(v.speed) * dt * (handbrake ? 1.4 : 1);
-    // hız vektörü: başa doğru, kayma
-    const fx = Math.sin(v.yaw), fz = Math.cos(v.yaw);
-    const tvx = fx * v.speed, tvz = fz * v.speed;
-    const k = Math.min(1, grip * 6 * dt);
-    v.vx += (tvx - v.vx) * k; v.vz += (tvz - v.vz) * k;
-    // yakıt
-    if (canRun) v.fuel = Math.max(0, v.fuel - (Math.abs(v.speed) * 0.0025 + (thr ? 0.004 : 0.001)) * dt * 6);
-    // konum ve çarpışma
-    let nx = v.pos.x + v.vx * dt, nz = v.pos.z + v.vz * dt;
-    const L = d.len, W = d.wid;
-    let impact = 0;
-    for (const off of [-L * 0.3, 0, L * 0.3]) {
-      const cx = nx + fx * off, cz = nz + fz * off;
-      const r = S.world.physics.resolveCircle(cx, cz, W * 0.45, v.pos.y + 0.3, v.pos.y + 1.6, 0.5, null, _res);
-      if (r.hit) {
-        const px = r.x - cx, pz = r.z - cz;
-        nx += px; nz += pz;
-        impact = Math.max(impact, Math.abs(v.speed));
-      }
+    const thr = local ? v.inThr : 0, steerIn = local ? v.inSteer : 0, hb = local && v.inHB;
+    const force = v.mass * d.accel * (v.upgrades.engine ? 1.2 : 1) * 0.62;
+    let eng = 0, brake = 0;
+    // ters yöne basmak fren yapar (motor çalışmasa da); durunca vites değişir
+    if (thr > 0) { if (speed < -0.6) brake = 1; else if (canRun && speed < maxSp) eng = force * thr; }
+    else if (thr < 0) { if (speed > 0.6) brake = 1; else if (canRun && speed > -maxSp * 0.35) eng = force * 0.55 * thr; }
+    if (!local) brake = 0.35; // park freni
+    else if (!eng && !brake) brake = canRun ? 0.06 : 0.14; // yuvarlanma direnci / motor freni
+    const brakeV = brake * v.mass * 0.036;
+    // zemin tipi: yol / arazi
+    const ix = Math.round((t.x + T.half) / T.cell), iz = Math.round((t.z + T.half) / T.cell);
+    const onRoad = !!S.world.roads && T.roadMask[T.idx(clamp(ix, 0, T.N), clamp(iz, 0, T.N))] > 0;
+    const terrainGrip = onRoad ? 1 : 0.62 + 0.38 * Math.min(1, d.offroad + (v.upgrades.tires ? 0.25 : 0));
+    const wet = S.env.weather.rain > 0.3 ? 0.82 : 1;
+    // lastik sürtünme katsayısı (µ): kuru asfaltta ~1.5
+    const baseSlip = 1.5 * d.grip * (v.upgrades.tires ? 1.1 : 1) * terrainGrip * wet;
+    // hıza ve tutunmaya duyarlı direksiyon: v²/R ≤ µg (biraz fazlasına izin: kayma/drift mümkün)
+    const v2 = Math.max(1, speed * speed);
+    const sGrip = Math.atan(v.wheelbase * baseSlip * 9.81 * 1.3 / v2);
+    const sMax = clamp(Math.min(lerp(0.62, 0.2, clamp(Math.abs(speed) / maxSp, 0, 1)), sGrip), 0.1, 0.62);
+    v.steer = damp(v.steer, steerIn * sMax, 6.5, h);
+    const n = v.pw.length;
+    for (let i = 0; i < n; i++) {
+      const w = v.pw[i];
+      ctrl.setWheelSteering(i, w.front ? v.steer : 0);
+      ctrl.setWheelEngineForce(i, v.driveIdx.includes(i) ? eng / v.driveIdx.length : 0);
+      const rearHB = hb && !w.front;
+      ctrl.setWheelBrake(i, rearHB ? v.mass * 0.09 : brakeV);
+      ctrl.setWheelFrictionSlip(i, baseSlip * (rearHB ? 0.45 : 1));
+      ctrl.setWheelSideFrictionStiffness(i, rearHB ? 0.45 : 1.0);
     }
-    // diğer araçlar
-    for (const o of this.list) {
-      if (o === v) continue;
-      const dd = dist(o.pos.x, o.pos.z, nx, nz);
-      const rr = (o.def.wid + W) * 0.5;
-      if (dd < rr) { const px = (nx - o.pos.x) / (dd || 1), pz = (nz - o.pos.z) / (dd || 1); nx += px * (rr - dd); nz += pz * (rr - dd); impact = Math.max(impact, Math.abs(v.speed)); }
+    ctrl.updateVehicle(h, undefined, groups(ALL, G.STATIC | G.VEHICLE | G.PROP), (c) => c !== v.col);
+    // devrilme önleyici: gövdeyi dik tut (motosiklette güçlü)
+    const r = v.body.rotation();
+    _qq.set(r.x, r.y, r.z, r.w);
+    _up.set(0, 1, 0).applyQuaternion(_qq);
+    _ax.crossVectors(_up, UP);
+    const tilt = Math.asin(clamp(_ax.length(), 0, 1));
+    const strength = d.bike ? 1 : tilt > 0.45 ? 0.35 : 0.08;
+    if (tilt > 0.02 && _up.y > 0) {
+      const av = v.body.angvel();
+      const k = v.mass * strength * 9;
+      v.body.applyTorqueImpulse({ x: (_ax.x * k - av.x * v.mass * 0.6 * strength) * h, y: 0, z: (_ax.z * k - av.z * v.mass * 0.6 * strength) * h }, true);
     }
-    if (impact > 3) {
-      const dmg = (impact - 3) * 2.2 * (v.upgrades.armor ? 0.6 : 1) * (1 - (d.armor || 0));
-      v.speed *= -0.25; v.vx *= -0.2; v.vz *= -0.2;
+    v.upsideT = _up.y < 0.35 ? v.upsideT + h : 0;
+    // kayma (lastik sesi): yanal hız / hız
+    const lv = v.body.linvel();
+    _fw.set(0, 0, 1).applyQuaternion(_qq);
+    const fwdSp = lv.x * _fw.x + lv.z * _fw.z;
+    const lat = Math.hypot(lv.x - _fw.x * fwdSp, lv.z - _fw.z * fwdSp);
+    v.skid = damp(v.skid || 0, lat / Math.max(3, Math.abs(fwdSp)) + (hb ? 0.4 : 0), 8, h);
+    // çarpışma hasarı: ani hız değişimi (Δv)
+    const lvv = v.lastVel;
+    const dv = Math.hypot(lv.x - lvv.x, lv.y - lvv.y, lv.z - lvv.z);
+    if (local && dv > 5.5 && !v.wrecked) {
+      const dmg = (dv - 5.5) * 6 * (v.upgrades.armor ? 0.6 : 1) * (1 - (d.armor || 0));
       S.act('vehicle_damage', { id: v.id, dmg });
-      S.audio.play('impact', { at: v.pos, vol: clamp(impact / 15, 0.3, 1) });
-      S.local.camShake = clamp(impact / 15, 0.2, 1);
-      if (impact > 14) { S.localStats.damage((impact - 14) * 1.5, 'fall'); S.ui.toast('Kaza! Yaralandın.', 'danger'); }
-      S.fx.sparks(nx + fx * L * 0.5, v.pos.y + 0.7, nz + fz * L * 0.5);
-    } else if (impact > 0) v.speed *= 0.5;
-    // su
-    if (v.water) {
-      const deep = T.heightAt(nx, nz) < -1.0;
-      if (!deep) { nx = v.pos.x; nz = v.pos.z; v.speed *= -0.3; }
-      v.pos.set(nx, 0.15 + Math.sin(S.t * 1.6) * 0.08, nz);
-      v.pitch = Math.sin(S.t * 1.3) * 0.03; v.roll = Math.sin(S.t * 1.1) * 0.04;
-    } else {
-      // arazi takibi: 4 köşe
-      const hf = S.world.physics.groundHeight(nx + fx * L * 0.4, nz + fz * L * 0.4, v.pos.y + 1.2, 1.1);
-      const hb = S.world.physics.groundHeight(nx - fx * L * 0.4, nz - fz * L * 0.4, v.pos.y + 1.2, 1.1);
-      const rx = Math.cos(v.yaw), rz = -Math.sin(v.yaw);
-      const hr = S.world.physics.groundHeight(nx + rx * W * 0.4, nz + rz * W * 0.4, v.pos.y + 1.2, 1.1);
-      const hl = S.world.physics.groundHeight(nx - rx * W * 0.4, nz - rz * W * 0.4, v.pos.y + 1.2, 1.1);
-      const gy = (hf + hb + hr + hl) / 4;
-      if (v.pos.y > gy + 0.05) { v.vy -= 20 * dt; v.pos.y = Math.max(gy, v.pos.y + v.vy * dt); } else { v.pos.y = gy; v.vy = 0; }
-      v.pitch = damp(v.pitch, Math.atan2(hf - hb, L * 0.8), 10, dt);
-      v.roll = damp(v.roll, Math.atan2(hl - hr, W * 0.8), 10, dt);
-      // derin su: stop
-      if (T.heightAt(nx, nz) < T.waterLevelAt(nx, nz) - 1.0 && v.pos.y < T.waterLevelAt(nx, nz) + 0.4) { v.speed *= 0.8; if (!v._sunk) { v._sunk = true; S.ui.toast('Araç suya battı! Motor stop etti.', 'danger'); S.act('vehicle_damage', { id: v.id, dmg: 40 }); } }
-      v.pos.x = nx; v.pos.z = nz;
+      S.audio.play('impact', { at: v.pos, vol: clamp(dv / 14, 0.35, 1) });
+      S.local.camShake = clamp(dv / 12, 0.2, 1);
+      if (dv > 13) { S.localStats.damage((dv - 13) * 2.2, 'fall'); S.ui.toast('Kaza! Yaralandın.', 'danger'); }
+      S.fx.sparks(t.x + _fw.x * d.len * 0.5, t.y + 0.8, t.z + _fw.z * d.len * 0.5);
     }
-    // zombilere çarpma (yerel tespit)
-    if (Math.abs(v.speed) > 4) {
-      const bumper = v.upgrades.bumper ? 2 : 1;
-      for (const [id, zv] of S.zombies.views) {
-        if (zv.state.dead || zv.hitCd > S.t) continue;
-        const zx = zv.pos.x - (v.pos.x + fx * L * 0.35), zz = zv.pos.z - (v.pos.z + fz * L * 0.35);
-        if (zx * zx + zz * zz < (W * 0.6) ** 2) {
-          zv.hitCd = S.t + 0.6;
-          const dmg = Math.round(Math.abs(v.speed) * 5 * bumper);
-          S.act('zombie_hit', { id, dmg, dir: [fx, fz], kind: 'melee' });
-          S.fx.hit(zv.pos.x, zv.pos.y + 1, zv.pos.z, 'flesh');
-          S.audio.play('hit', { at: zv.pos, vol: 1, rate: 0.7 });
-          v.speed *= v.upgrades.bumper ? 0.95 : 0.85;
-          S.act('vehicle_damage', { id: v.id, dmg: (zv.type === 'heavy' ? 8 : 2) / bumper });
-        }
-      }
-    }
-    // tekerlekler
-    for (const w of v.wheels) {
-      w.spin.rotation.x += v.speed * dt / 0.4;
-      if (w.front) w.pivot.rotation.y = v.steer * 0.5;
-    }
-    v.sync();
-    // farlar
-    for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
-    S.local.noise = Math.abs(v.speed) > 2 ? 18 : 6;
-    if (S.isHost && Math.random() < dt * 2 && Math.abs(v.speed) > 3) S.applyAction('noise', { x: v.pos.x, z: v.pos.z, r: 22 + Math.abs(v.speed), src: 'engine' }, S.localId);
-    void tvx;
+    lvv.x = lv.x; lvv.y = lv.y; lvv.z = lv.z;
+    // su: motor durur, batma
+    if (inWater) { v.body.setLinearDamping(2.5); if (!v._sunk && local) { v._sunk = true; S.ui.toast('Araç suya battı! Motor stop etti.', 'danger'); S.act('vehicle_damage', { id: v.id, dmg: 40 }); } }
+    else if (v._sunk) { v._sunk = false; v.body.setLinearDamping(0.04); }
+    // yakıt
+    if (canRun && eng) v.fuel = Math.max(0, v.fuel - (Math.abs(speed) * 0.0025 + 0.004) * h * 6);
+    // zombilere çarpma (yerel sürücü tespit eder, host'a bildirir)
+    if (local && Math.abs(speed) > 4) this.hitZombies(v, speed);
   }
 
-  stateOf(v) { return { id: v.id, x: +v.pos.x.toFixed(2), y: +v.pos.y.toFixed(2), z: +v.pos.z.toFixed(2), yaw: +v.yaw.toFixed(3), sp: +v.speed.toFixed(2), st: +v.steer.toFixed(2), f: +v.fuel.toFixed(1), l: v.lights ? 1 : 0 }; }
+  hitZombies(v, speed) {
+    const S = this.s;
+    const L = v.def.len, W = v.def.wid;
+    const t = v.body.translation();
+    const bumper = v.upgrades.bumper ? 2 : 1;
+    for (const [id, zv] of S.zombies.views) {
+      if (zv.state.dead || zv.hitCd > S.t) continue;
+      const zx = zv.pos.x - (t.x + _fw.x * L * 0.35), zz = zv.pos.z - (t.z + _fw.z * L * 0.35);
+      if (zx * zx + zz * zz < (W * 0.62) ** 2 && Math.abs(zv.pos.y - t.y) < 2) {
+        zv.hitCd = S.t + 0.6;
+        const dmg = Math.round(Math.abs(speed) * 5 * bumper);
+        S.act('zombie_hit', { id, dmg, dir: [_fw.x * Math.sign(speed), _fw.z * Math.sign(speed)], kind: 'vehicle', force: Math.abs(speed) });
+        S.fx.hit(zv.pos.x, zv.pos.y + 1, zv.pos.z, 'flesh');
+        S.audio.play('hit', { at: zv.pos, vol: 1, rate: 0.7 });
+        const lv = v.body.linvel();
+        const slow = v.upgrades.bumper ? 0.97 : 0.9;
+        v.body.setLinvel({ x: lv.x * slow, y: lv.y, z: lv.z * slow }, true);
+        S.act('vehicle_damage', { id: v.id, dmg: (zv.type === 'heavy' ? 8 : 2) / bumper });
+      }
+    }
+  }
+
+  /** Uzak sürücünün aracı: ağ hedefine kinematik takip */
+  stepRemote(v, h) {
+    const tg = v.netTarget;
+    if (!tg) return;
+    const t = v.body.translation();
+    const k = Math.min(1, h * 12);
+    v.body.setNextKinematicTranslation({ x: t.x + (tg.x - t.x) * k, y: t.y + (tg.y - t.y) * k, z: t.z + (tg.z - t.z) * k });
+    const r = v.body.rotation();
+    _qq.set(r.x, r.y, r.z, r.w).slerp(tg.q, k);
+    v.body.setNextKinematicRotation({ x: _qq.x, y: _qq.y, z: _qq.z, w: _qq.w });
+  }
+
+  /** Tekne: basit su sürüşü (kinematik), dalga salınımı */
+  stepBoat(v, h) {
+    const S = this.s;
+    const local = v === this.local && S.local.mode === 'drive';
+    if (!local && v.netTarget) { this.stepRemote(v, h); return; }
+    const d = v.def;
+    const canRun = local && !v.broken && !v.wrecked && v.fuel > 0;
+    const thr = local ? v.inThr : 0;
+    if (canRun && thr) v.speed = clamp(v.speed + d.accel * thr * h, -d.maxSpeed * 0.3, d.maxSpeed);
+    v.speed -= v.speed * 0.4 * h;
+    v.steer = damp(v.steer, (local ? v.inSteer : 0) * 0.6, 4, h);
+    v.yaw += v.steer * 0.9 * Math.sign(v.speed) * Math.min(1, Math.abs(v.speed) / 4) * h;
+    const T = S.world.terrain;
+    let nx = v.pos.x + Math.sin(v.yaw) * v.speed * h, nz = v.pos.z + Math.cos(v.yaw) * v.speed * h;
+    if (T.heightAt(nx, nz) > -1.0) { nx = v.pos.x; nz = v.pos.z; v.speed *= -0.3; }
+    v.pos.set(nx, 0.15 + Math.sin(S.t * 1.6) * 0.08, nz);
+    _qq.setFromEuler(new THREE.Euler(Math.sin(S.t * 1.3) * 0.03, v.yaw, Math.sin(S.t * 1.1) * 0.04, 'YXZ'));
+    v.body.setNextKinematicTranslation({ x: v.pos.x, y: v.pos.y, z: v.pos.z });
+    v.body.setNextKinematicRotation({ x: _qq.x, y: _qq.y, z: _qq.z, w: _qq.w });
+    if (canRun && thr) v.fuel = Math.max(0, v.fuel - (Math.abs(v.speed) * 0.0025 + 0.004) * h * 6);
+  }
+
+  /** Ters dönmüş aracı tekerlekleri üzerine geri koy */
+  flipUpright(v) {
+    if (!v.body || v.body.isKinematic()) return;
+    const t = v.body.translation();
+    const y = this.s.world.physics.groundHeight(t.x, t.z, t.y + 3) + 0.6;
+    v.body.setTranslation({ x: t.x, y, z: t.z }, true);
+    v.body.setRotation(quatYaw(v.yaw), true);
+    v.body.setLinvel({ x: 0, y: 0, z: 0 }, true);
+    v.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
+    v.upsideT = 0;
+    this.s.ui.toast('Araç tekerlekleri üzerine çevrildi.', 'info', 2);
+  }
+
+  /** Adım sonrası: önceki/güncel durumları kaydet (enterpolasyon) */
+  afterStep() {
+    for (const v of this.list) {
+      if (!v.body) continue;
+      v.prevPos.copy(v.pos); v.prevQuat.copy(v.quat);
+      if (!v.water || v.netTarget) {
+        const t = v.body.translation(), r = v.body.rotation();
+        v.pos.set(t.x, t.y, t.z);
+        v.quat.set(r.x, r.y, r.z, r.w);
+      } else v.quat.copy(_qq.setFromEuler(new THREE.Euler(0, v.yaw, 0)));
+      if (!v.water) v.yaw = yawOf(v.quat);
+    }
+  }
+
+  /** Görsel: enterpolasyonlu konum/dönüş, tekerlek süspansiyonu ve dönüşü */
+  syncVisual(v, alpha) {
+    v.vis = v.vis || new THREE.Vector3();
+    v.visQuat = v.visQuat || new THREE.Quaternion();
+    v.vis.lerpVectors(v.prevPos, v.pos, alpha);
+    v.visQuat.slerpQuaternions(v.prevQuat, v.quat, alpha);
+    v.sync();
+    if (v.ctrl) {
+      for (let i = 0; i < v.pw.length; i++) {
+        const w = v.pw[i].vis;
+        if (!w) continue;
+        const sl = v.ctrl.wheelSuspensionLength(i);
+        const lift = v.def.susp ?? 0.34;
+        if (sl !== null && sl !== undefined) w.pivot.position.y = v.pw[i].y + lift * 0.75 - sl;
+        w.pivot.rotation.y = w.front ? v.steer : 0;
+        const rot = v.ctrl.wheelRotation(i);
+        if (rot !== null && rot !== undefined) w.spin.rotation.x = rot;
+      }
+    } else for (const w of v.wheels) { w.spin.rotation.x += v.speed * 0.016 / 0.4; if (w.front) w.pivot.rotation.y = v.steer * 0.5; }
+  }
+
+  stateOf(v) {
+    const q = v.quat;
+    return { id: v.id, x: +v.pos.x.toFixed(2), y: +v.pos.y.toFixed(2), z: +v.pos.z.toFixed(2), q: [+q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)], yaw: +v.yaw.toFixed(3), sp: +v.speed.toFixed(2), st: +v.steer.toFixed(2), f: +v.fuel.toFixed(1), l: v.lights ? 1 : 0 };
+  }
 
   applyState(v, p) {
-    v.netTarget = { x: p.x, y: p.y, z: p.z, yaw: p.yaw };
+    const q = p.q ? new THREE.Quaternion(p.q[0], p.q[1], p.q[2], p.q[3]) : new THREE.Quaternion().setFromAxisAngle(UP, p.yaw || 0);
+    v.netTarget = { x: p.x, y: p.y, z: p.z, q };
     v.speed = p.sp; v.steer = p.st; v.fuel = p.f; v.lights = !!p.l;
+    if (v.water) { v.pos.set(p.x, p.y, p.z); v.yaw = p.yaw || 0; }
+    v.setRemote(true);
   }
 
   /** Araçların içinden geçmeyi önle (oyuncu itme) */
@@ -526,30 +753,25 @@ export class Vehicles {
 
   update(dt) {
     const S = this.s;
+    const alpha = S.game.phys ? S.game.phys.alpha : 1;
     for (const v of this.list) {
       if (v === this.local) continue;
-      if (v.netTarget) {
-        v.pos.x += (v.netTarget.x - v.pos.x) * Math.min(1, dt * 10);
-        v.pos.y += (v.netTarget.y - v.pos.y) * Math.min(1, dt * 10);
-        v.pos.z += (v.netTarget.z - v.pos.z) * Math.min(1, dt * 10);
-        v.yaw = dampAngle(v.yaw, v.netTarget.yaw, 10, dt);
-        for (const w of v.wheels) { w.spin.rotation.x += v.speed * dt / 0.4; if (w.front) w.pivot.rotation.y = v.steer * 0.5; }
-        v.sync();
-        for (const h of v.headlights) h.intensity = v.lights ? 35 : 0;
-        if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
-        else S.audio.stopLoop('engine_' + v.id);
-      }
+      this.syncVisual(v, alpha);
+      for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
+      if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
+      else S.audio.stopLoop('engine_' + v.id);
       if (v.wrecked && Math.random() < dt * 3) S.fx.smoke(v.pos.x, v.pos.y + 1.5, v.pos.z, 1, '#333333');
       else if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 2) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#666666');
     }
     if (this.local) {
       const v = this.local;
+      for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
       if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 3) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#555555');
     }
   }
 
   serialize() {
-    return this.list.map((v) => ({ id: v.id, type: v.type, x: v.pos.x, y: v.pos.y, z: v.pos.z, rot: v.yaw, health: v.health / v.def.hp, fuel: v.fuel / v.def.fuelCap, broken: v.broken, upgrades: v.upgrades, paint: v.paint, trunk: v.trunk, wrecked: v.wrecked }));
+    return this.list.map((v) => ({ id: v.id, type: v.type, x: v.pos.x, y: v.pos.y, z: v.pos.z, rot: v.yaw, q: [v.quat.x, v.quat.y, v.quat.z, v.quat.w], health: v.health / v.def.hp, fuel: v.fuel / v.def.fuelCap, broken: v.broken, upgrades: v.upgrades, paint: v.paint, trunk: v.trunk, wrecked: v.wrecked }));
   }
   load(arr) {
     for (const v of this.list) v.dispose();

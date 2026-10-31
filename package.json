@@ -11,10 +11,12 @@
     "pack-assets": "node tools/pack-assets.mjs"
   },
   "devDependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
     "@gltf-transform/core": "^4.2.1",
     "@gltf-transform/extensions": "^4.2.1",
     "@gltf-transform/functions": "^4.2.1",
-    "draco3dgltf": "^1.5.9"
+    "draco3dgltf": "^1.5.9",
+    "meshoptimizer": "^0.22.0"
   },
   "license": "SEE LICENSE IN LICENSE.md"
 }

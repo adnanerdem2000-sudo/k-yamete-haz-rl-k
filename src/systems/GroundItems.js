@@ -1,12 +1,18 @@
-// Yere bırakılan eşyalar: fiziksel olarak düşer, sekip durur, parıldar; toplanabilir.
+// Yere bırakılan eşyalar: Rapier katı cismi olarak düşer, yuvarlanır, sekip durur; durunca
+// gövde kaldırılır (performans) ve eşya parıldayarak bekler. Araçlar ve oyuncu eşyaları itebilir.
 import * as THREE from 'three';
 import { ITEMS } from '../data/items.js';
 import { uid } from '../core/util.js';
+import { G } from '../physics/PhysicsWorld.js';
+
+const _box = new THREE.Box3();
+const _size = new THREE.Vector3();
+const _c = new THREE.Vector3();
 
 export class GroundItems {
   constructor(session) {
     this.s = session;
-    this.items = new Map(); // id → {id, stack, x,y,z, vx,vy,vz, obj, rest}
+    this.items = new Map(); // id → {id, stack, x,y,z, obj, ring, rest, body}
     const S = session;
     S.on('ground_drop', (p) => {
       const id = 'g' + uid();
@@ -28,50 +34,79 @@ export class GroundItems {
     S.onEvt('ground_remove', (e) => this.remove(e.id));
   }
 
-  add(id, stack, x, y, z, v = [0, 0, 0]) {
+  add(id, stack, x, y, z, v = [0, 0, 0], resting = false) {
     if (this.items.has(id)) return;
-    const obj = this.s.game.itemModels.make(stack.id);
+    const S = this.s;
+    const model = S.game.itemModels.make(stack.id);
+    // modeli kendi merkezine al (fizik gövdesi kütle merkezinde döner)
+    _box.setFromObject(model);
+    _box.getSize(_size); _box.getCenter(_c);
+    model.position.sub(_c);
     const holder = new THREE.Group();
-    holder.add(obj);
-    // parıltı halkası
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 20), new THREE.MeshBasicMaterial({ color: ITEMS[stack.id].rarity === 'story' ? 0xffb347 : 0xfff3c4, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false }));
+    holder.add(model);
+    holder.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.3, 20), new THREE.MeshBasicMaterial({ color: ITEMS[stack.id].rarity === 'story' ? 0xffb347 : 0xfff3c4, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.03;
-    holder.add(ring);
-    holder.position.set(x, y, z);
-    holder.rotation.y = Math.random() * 6;
-    this.s.game.scene.add(holder);
-    this.items.set(id, { id, stack, x, y, z, vx: v[0], vy: v[1], vz: v[2], obj: holder, ring, rest: false, spin: (Math.random() - 0.5) * 8, age: 0 });
+    ring.visible = false;
+    S.game.scene.add(ring);
+    S.game.scene.add(holder);
+    const it = { id, stack, x, y, z, obj: holder, ring, rest: false, age: 0, half: { x: Math.max(0.05, _size.x / 2), y: Math.max(0.04, _size.y / 2), z: Math.max(0.05, _size.z / 2) }, body: null };
+    this.items.set(id, it);
+    const pw = S.game.phys;
+    if (pw && !resting) {
+      const h = it.half;
+      const vol = h.x * h.y * h.z * 8;
+      const mass = Math.max(0.3, (ITEMS[stack.id].weight || 0.5) * Math.min(stack.qty, 5));
+      it.body = pw.addDynamic(holder, { type: 'box', hx: h.x, hy: h.y, hz: h.z }, x, y, z, {
+        vel: { x: v[0], y: v[1], z: v[2] }, spin: { x: (Math.random() - 0.5) * 6, y: (Math.random() - 0.5) * 8, z: (Math.random() - 0.5) * 6 },
+        density: mass / Math.max(0.002, vol), friction: 0.8, bounce: 0.2, group: G.DEBRIS, ccd: true,
+        onSleep: () => this.settle(it),
+      });
+      it.body.onLost = () => this.settle(it, true);
+    } else {
+      holder.position.set(x, y + it.half.y, z);
+      holder.rotation.y = Math.random() * 6;
+      this.settle(it);
+    }
+  }
+
+  /** Durdu: fizik gövdesini bırak, parıltı halkasını göster */
+  settle(it, lost = false) {
+    const S = this.s;
+    if (it.body) {
+      const t = it.body.body.translation();
+      if (!lost) { it.x = t.x; it.y = t.y - it.half.y; it.z = t.z; }
+      S.game.phys.removeDynamic(it.body);
+      it.body = null;
+    }
+    if (lost) { // haritadan düştü: en yakın zemine geri koy
+      it.y = S.world.physics.groundHeight(it.x, it.z, 200);
+      it.obj.position.set(it.x, it.y + it.half.y, it.z);
+    }
+    if (!Number.isFinite(it.y)) it.y = S.world.physics.groundHeight(it.x, it.z, 200);
+    it.baseY = it.obj.position.y;
+    it.rest = true;
+    it.ring.visible = true;
+    it.ring.position.set(it.x, it.y + 0.03, it.z);
   }
 
   remove(id) {
     const it = this.items.get(id);
     if (!it) return;
+    if (it.body) this.s.game.phys.removeDynamic(it.body);
     this.s.game.scene.remove(it.obj);
+    this.s.game.scene.remove(it.ring);
     this.items.delete(id);
   }
 
   update(dt) {
-    const phys = this.s.world.physics;
     for (const it of this.items.values()) {
       it.age += dt;
       if (!it.rest) {
-        it.vy -= 16 * dt;
-        let nx = it.x + it.vx * dt, nz = it.z + it.vz * dt, ny = it.y + it.vy * dt;
-        const r = phys.resolveCircle(nx, nz, 0.12, it.y, it.y + 0.3, 0.2);
-        nx = r.x; nz = r.z;
-        if (r.hit) { it.vx *= -0.3; it.vz *= -0.3; }
-        const g = phys.groundHeight(nx, nz, it.y + 0.2, 0.3);
-        if (ny <= g + 0.08) {
-          ny = g + 0.08;
-          if (Math.abs(it.vy) > 1.5) { it.vy = -it.vy * 0.35; it.vx *= 0.6; it.vz *= 0.6; }
-          else { it.vy = 0; it.vx *= 0.8; it.vz *= 0.8; if (Math.hypot(it.vx, it.vz) < 0.2) it.rest = true; }
-        }
-        it.x = nx; it.y = ny; it.z = nz;
-        it.obj.rotation.y += it.spin * dt;
-        it.obj.position.set(it.x, it.y, it.z);
+        // yuvarlanırken konumu izle (etkileşim/kayıt için)
+        if (it.body) { const t = it.body.body.translation(); it.x = t.x; it.y = t.y - it.half.y; it.z = t.z; }
+        if (it.age > 12 && it.body) this.settle(it); // hiç uyumazsa
       } else {
-        it.obj.position.y = it.y + Math.sin(it.age * 2.5) * 0.03;
         it.ring.material.opacity = 0.35 + Math.sin(it.age * 3) * 0.2;
       }
     }
@@ -89,7 +124,7 @@ export class GroundItems {
   serialize() { return [...this.items.values()].map((it) => ({ id: it.id, s: it.stack, p: [Math.round(it.x * 100) / 100, Math.round(it.y * 100) / 100, Math.round(it.z * 100) / 100] })); }
   load(arr) {
     for (const id of [...this.items.keys()]) this.remove(id);
-    for (const o of arr || []) { this.add(o.id, o.s, o.p[0], o.p[1], o.p[2], [0, 0, 0]); const it = this.items.get(o.id); if (it) it.rest = true; }
+    for (const o of arr || []) this.add(o.id, o.s, o.p[0], o.p[1], o.p[2], [0, 0, 0], true);
   }
   dispose() { for (const id of [...this.items.keys()]) this.remove(id); }
 }

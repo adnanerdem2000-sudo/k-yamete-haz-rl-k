@@ -7,6 +7,7 @@ import { damp, dampAngle } from '../core/util.js';
 export class ZombieView {
   constructor(game, type) {
     this.game = game;
+    this.def = type; // tür tanımı (Zombies.makeView this.type'a tür adını yazar)
     this.type = type;
     this.t = Math.random() * 10;
     this.phase = Math.random() * 6;
@@ -29,7 +30,7 @@ export class ZombieView {
 
   buildDog() {
     const g = new THREE.Group();
-    const c = new THREE.Color(this.type.tint);
+    const c = new THREE.Color(this.def.tint);
     const M = (col, o = {}) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.85, ...o });
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, 0.95), M(c));
     body.position.y = 0.62;
@@ -74,10 +75,10 @@ export class ZombieView {
   update(dt, s, lodSkip = false) {
     this.t += dt;
     const run = Math.min(1, Math.max(0, (s.speed - 1.6) / 2.5));
-    this.phase += s.speed * dt * (this.type.dog ? 3.4 : 2.1);
+    this.phase += s.speed * dt * (this.def.dog ? 3.4 : 2.1);
     this.visYaw = dampAngle(this.visYaw, s.yaw, 10, dt);
-    this.root.rotation.y = this.visYaw;
-    if (this.type.dog) { this.updateDog(dt, s); return; }
+    if (!this.corpse) this.root.rotation.y = this.visYaw;
+    if (this.def.dog) { this.updateDog(dt, s); return; }
     if (lodSkip) return;
     const p = this.pose;
     if (s.dead) {
@@ -85,23 +86,24 @@ export class ZombieView {
       A.downed(p, 0, 0);
       p.set('Head', 30 * Math.PI / 180, 0.4, 0);
       this.rig.apply(p);
+      if (this.corpse) return; // fizik gövdesi devirir
       const k = Math.min(1, this.deadT * 3);
       this.ch.model.rotation.x = k * (Math.PI / 2 - 0.05);
       this.ch.model.position.y = k * 0.25;
       this.ch.model.position.z = k * 0.7;
       return;
     }
-    if (this.type.human) {
+    if (this.def.human) {
       if (s.speed > 0.2) A.locomotion(p, this.phase, run, this.t); else A.idle(p, this.t);
       if (s.state === 'attack' || s.state === 'aim') A.aim(p, 'rifle', 0, this.attackT > 0 ? 0.6 : 0);
     } else {
-      A.zombieWalk(p, this.phase, run, this.t, this.type.style || 0);
+      A.zombieWalk(p, this.phase, run, this.t, this.def.style || 0);
       if (s.bashing) A.zombieBash(p, this.t);
     }
     if (this.attackT >= 0) {
       this.attackT += dt;
       const k = this.attackT / 0.6;
-      if (!this.type.human) A.zombieAttack(p, k);
+      if (!this.def.human) A.zombieAttack(p, k);
       if (k >= 1) this.attackT = -1;
     }
     if (this.hitT >= 0) {
@@ -115,6 +117,7 @@ export class ZombieView {
   updateDog(dt, s) {
     if (s.dead) {
       this.deadT += dt;
+      if (this.corpse) return;
       this.body.rotation.z = Math.min(1, this.deadT * 3) * Math.PI / 2;
       this.body.position.y = -0.3 * Math.min(1, this.deadT * 3);
       return;

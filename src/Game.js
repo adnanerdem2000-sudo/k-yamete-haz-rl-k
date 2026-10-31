@@ -15,6 +15,7 @@ import { UIManager } from './ui/UIManager.js';
 import { Net } from './net/Net.js';
 import { Session } from './Session.js';
 import { mapBase } from './systems/MapSystem.js';
+import { PhysicsWorld } from './physics/PhysicsWorld.js';
 
 const TIPS = [
   'İpucu: Silah sesleri zombileri çeker. Her sorunu silahla çözme.',
@@ -63,7 +64,10 @@ export class Game {
       this.icons = new IconRenderer(this.gfx.renderer, this.itemModels);
       this.world = new World(this.assets, this.scene);
       let step = 0;
-      await this.world.build((l) => { step++; setP(0.45 + step * 0.07, l); });
+      await this.world.build((l) => { step++; setP(0.45 + step * 0.06, l); });
+      setP(0.88, 'Fizik motoru hazırlanıyor…');
+      await PhysicsWorld.load();
+      this.phys = new PhysicsWorld(this.world);
       this.env = new Environment(this);
       this.env.setLamps(this.world);
       setP(0.92, 'Harita çiziliyor…');
