@@ -103,7 +103,7 @@ function model(c, kit, name, tx, ty, tz, rot, scale) {
   const sc = typeof scale === 'number' ? _s.set(scale, scale, scale) : _s.set(scale[0], scale[1], scale[2]);
   _m.compose(_p.set(tx, ty, tz), _q.setFromAxisAngle(_Y, rot), sc);
   const world = new THREE.Matrix4().multiplyMatrices(p.matrix, _m);
-  c.ctx.instancer.add(kit, name, world);
+  c.ctx.instancer.add(kit, name, world, { interior: true });
 }
 
 /** Eşyanın çarpışma kutusu (şablon koordinatlarında merkez + yarı boyut, dönüş 90°'nin katı) */

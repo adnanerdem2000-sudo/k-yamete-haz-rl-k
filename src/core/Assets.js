@@ -6,6 +6,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 import { unpackBytes, packToClips } from '../entities/AnimPack.js';
 import { loadSurfaces } from '../world/Surfaces.js';
+import { mergeParts } from './PartMerge.js';
 
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items', 'city'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
@@ -120,8 +121,10 @@ export class Assets {
         }
       });
     }
-    this.partsCache.set(key, out);
-    return out;
+    // aynı malzemeli parçalar ve düz renkli malzemeler birleştirilir (çizim çağrısı)
+    const merged = mergeParts(out);
+    this.partsCache.set(key, merged);
+    return merged;
   }
 
   /** Modelin model-uzayı sınır kutusu */

@@ -350,13 +350,9 @@ export class Session {
     this.updateAmbience(dt);
   }
 
-  /** İçindeki binanın çatısını gizle (kesit görünüm) */
+  /** İçindeki binanın çatısını gizle (kesit görünüm; birleşik çatılarda gölgelendirici kırpar) */
   updateRoofs() {
-    const inside = this.local.inside;
-    for (const b of this.world.buildings) {
-      const hide = b === inside;
-      if (b.roof.visible === hide) b.roof.visible = !hide;
-    }
+    this.world.setRoofHidden(this.local.inside || null);
   }
 
   updateAmbience(dt) {
@@ -879,7 +875,7 @@ export class Session {
     // dünyayı sıfırla (kapılar, pencereler)
     for (const d of this.world.doors) this.interact.applyDoorState(d, { target: 0, broken: false, barricade: 0, locked: d.origLocked ?? d.locked, hp: d.maxHp }, true);
     for (const w of this.world.windows) this.interact.applyWindowState(w, { broken: false, barricade: 0, hp: w.maxHp }, true);
-    for (const b of this.world.buildings) b.roof.visible = true;
+    this.world.setRoofHidden(null);
     this.env.weather = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
     this.env.doom = 0; this.env.redMist = 0; this.env.streetPower = true; this.env.bloodMoon = false;
     this.env.extraLights.length = 0;

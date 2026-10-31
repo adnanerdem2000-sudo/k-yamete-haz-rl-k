@@ -14,7 +14,7 @@ import { Sky } from './Sky.js';
 import { Geo, materials } from './Geo.js';
 import * as P from './Props.js';
 import { addContainer } from './Furnish.js';
-import { signTexture } from './TextureFactory.js';
+import { signTexture, dropSignTextures } from './TextureFactory.js';
 import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE } from './WorldLayout.js';
 import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
@@ -64,6 +64,7 @@ export class World {
       this.buildingById = Object.fromEntries(this.buildings.map((b) => [b.id, b]));
       this.home = this.buildingById.home;
       this.mergeShells();
+      this.mergeRoofs();
       this.doorRenderer = new DoorRenderer(this.doors, this.root);
     });
     await step('Mahalle ve şehir donanımları…', () => {
@@ -80,6 +81,7 @@ export class World {
       this.forest();
       buildExtraRegions(this);
       this.signposts();
+      this.mergeSigns();
       this.addGeo(this.geo);
     });
     await step('Orman büyüyor…', () => {
@@ -107,19 +109,25 @@ export class World {
     progress('Dünya hazır');
   }
 
-  /** Bina kabuklarını (statik) malzeme + 256 m parça başına birleştir: çizim çağrısı azaltma */
+  /**
+   * Bina kabuklarını (statik) malzeme + parça başına birleştir: çizim çağrısı azaltma. Dış yüzeyler 512 m'lik
+   * parçalarda (şehir tek parçaya düşecek şekilde kaydırılmış), iç yüzeyler (iç duvar, parke, fayans, halı)
+   * 64 m'lik hücrelerde: uzaktan görünmedikleri için cullInteriors onları hücre hücre gizler.
+   */
   mergeShells() {
     const groups = new Map();
     for (const b of this.buildings) {
       b.shell.updateMatrixWorld(true);
       for (const m of b.shell.children) {
-        const cx = Math.floor(b.spec.x / 256), cz = Math.floor(b.spec.z / 256);
-        const key = m.material.uuid + '@' + cx + ',' + cz;
-        if (!groups.has(key)) groups.set(key, { mat: m.material, geos: [], cast: m.castShadow });
+        const interior = INTERIOR_MAT.test(m.material.name);
+        const key = m.material.uuid + '@' + (interior ? cellKey(b.spec.x, b.spec.z, 64, 0) : cellKey(b.spec.x, b.spec.z, 512, 256));
+        if (!groups.has(key)) groups.set(key, { mat: m.material, geos: [], cast: m.castShadow, interior });
         groups.get(key).geos.push(m.geometry);
       }
       this.root.remove(b.shell);
+      b.shell.clear();
     }
+    this._interiors = [];
     for (const g of groups.values()) {
       const merged = mergeGeometries(g.geos, false);
       if (!merged) continue;
@@ -129,28 +137,158 @@ export class World {
       mesh.name = 'shells';
       if (g.mat.transparent) mesh.renderOrder = 2;
       this.root.add(mesh);
+      if (g.interior) this._interiors.push(mesh);
       for (const gg of g.geos) gg.dispose();
     }
   }
+
+  /**
+   * Çatıları malzeme + 256 m parça başına birleştir (bina başına ayrı çatı ağları yerine). Oyuncunun içinde
+   * bulunduğu binanın çatısı (kesit görünüm) köşe gölgelendiricisinde kırpılır: her köşe kendi binasının
+   * numarasını (aRoof) taşır, uRoofHide eşleşirse üçgen ekran dışına atılır. Gölge geçişi de aynı kuralı
+   * uygular (önceki davranış: gizli çatı gölge de düşürmez).
+   */
+  mergeRoofs() {
+    this.roofHide = { value: 0 };
+    const hide = (sh) => {
+      sh.uniforms.uRoofHide = this.roofHide;
+      sh.vertexShader = sh.vertexShader
+        .replace('#include <common>', '#include <common>\nattribute float aRoof; uniform float uRoofHide;')
+        .replace('#include <project_vertex>', '#include <project_vertex>\nif (aRoof > 0.5 && abs(aRoof - uRoofHide) < 0.5) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);');
+    };
+    const roofMats = new Map();
+    const roofMat = (m) => {
+      if (!roofMats.has(m)) {
+        const c = m.clone();
+        c.name = m.name + '_roof';
+        c.onBeforeCompile = hide;
+        c.customProgramCacheKey = () => 'roof';
+        roofMats.set(m, c);
+      }
+      return roofMats.get(m);
+    };
+    const depth = new THREE.MeshDepthMaterial();
+    depth.onBeforeCompile = hide;
+    depth.customProgramCacheKey = () => 'roof-depth';
+    const groups = new Map();
+    this.buildings.forEach((b, i) => {
+      b.roofId = i + 1;
+      const ck = cellKey(b.spec.x, b.spec.z, 512, 256);
+      for (const m of b.roof.children) {
+        const key = m.material.uuid + '@' + ck;
+        if (!groups.has(key)) groups.set(key, { mat: m.material, geos: [], cast: m.castShadow });
+        const g = m.geometry;
+        g.setAttribute('aRoof', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count).fill(i + 1), 1));
+        groups.get(key).geos.push(g);
+      }
+      this.root.remove(b.roof);
+      b.roof.clear();
+    });
+    for (const g of groups.values()) {
+      const merged = mergeGeometries(g.geos, false);
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      const mesh = new THREE.Mesh(merged, roofMat(g.mat));
+      mesh.castShadow = g.cast; mesh.receiveShadow = true;
+      mesh.customDepthMaterial = depth;
+      mesh.name = 'roofs';
+      if (g.mat.transparent) mesh.renderOrder = 2;
+      this.root.add(mesh);
+      for (const gg of g.geos) gg.dispose();
+    }
+  }
+
+  /**
+   * Tabelaları tek doku atlasında birleştir: ışıklı bina/benzinlik tabelaları bir, ahşap yol levhaları bir çizim
+   * çağrısı (önceden tabela başına bir, levha satırı başına altı çağrı). Her tabelanın canvas'ı atlasın bir
+   * hücresine çizilir ve UV'ler hücreye taşınır; levhaların yazısız yüzleri hücrenin zemin rengine bakar.
+   */
+  mergeSigns() {
+    const items = this.root.children.filter((o) => o.isMesh && (o.name === 'sign' || o.name === 'signpost'));
+    if (!items.length) return;
+    const CW = 512, CH = 128, COLS = 4;
+    const cells = new Map();
+    const canvasOf = (m) => m && m.map && m.map.image;
+    for (const o of items) for (const m of [].concat(o.material)) { const c = canvasOf(m); if (c && !cells.has(c)) cells.set(c, cells.size); }
+    const rows = Math.ceil(cells.size / COLS), W = CW * COLS, H = CH * rows;
+    const atlas = document.createElement('canvas');
+    atlas.width = W; atlas.height = H;
+    const g2 = atlas.getContext('2d');
+    for (const [c, i] of cells) g2.drawImage(c, (i % COLS) * CW, Math.floor(i / COLS) * CH, CW, CH);
+    const tex = new THREE.CanvasTexture(atlas);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 8;
+    // hücre içi UV: (u, v) ∈ [0,1] → atlas; 1 px içeriden (komşu hücre sızmasın)
+    const cellUV = (i, u, v) => {
+      const x0 = (i % COLS) * CW, y0 = Math.floor(i / COLS) * CH;
+      return [(x0 + 1 + u * (CW - 2)) / W, 1 - (y0 + 1 + (1 - v) * (CH - 2)) / H];
+    };
+    const lit = [], wood = [];
+    this.signSpots = []; // tabela konumları (birleştirmeden sonra da bilinsin: test, ileride yanıp sönme vb.)
+    this.root.updateMatrixWorld(true);
+    for (const o of items) {
+      this.signSpots.push({ kind: o.name, x: o.position.x, y: o.position.y, z: o.position.z, ry: o.rotation.y });
+      const mats = [].concat(o.material);
+      const g = o.geometry.clone();
+      const uv = g.attributes.uv;
+      const groups = g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : uv.count, materialIndex: 0 }];
+      const textCell = cells.get(mats.map(canvasOf).find(Boolean));
+      const done = new Set(); // indeksli geometride köşe birden çok üçgende geçer: bir kez taşı
+      for (const gr of groups) {
+        const m = mats[gr.materialIndex] || mats[0];
+        const cell = cells.get(canvasOf(m));
+        const ix = g.index ? g.index.array : null;
+        for (let k = gr.start; k < gr.start + gr.count; k++) {
+          const vi = ix ? ix[k] : k;
+          if (done.has(vi)) continue;
+          done.add(vi);
+          // yazılı yüz: kendi hücresi; yazısız yüz: tabelanın zemin renginden bir nokta
+          const [u, v] = cell !== undefined ? cellUV(cell, uv.getX(vi), uv.getY(vi)) : cellUV(textCell, 0.03, 0.25);
+          uv.setXY(vi, u, v);
+        }
+      }
+      g.clearGroups();
+      g.applyMatrix4(o.matrixWorld);
+      (o.name === 'signpost' ? wood : lit).push(g);
+      this.root.remove(o);
+      o.geometry.dispose();
+    }
+    const litMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: 0 });
+    litMat.name = 'signs_lit';
+    const woodMat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
+    woodMat.name = 'signs_wood';
+    for (const [geos, mat, cast, name] of [[lit, litMat, false, 'signs'], [wood, woodMat, true, 'signposts']]) {
+      if (!geos.length) continue;
+      const merged = mergeGeometries(geos.map((x) => (x.index ? x : x.setIndex([...Array(x.attributes.position.count).keys()]))), false);
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      const mesh = new THREE.Mesh(merged, mat);
+      mesh.castShadow = cast; mesh.receiveShadow = true;
+      mesh.name = name;
+      this.root.add(mesh);
+    }
+    // gece ışıklandırması (Environment) bina tabelalarının malzemesini değiştirir: hepsi ortak malzemeye bakar
+    for (const b of this.buildings) if (b.signMat) b.signMat = litMat;
+    this.extraSigns = [litMat];
+    dropSignTextures();
+  }
+
+  /** Kesit görünüm: içinde bulunulan binanın çatısını gizle (0: hepsi görünür) */
+  setRoofHidden(b) { if (this.roofHide) this.roofHide.value = b ? b.roofId || 0 : 0; }
 
   /**
    * İç mekân ağlarını uzakta gizle: yalnızca iç yüzeylere ait malzemeler (iç duvar, parke, fayans, halı)
    * — dışarıdan pencere ardında bile 45 m ötesinde görünmezler; çizim çağrısını ciddi azaltır.
    */
   cullInteriors(camPos, dt = 0.016) {
-    if (!this._interiors) {
-      this._interiors = [];
-      for (const b of this.buildings) {
-        if (!b.shell) continue;
-        const cx = (b.box.minX + b.box.maxX) / 2, cz = (b.box.minZ + b.box.maxZ) / 2, rad = Math.hypot(b.box.maxX - b.box.minX, b.box.maxZ - b.box.minZ) / 2;
-        for (const m of b.shell.children) if (m.isMesh && /geo_(interior|woodfloor|tiles|carpet)$/.test(m.material && m.material.name)) this._interiors.push({ m, cx, cz, rad });
-      }
-      this._icT = 0;
-    }
-    this._icT -= dt;
+    if (!this._interiors) return;
+    this._icT = (this._icT || 0) - dt;
     if (this._icT > 0) return;
     this._icT = 0.25;
-    for (const it of this._interiors) it.m.visible = Math.hypot(it.cx - camPos.x, it.cz - camPos.z) - it.rad < 45;
+    for (const m of this._interiors) {
+      const s = m.geometry.boundingSphere;
+      m.visible = Math.hypot(s.center.x - camPos.x, s.center.z - camPos.z) - s.radius < 45;
+    }
   }
 
   addGeo(geo, parent = this.root) {
@@ -765,10 +903,15 @@ export class World {
         m.rotation.z = (i % 2 ? 0.03 : -0.04);
         m.translateX(1.1);
         m.castShadow = true;
+        m.name = 'signpost';
         this.root.add(m);
       });
     }
   }
 }
+
+/** Birleştirme hücresi anahtarı (off: hücre sınırlarını kaydırır; şehir 0,0 kesişiminde bölünmesin) */
+function cellKey(x, z, size, off) { return Math.floor((x + off) / size) + ',' + Math.floor((z + off) / size); }
+const INTERIOR_MAT = /geo_(interior|woodfloor|tiles|carpet)$/;
 
 export { WORLD };

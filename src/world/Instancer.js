@@ -1,8 +1,10 @@
 // Tekrarlanan modelleri (mobilya, ağaç, çit, sokak lambası...) InstancedMesh ile çizer.
-// Görünürlük ayıklaması için dünya 128 m'lik parçalara bölünür.
+// Görünürlük ayıklaması için dünya 512 m'lik parçalara bölünür (256 m kaydırılmış: şehir merkezi tek parçaya
+// düşer, model başına tek çağrı); iç mekân eşyaları (interior) 64 m'lik hücrelerde tutulur ve yalnız yakında
+// (INTERIOR_DIST) çizilir: duvar ardında, en fazla pencereden görünürler.
 import * as THREE from 'three';
 
-const CHUNK = 256;
+const CHUNK = 512, CHUNK_OFF = 256, ICHUNK = 64, INTERIOR_DIST = 50;
 const _m = new THREE.Matrix4();
 
 export class Instancer {
@@ -16,10 +18,11 @@ export class Instancer {
   /** Model örneği ekle. matrix: dünya dönüşümü */
   add(kit, name, matrix, opts = {}) {
     const e = matrix.elements;
-    const cx = Math.floor(e[12] / CHUNK), cz = Math.floor(e[14] / CHUNK);
-    const key = `${kit}/${name}@${cx},${cz}${opts.noShadow ? '!' : ''}`;
+    const C = opts.interior ? ICHUNK : CHUNK, off = opts.interior ? 0 : CHUNK_OFF;
+    const cx = Math.floor((e[12] + off) / C), cz = Math.floor((e[14] + off) / C);
+    const key = `${kit}/${name}@${cx},${cz}${opts.noShadow ? '!' : ''}${opts.interior ? '#i' : ''}`;
     let g = this.groups.get(key);
-    if (!g) { g = { kit, name, matrices: [], shadow: !opts.noShadow, recv: opts.receive !== false }; this.groups.set(key, g); }
+    if (!g) { g = { kit, name, matrices: [], shadow: !opts.noShadow, recv: opts.receive !== false, interior: !!opts.interior }; this.groups.set(key, g); }
     g.matrices.push(matrix.clone());
     return g.matrices.length - 1;
   }
@@ -48,6 +51,7 @@ export class Instancer {
         im.receiveShadow = g.recv;
         im.computeBoundingSphere();
         im.name = `inst:${g.kit}/${g.name}`;
+        im.userData.interior = g.interior;
         this.parent.add(im);
         this.meshes.push(im);
       }
@@ -56,13 +60,12 @@ export class Instancer {
 
   /** Uzak parçaları gizle (çizim mesafesi) */
   cull(camPos, maxDist) {
-    const m2 = maxDist * maxDist;
     for (const im of this.meshes) {
       const s = im.boundingSphere;
       if (!s) continue;
       const dx = s.center.x - camPos.x, dz = s.center.z - camPos.z;
       const d = Math.sqrt(dx * dx + dz * dz) - s.radius;
-      im.visible = d * d < m2 || d < 0;
+      im.visible = d < (im.userData.interior ? Math.min(maxDist, INTERIOR_DIST) : maxDist);
     }
   }
 }

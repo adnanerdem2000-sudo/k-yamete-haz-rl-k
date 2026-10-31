@@ -204,6 +204,11 @@ export function signTexture(text, bg = '#c0392b', fg = '#ffffff', w = 512, h = 1
 }
 
 /** Karakter/eşya simgeleri için yuvarlak gradyan sprite */
+/** Atlasa taşınan tabela dokularını önbellekten çıkar (canvas belleği) */
+export function dropSignTextures() {
+  for (const [k, t] of cache) if (k.startsWith('sign:')) { t.dispose(); cache.delete(k); }
+}
+
 export function glowTexture(color = '#ffffff') {
   const key = 'glow:' + color;
   if (cache.has(key)) return cache.get(key);
