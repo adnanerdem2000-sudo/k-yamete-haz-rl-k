@@ -97,6 +97,16 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   çarpanı, yuvarlanma direnci (kum/kar yavaşlatır; arazi aracı daha az etkilenir), ıslak/karlı çarpanı ve toz
   yoğunluğu; aracın `offroad` yeteneği çim/toprak tutunmasını kısmen telafi eder. Çarpışmada Δv'den hasar ve çarpma
   yönü (göçük yeri); önündeki üs yapısı, bina kapısı ya da pencere `vehicle_ram` ile hasar alır (host uygular).
+- **Zombi sürüsü ve botlar (Aşama 6):** yol bulma bütçesi (kare başına 3 A*) oyunculara en yakın zombilere
+  öncelikle verilir; 60 m'den uzaktakiler seyrek düşünür. Ayrışma kuvvetine ek olarak her adım sonunda aynı 3 m
+  hücredeki çiftler 0,55 m altına inemez (`resolveOverlaps`), zombiler oyuncu/botların 0,75 m içine giremez
+  (`moveBy` itmesi). Dikkat dağıtma: boş şişe fırlatılabilir; kırılma sesi (32 m, cam kırığı parçacıkları) zombileri
+  sesin yerine araştırmaya gönderir (`hearNoise`). Botlar (`Bots`): `loot` emri — emrin verildiği yerin 30 m
+  çevresinde, botla aynı bina içinde/dışında, aranmamış ve kilitsiz konteynerlere gidip 2,5 sn arar, eşyaları
+  doğrudan çantasına alır (grant olayı oyunculara özel olduğundan `Bots.receive`), 20 sn'de ulaşamazsa vazgeçer;
+  `build` emri — 40 m içindeki bitmemiş yapıya gidip 2 sn'de bir çeyrek ilerletir; `base` nöbeti üç nokta arasında
+  devriye. Emir anlık görüntüde taşınır (istemci vekilleri ve takım ekranı doğru emri gösterir); takım kartında
+  emir ve çanta sayısı.
 - **Yol bulma:** 0,5 m'lik gezinme ızgarası + pencereli A*; kapı/pencere/yapı hücreleri "kırılabilir" sayılır,
   zombiler engeli kırarak yol açar.
 - **Varlıklar:** CC0 modeller `tools/pack-assets.mjs` ile 7 GLB kitinde birleştirilir (~11 MB).
