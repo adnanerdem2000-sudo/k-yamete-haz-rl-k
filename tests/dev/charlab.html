@@ -1,0 +1,45 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Karakter laboratuvarı</title>
+<style>body{margin:0;background:#202630;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// Model parçalarını/malzemelerini gizleme ve renk deneme sayfası
+// ?m=hooded_adventurer&hide=Medieval_Head:DarkBrown,Medieval_Body:Metal&color=Skin:#e0a07a&clip=Idle&zoom=head
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+const q = new URLSearchParams(location.search);
+const name = q.get('m') || 'hooded_adventurer';
+const hide = (q.get('hide') || '').split(',').filter(Boolean).map((s) => s.split(':'));
+const colors = (q.get('color') || '').split(',').filter(Boolean).map((s) => s.split(':'));
+const clipName = q.get('clip') || 'none';
+const zoom = q.get('zoom') || 'head';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#5a6878');
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.0)); const dl = new THREE.DirectionalLight(0xffffff, 2.2); dl.position.set(3, 6, 5); scene.add(dl);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+const g = await new GLTFLoader().loadAsync(`_preview/${name}.glb`);
+const views = [];
+for (let k = 0; k < 3; k++) {
+  const o = k === 0 ? g.scene : (await new GLTFLoader().loadAsync(`_preview/${name}.glb`)).scene;
+  o.traverse((c) => {
+    if (!c.isMesh) return;
+    const mats = Array.isArray(c.material) ? c.material : [c.material];
+    const nm = mats.map((m) => { const mm = m.clone(); for (const [node, mat] of hide) if ((node === '*' || c.name.startsWith(node) || (c.parent && c.parent.name.startsWith(node))) && mm.name === mat) mm.visible = false; for (const [mat, col] of colors) if (mm.name === mat) mm.color.set(col); return mm; });
+    c.material = Array.isArray(c.material) ? nm : nm[0];
+    for (const [node, mat] of hide) if (mat === '*' && (c.name.startsWith(node) || (c.parent && c.parent.name.startsWith(node)))) c.visible = false;
+  });
+  o.rotation.y = [0, Math.PI / 2, Math.PI][k];
+  o.position.x = (k - 1) * 0.9;
+  scene.add(o);
+  if (clipName !== 'none') { const m = new THREE.AnimationMixer(o); const clip = g.animations.find((a) => a.name.endsWith(clipName)); if (clip) { const a = m.clipAction(clip); a.play(); m.update(0.3); } }
+  views.push(o);
+}
+const meshInfo = [];
+g.scene.traverse((c) => { if (c.isMesh) meshInfo.push(c.name + '(' + (c.parent ? c.parent.name : '') + '):' + (Array.isArray(c.material) ? c.material.map((m) => m.name).join('/') : c.material.name)); });
+window.__info = meshInfo;
+if (zoom === 'head') { cam.position.set(0, 1.62, 3.2); cam.lookAt(0, 1.55, 0); }
+else { cam.position.set(0, 1.0, 6.5); cam.lookAt(0, 0.95, 0); }
+r.render(scene, cam);
+(function loop() { r.render(scene, cam); requestAnimationFrame(loop); })();
+</script></body></html>

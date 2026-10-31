@@ -235,9 +235,11 @@ class Vehicle {
   /** Model üzerindeki koltuk konumları (yerel) */
   seatLocal(i) {
     const W = this.def.wid, L = this.def.len;
-    if (this.def.bike) return new THREE.Vector3(0, 0.75, i === 0 ? -0.1 : -0.75);
+    if (this.def.bike) return new THREE.Vector3(0, 0.62, i === 0 ? -0.1 : -0.7);
     const row = Math.floor(i / 2), side = i % 2 === 0 ? 1 : -1;
-    return new THREE.Vector3(side * W * 0.2, 0.55, L * 0.08 - row * 1.1);
+    // koltuk yüzeyi: araç gövde yüksekliğine göre (binek ~0.38 m, kamyon daha yüksek)
+    const seatY = clamp((this.modelH || 1.5) * 0.25, 0.32, 0.85);
+    return new THREE.Vector3(side * W * 0.2, seatY, L * 0.06 - row * 1.0);
   }
 
   seatPlayer(avatar, i) {

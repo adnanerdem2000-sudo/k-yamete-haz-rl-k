@@ -124,6 +124,29 @@ export function prone(p, phase, move01) {
   return p;
 }
 
+/** Yüzme (serbest stil): model kökü öne yatırılır; kollar sırayla kulaç atar, bacaklar çırpar */
+export function swim(p, phase, move01) {
+  p.reset();
+  const s = sin(phase), c = cos(phase);
+  const m = 0.3 + 0.7 * min(1, move01);
+  p.set('Neck', -38 * D, 0, 0);
+  p.set('Head', -22 * D, s * 12 * m * D, 0);
+  p.set('Spine', 0, s * 10 * m * D, 0);
+  p.set('Chest', 0, s * 6 * m * D, 0);
+  p.set('LeftArm', (-100 - 78 * s * m) * D, 0, -78 * D);
+  p.set('RightArm', (-100 + 78 * s * m) * D, 0, 78 * D);
+  p.set('LeftForeArm', 0, (-15 - max(0, -c) * 45 * m) * D, 0);
+  p.set('RightForeArm', 0, (15 + max(0, c) * 45 * m) * D, 0);
+  const k = sin(phase * 3) * 16 * m;
+  p.set('LeftUpLeg', (4 + k) * D, 0, -3 * D);
+  p.set('RightUpLeg', (4 - k) * D, 0, 3 * D);
+  p.set('LeftLeg', (8 + max(0, k)) * D, 0, 0);
+  p.set('RightLeg', (8 + max(0, -k)) * D, 0, 0);
+  p.set('LeftFoot', 35 * D, 0, 0);
+  p.set('RightFoot', 35 * D, 0, 0);
+  return p;
+}
+
 /** Zıplama / düşme. vy: dikey hız */
 export function airborne(p, vy, t) {
   p.reset();

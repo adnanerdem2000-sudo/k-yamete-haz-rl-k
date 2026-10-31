@@ -35,7 +35,7 @@ const P = {
 const list = (src, names) => names.split(/\s+/).filter(Boolean).map((n) => ({ src, n }));
 
 const KITS = {
-  chars: list('M', 'survivor-male survivor-female male skater-male skater-female cyborg-female zombie-1 zombie-2'),
+  // insan karakterleri ve hayvanlar: tools/pack-rigged.mjs (assets/models/rigged/)
   vehicles: [
     ...list('M', 'sedan suv suv-luxury van police-car ambulance taxi truck truck-flat hatchback delivery-truck garbage-truck firetruck tractor citroen-old-van boat-small boat-large sports-sedan'),
     ...list('NR', 'vehicle-truck-red vehicle-truck-green vehicle-truck-yellow vehicle-motorcycle'),

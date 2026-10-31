@@ -1,0 +1,69 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>İskelet ölçümü</title>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// İnsan tabanlarının kemik konumları, konum izleri ve klip yürüyüş hızlarını ölçer (geliştirici aracı)
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const out = {};
+for (const base of ['male', 'female']) {
+  const g = await loader.loadAsync(`../../assets/models/rigged/${base}.glb`);
+  const root = g.scene; root.updateMatrixWorld(true);
+  const bones = {}; root.traverse((o) => { if (o.isBone) bones[o.name] = o; });
+  const wp = (n) => { const v = new THREE.Vector3(); bones[n].getWorldPosition(v); return v.toArray().map((x) => +x.toFixed(3)); };
+  const info = { bones: {} };
+  for (const n of ['Root', 'Body', 'Hips', 'Abdomen', 'Torso', 'Chest', 'Neck', 'Head', 'ShoulderL', 'UpperArmL', 'LowerArmL', 'WristL', 'Index1L', 'UpperArmR', 'UpperLegL', 'LowerLegL', 'FootL', 'PTL']) if (bones[n]) info.bones[n] = wp(n);
+  info.parents = {}; for (const n of Object.keys(bones)) info.parents[n] = bones[n].parent ? bones[n].parent.name : null;
+  info.rootTransform = { pos: root.children.map((c) => c.name + ':' + c.position.toArray().map((x) => +x.toFixed(2)) + ' r' + c.quaternion.toArray().map((x) => +x.toFixed(2)) + ' s' + c.scale.toArray().map((x) => +x.toFixed(2))) };
+  // skinned meshes
+  const sk = []; root.traverse((o) => { if (o.isSkinnedMesh) sk.push(o); });
+  info.meshes = sk.map((m) => m.name + ' bindIdentity=' + m.bindMatrix.equals(new THREE.Matrix4()) + ' sameBones=' + (m.skeleton.bones[5] === sk[0].skeleton.bones[5]) + ' mat=' + m.material.name);
+  info.bindMatrix0 = sk[0].bindMatrix.elements.map((x) => +x.toFixed(3));
+  const hb = new THREE.Box3(); for (const m of sk) if (/Head/.test(m.name)) { m.geometry.computeBoundingBox(); const b = m.geometry.boundingBox.clone().applyMatrix4(m.bindMatrix); hb.union(b); }
+  info.headBox = [hb.min.toArray().map((x) => +x.toFixed(3)), hb.max.toArray().map((x) => +x.toFixed(3))];
+  // pozisyon izleri
+  const posTracks = new Set(); for (const a of g.animations) for (const t of a.tracks) if (t.name.endsWith('.position')) posTracks.add(t.name.split('.')[0] + '.' + (t.name.split('.').length > 2 ? t.name.split('.')[1] : ''));
+  info.posTracks = [...posTracks];
+  // yürüyüş hızları: ayak bileği dünya z salınımı
+  const mixer = new THREE.AnimationMixer(root);
+  info.clips = {};
+  for (const clipName of ['Walk', 'Run', 'Run_Back', 'Run_Left', 'Run_Right', 'Idle', 'Roll']) {
+    const clip = g.animations.find((a) => a.name === clipName);
+    if (!clip) continue;
+    mixer.stopAllAction();
+    const act = mixer.clipAction(clip); act.reset().play();
+    let zmin = 1e9, zmax = -1e9, xmin = 1e9, xmax = -1e9, hipMin = 1e9, hipMax = -1e9, footMinY = 1e9;
+    const N = 120;
+    let lastBody = null, bodyTravel = 0;
+    for (let i = 0; i <= N; i++) {
+      mixer.setTime(clip.duration * i / N);
+      root.updateMatrixWorld(true);
+      const f = new THREE.Vector3(); bones['FootL'].getWorldPosition(f);
+      const h = new THREE.Vector3(); bones['Hips'].getWorldPosition(h);
+      zmin = Math.min(zmin, f.z - h.z); zmax = Math.max(zmax, f.z - h.z); xmin = Math.min(xmin, f.x - h.x); xmax = Math.max(xmax, f.x - h.x);
+      hipMin = Math.min(hipMin, h.y); hipMax = Math.max(hipMax, h.y); footMinY = Math.min(footMinY, f.y);
+      if (lastBody) bodyTravel += h.distanceTo(lastBody); lastBody = h.clone();
+    }
+    // yerdeyken ayağın kalçaya göre geri kayma hızı = yer hızı
+    let vs = 0, vn = 0;
+    const M = 240;
+    let prev = null;
+    for (let i = 0; i <= M; i++) {
+      mixer.setTime(clip.duration * i / M);
+      root.updateMatrixWorld(true);
+      const f = new THREE.Vector3(); bones['FootL'].getWorldPosition(f);
+      const h = new THREE.Vector3(); bones['Hips'].getWorldPosition(h);
+      const rel = new THREE.Vector3(f.x - h.x, 0, f.z - h.z);
+      if (prev && f.y < footMinY + 0.015) { vs += rel.distanceTo(prev.rel) / (clip.duration / M); vn++; }
+      prev = { rel };
+    }
+    info.clips[clipName] = { dur: +clip.duration.toFixed(3), footZ: +(zmax - zmin).toFixed(3), footX: +(xmax - xmin).toFixed(3), hipY: [+hipMin.toFixed(3), +hipMax.toFixed(3)], footMinY: +footMinY.toFixed(3), groundSpeed: vn ? +(vs / vn).toFixed(2) : 0, stanceFrac: +(vn / M).toFixed(2) };
+    act.stop();
+  }
+  out[base] = info;
+}
+window.__info = out;
+</script></body></html>

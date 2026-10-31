@@ -300,7 +300,7 @@ export class Menus {
           button('Varsayılana Dön', () => { const all = { ...(Settings.get('player.appearance') || {}) }; delete all[id]; Settings.set('player.appearance', all); if (this.game.menu) this.game.menu.showcase(this.lookFor(id)); render(); }, 'small'));
       } else if (this.custTab === 'face') {
         body = h('div.cust-body',
-          sel('Yüz tipi', BASE_FACES, look.base, (v) => set({ base: v })),
+          sel('Beden', BASE_FACES, /female/.test(look.base || '') ? 'female' : 'male', (v) => set({ base: v })),
           h('div.opt-label', 'Ten rengi'), swatches(PALETTES.skin, look.skin, (v) => set({ skin: v })),
           sel('Saç modeli', OPTIONS.hairStyle, look.hairStyle, (v) => set({ hairStyle: v })),
           h('div.opt-label', 'Saç rengi'), swatches(PALETTES.hair, look.hairColor, (v) => set({ hairColor: v })),
@@ -407,7 +407,7 @@ export class Menus {
     const body = h('div.howto',
       sec('🎯 Amaç', 'Ada 30 gün sonra, 30. gün saat 22:00\'de "Son Işık" denen bir felaketle yutulacak. Arkadaşlarınla (ya da yapay zekâ takım arkadaşlarıyla) kaynak topla, üssünü güçlendir ve altı kaçış yolundan en az birini hazırla: Yeraltı sığınağı, askerî helikopter, tekne, dağ kampı, araç konvoyu ya da son savunma.'),
       sec('🎮 Kontroller', h('div.keys-grid',
-        h('span', k('forward'), k('left'), k('back'), k('right'), ' Hareket'), h('span', k('sprint'), ' Koş · ', k('crouch'), ' Eğil · ', k('prone'), ' Sürün · ', k('jump'), ' Zıpla/Tırman'),
+        h('span', k('forward'), k('left'), k('back'), k('right'), ' Hareket'), h('span', k('sprint'), ' Koş · ', k('crouch'), ' Eğil · ', k('prone'), ' Sürün · ', k('jump'), ' Zıpla/Tırman'), h('span', k('sprint'), '+', k('crouch'), ' Takla (koşarken kaçınma)'),
         h('span', h('kbd', 'Fare'), ' Kamera · ', h('kbd', 'Sol tık'), ' Vur/Ateş · ', h('kbd', 'Sağ tık'), ' Nişan al'), h('span', k('interact'), ' Etkileşim (basılı tut: ara/aç/tamir) · ', k('reload'), ' Şarjör'),
         h('span', h('kbd', '1-6'), ' Hızlı erişim · ', k('inventory'), ' Envanter · ', k('crafting'), ' Üretim · ', k('build'), ' İnşa'), h('span', k('map'), ' Harita · ', k('quests'), ' Görevler · ', k('character'), ' Karakter · ', k('team'), ' Takım'),
         h('span', k('flashlight'), ' Fener · ', k('ping'), ' İşaret · ', k('voice'), ' Bas-konuş · ', k('chat'), ' Sohbet · ', k('emote'), ' İfade'), h('span', k('quickHeal'), ' Hızlı tedavi (araçta korna) · ', k('drop'), ' Bırak · ', k('pause'), ' Menü'))),

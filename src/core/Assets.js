@@ -3,8 +3,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 
-const KITS = ['chars', 'vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
+const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
+// iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): insan tabanları ve hayvanlar
+const RIGGED = ['male', 'female', 'wolf', 'deer', 'stag', 'husky', 'fox', 'shiba'];
 const SOUNDS = ['ambience', 'break', 'engine', 'engine-motorcycle', 'fall', 'impact', 'jump_a', 'land', 'pickup', 'placement-a', 'placement-b', 'removal-a', 'rotate', 'skid', 'toggle', 'walking', 'weapon_change'];
 
 export class Assets {
@@ -15,11 +18,13 @@ export class Assets {
     this.sounds = {}; // ad → ArrayBuffer (çözme AudioManager'da)
     this.partsCache = new Map();
     this.bboxCache = new Map();
+    this.rigged = {}; // ad → {scene, animations}
     this.loader = new GLTFLoader();
+    this.loader.setMeshoptDecoder(MeshoptDecoder);
   }
 
   async loadAll(onProgress = () => {}) {
-    const total = KITS.length + SOUNDS.length;
+    const total = KITS.length + SOUNDS.length + RIGGED.length;
     let done = 0;
     const tick = (label) => { done++; onProgress(done / total, label); };
     const kitJobs = KITS.map(async (k) => {
@@ -46,7 +51,13 @@ export class Assets {
       } catch (e) { console.warn('Ses yüklenemedi', s, e); }
       tick(`Ses: ${s}`);
     });
-    await Promise.all([...kitJobs, ...soundJobs]);
+    const rigJobs = RIGGED.map(async (r) => {
+      const gltf = await this.loader.loadAsync(`${this.base}assets/models/rigged/${r}.glb`);
+      gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; const mats = Array.isArray(o.material) ? o.material : [o.material]; for (const m of mats) { m.metalness = 0; m.roughness = Math.max(m.roughness ?? 0.8, 0.7); } } });
+      this.rigged[r] = gltf;
+      tick(`Karakter: ${r}`);
+    });
+    await Promise.all([...kitJobs, ...soundJobs, ...rigJobs]);
   }
 
   has(kit, name) { return !!this.index[`${kit}/${name}`]; }

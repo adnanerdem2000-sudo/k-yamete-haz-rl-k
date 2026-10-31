@@ -85,6 +85,21 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return { height: +(peak - y0).toFixed(3), airTime: +(air / 60).toFixed(3), endGap: +(pl.pos.y - y0).toFixed(3), mode: pl.mode };
   });
   log('zıplama', res.jump);
+  // ---- takla (koşarken eğil)
+  res.roll = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local;
+    const f = window.__flat(14);
+    pl.spawnAt(f.x, f.y + 0.05, f.z, Math.PI / 2);
+    window.__step(20);
+    S.localStats.stamina = 100;
+    window.__step(40, ['KeyW', 'ShiftLeft']);
+    const x0 = pl.pos.x, st0 = S.localStats.stamina;
+    window.__press('KeyC');
+    let rolled = false, minH = 9;
+    window.__step(50, ['KeyW', 'ShiftLeft'], () => { if (pl.roll) rolled = true; minH = Math.min(minH, pl.body.height); });
+    return { rolled, dist: +(pl.pos.x - x0).toFixed(2), stamina: +(st0 - S.localStats.stamina).toFixed(1), capsuleMin: minH, endMode: pl.mode, endHeight: pl.body.height };
+  });
+  log('takla', res.roll);
   // ---- düşme hasarı
   res.fall = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;

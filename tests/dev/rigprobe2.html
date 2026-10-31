@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8">
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body><script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const out = {};
+for (const base of ['male', 'female']) {
+  const g = await loader.loadAsync(`../../assets/models/rigged/${base}.glb`);
+  g.scene.updateMatrixWorld(true);
+  const res = [];
+  g.scene.traverse((m) => {
+    if (!m.isSkinnedMesh) return;
+    const sk = m.skeleton;
+    const pick = ['Hips', 'Head', 'UpperLegL', 'LowerLegL', 'UpperArmL'];
+    const row = { mesh: m.name, posType: m.geometry.attributes.position.array.constructor.name, norm: m.geometry.attributes.position.normalized, bind: m.bindMatrix.elements.map((x) => +x.toFixed(3)).join(','), sk: {} };
+    for (const n of pick) {
+      const i = sk.bones.findIndex((b) => b.name === n);
+      if (i < 0) continue;
+      const M = new THREE.Matrix4().multiplyMatrices(sk.bones[i].matrixWorld, sk.boneInverses[i]);
+      row.sk[n] = M.elements.map((x) => +x.toFixed(3)).join(',');
+    }
+    res.push(row);
+  });
+  out[base] = res.slice(0, 3);
+}
+window.__info = out;
+</script></body></html>

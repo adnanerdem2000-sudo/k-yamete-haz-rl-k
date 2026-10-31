@@ -1,41 +1,34 @@
-// CharacterRig — Kenney karakter iskeletini prosedürel olarak süren animasyon katmanı.
+// CharacterRig — insan iskeletini (Quaternius "CharacterArmature", 62 kemik) prosedürel pozlarla süren katman.
 //
-// Tüm dönüşler "T-poz model uzayında" tanımlanır: karakter +Z'ye bakar, sol tarafı +X,
-// yukarısı +Y'dir. Her kemik için verilen R dönüşü, kemiği T-pozdaki model eksenleri
-// etrafında döndürür ve ebeveyn kemiklerin dönüşleriyle zincirlenir (ileri kinematik).
-//   yerel_q = P⁻¹ · R · P · q_dinlenme      (P: ebeveynin dinlenme dünyasal yönelimi)
-// Böylece kemiklerin garip yerel eksenleriyle uğraşmadan "kolu 70° indir", "dizi 40° bük"
-// gibi okunabilir pozlar yazılabilir. Kol IK'si (iki kemik) silah/direksiyon tutmak için vardır.
+// Pozlar "T-poz model uzayında" tanımlanır: karakter +Z'ye bakar, sol tarafı +X, yukarısı +Y'dir.
+// Her kemik için verilen R dönüşü, kemiği T-pozdaki model eksenleri etrafında döndürür ve ebeveyn
+// kemiklerin dönüşleriyle zincirlenir (ileri kinematik):
+//   yerel_q = P⁻¹ · R · P · q_T      (P: ebeveynin T-poz dünyasal yönelimi, q_T: kemiğin T-poz yerel dönüşü)
+// Modelin bağlama pozu kollar aşağıdadır; T-poz yükleme sırasında bir kez hesaplanır (HumanBase).
+// Poz sözlüğü (Hips, Spine, LeftArm…) eski prosedürel kütüphaneyle aynıdır; burada yeni iskelete eşlenir.
+// Ayak kemikleri modelde bacak zincirine değil köke bağlıdır (IK hedefi): prosedürel pozda bilek
+// konumuna taşınırlar. apply() klip pozunun üzerine kemik başına ağırlıkla karışabilir.
 import * as THREE from 'three';
 
 const D = Math.PI / 180;
 
-// Animasyonla sürülen kemikler ve (animasyon zinciri içindeki) ebeveynleri
-const CHAIN = [
-  ['Hips', null], ['Spine', 'Hips'], ['Chest', 'Spine'], ['UpperChest', 'Chest'], ['Neck', 'UpperChest'], ['Head', 'Neck'],
-  ['LeftShoulder', 'UpperChest'], ['LeftArm', 'LeftShoulder'], ['LeftForeArm', 'LeftArm'], ['LeftHand', 'LeftForeArm'],
-  ['LeftHandIndex1', 'LeftHand'], ['LeftHandIndex2', 'LeftHandIndex1'], ['LeftHandThumb1', 'LeftHand'],
-  ['RightShoulder', 'UpperChest'], ['RightArm', 'RightShoulder'], ['RightForeArm', 'RightArm'], ['RightHand', 'RightForeArm'],
-  ['RightHandIndex1', 'RightHand'], ['RightHandIndex2', 'RightHandIndex1'], ['RightHandThumb1', 'RightHand'],
-  ['LeftUpLeg', 'Hips'], ['LeftLeg', 'LeftUpLeg'], ['LeftFoot', 'LeftLeg'],
-  ['RightUpLeg', 'Hips'], ['RightLeg', 'RightUpLeg'], ['RightFoot', 'RightLeg'],
+// ---------------------------------------------------------------- poz sözlüğü (eski adlar)
+const VOCAB = [
+  'Hips', 'Spine', 'Chest', 'UpperChest', 'Neck', 'Head',
+  'LeftShoulder', 'LeftArm', 'LeftForeArm', 'LeftHand', 'LeftHandIndex1', 'LeftHandIndex2', 'LeftHandThumb1',
+  'RightShoulder', 'RightArm', 'RightForeArm', 'RightHand', 'RightHandIndex1', 'RightHandIndex2', 'RightHandThumb1',
+  'LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot',
 ];
-export const BONES = CHAIN.map((c) => c[0]);
+export const BONES = VOCAB;
 const ORDER = {};
-for (const b of BONES) ORDER[b] = /Arm|Leg|Foot|Hand|Shoulder/.test(b) ? 'XYZ' : 'YXZ';
+for (const b of VOCAB) ORDER[b] = /Arm|Leg|Foot|Hand|Shoulder/.test(b) ? 'XYZ' : 'YXZ';
+const IDX = {};
+VOCAB.forEach((b, i) => { IDX[b] = i; });
 
-const _q = new THREE.Quaternion();
-const _q2 = new THREE.Quaternion();
-const _e = new THREE.Euler();
-const _v = new THREE.Vector3();
-const _v2 = new THREE.Vector3();
-const _v3 = new THREE.Vector3();
-const _m = new THREE.Matrix4();
-
-/** Pose: kemik adı → [x, y, z] (radyan, T-poz model uzayı) + kalça ofseti */
+/** Pose: kemik adı → [x, y, z] (radyan, T-poz model uzayı) + kalça ofseti (metre) */
 export class Pose {
   constructor() {
-    this.a = new Float32Array(BONES.length * 3);
+    this.a = new Float32Array(VOCAB.length * 3);
     this.hip = new THREE.Vector3();
   }
   reset() { this.a.fill(0); this.hip.set(0, 0, 0); return this; }
@@ -60,58 +53,156 @@ export class Pose {
     return this;
   }
 }
-const IDX = {};
-BONES.forEach((b, i) => { IDX[b] = i; });
-export const UPPER_MASK = BONES.map((b, i) => [b, i]).filter(([b]) => /Spine|Chest|Neck|Head|Shoulder|Arm|Hand/.test(b)).map(([, i]) => i);
-export const ARMS_MASK = BONES.map((b, i) => [b, i]).filter(([b]) => /Shoulder|Arm|Hand/.test(b)).map(([, i]) => i);
-export const RARM_MASK = BONES.map((b, i) => [b, i]).filter(([b]) => /Right(Shoulder|Arm|ForeArm|Hand)/.test(b)).map(([, i]) => i);
-export const LARM_MASK = BONES.map((b, i) => [b, i]).filter(([b]) => /Left(Shoulder|Arm|ForeArm|Hand)/.test(b)).map(([, i]) => i);
+const vmask = (re) => VOCAB.map((b, i) => [b, i]).filter(([b]) => re.test(b)).map(([, i]) => i);
+export const UPPER_MASK = vmask(/Spine|Chest|Neck|Head|Shoulder|Arm|Hand/);
+export const ARMS_MASK = vmask(/Shoulder|Arm|Hand/);
+export const RARM_MASK = vmask(/Right(Shoulder|Arm|ForeArm|Hand)/);
+export const LARM_MASK = vmask(/Left(Shoulder|Arm|ForeArm|Hand)/);
+
+// ---------------------------------------------------------------- yeni iskelete eşleme
+// [kemik, ebeveyn (zincirde), poz yuvası (null: geçiş), oran]
+const RIG = [['Body', null, 'Hips'], ['Hips', 'Body', null], ['Abdomen', 'Hips', 'Spine'], ['Torso', 'Abdomen', 'Chest'], ['Chest', 'Torso', 'UpperChest'], ['Neck', 'Chest', 'Neck'], ['Head', 'Neck', 'Head']];
+for (const [S, s] of [['Left', 'L'], ['Right', 'R']]) {
+  RIG.push(['Shoulder' + s, 'Chest', S + 'Shoulder'], ['UpperArm' + s, 'Shoulder' + s, S + 'Arm'], ['LowerArm' + s, 'UpperArm' + s, S + 'ForeArm'], ['Wrist' + s, 'LowerArm' + s, S + 'Hand']);
+  for (const f of ['Index', 'Middle', 'Ring', 'Pinky']) {
+    RIG.push([f + '1' + s, 'Wrist' + s, S + 'HandIndex1', f === 'Index' ? 1 : 0.95], [f + '2' + s, f + '1' + s, S + 'HandIndex2', 1], [f + '3' + s, f + '2' + s, S + 'HandIndex2', 0.7]);
+  }
+  RIG.push(['Thumb1' + s, 'Wrist' + s, S + 'HandThumb1', 1], ['Thumb2' + s, 'Thumb1' + s, S + 'HandThumb1', 0.6]);
+  RIG.push(['UpperLeg' + s, 'Body', S + 'UpLeg'], ['LowerLeg' + s, 'UpperLeg' + s, S + 'Leg']);
+}
+export const RIG_BONES = RIG.map((r) => r[0]);
+const RIDX = {};
+RIG.forEach((r, i) => { RIDX[r[0]] = i; });
+const rmask = (re) => RIG.map((r, i) => [r[0], i]).filter(([b]) => re.test(b)).map(([, i]) => i);
+/** Klip üzerine karıştırma maskeleri (RIG dizinleri) */
+export const RIG_MASK = {
+  all: RIG.map((_, i) => i),
+  upper: rmask(/Abdomen|Torso|Chest|Neck|Head|Shoulder|Arm|Wrist|Index|Middle|Ring|Pinky|Thumb/),
+  spine: rmask(/Abdomen|Torso|^Chest|Neck|Head/),
+  arms: rmask(/Shoulder|Arm|Wrist|Index|Middle|Ring|Pinky|Thumb/),
+  rarm: rmask(/(Shoulder|Arm|Wrist|Index\d|Middle\d|Ring\d|Pinky\d|Thumb\d)R$/),
+  larm: rmask(/(Shoulder|Arm|Wrist|Index\d|Middle\d|Ring\d|Pinky\d|Thumb\d)L$/),
+  rhand: rmask(/(Index\d|Middle\d|Ring\d|Pinky\d|Thumb\d)R$/),
+  lhand: rmask(/(Index\d|Middle\d|Ring\d|Pinky\d|Thumb\d)L$/),
+  legs: rmask(/Leg/),
+  head: rmask(/Neck|Head/),
+};
+/** Kemik adı (sanitize edilmiş) → klip izleri için grup testi */
+export const UPPER_BONE_RE = /^(Abdomen|Torso|Chest|Neck|Head|Shoulder|UpperArm|LowerArm|Wrist|Index|Middle|Ring|Pinky|Thumb)/;
+export const ARM_BONE_RE = /^(Shoulder|UpperArm|LowerArm|Wrist|Index|Middle|Ring|Pinky|Thumb)/;
+
+const _q = new THREE.Quaternion();
+const _q2 = new THREE.Quaternion();
+const _q3 = new THREE.Quaternion();
+const _e = new THREE.Euler();
+const _v = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
+const _m = new THREE.Matrix4();
+const _ident = new THREE.Quaternion();
+const _e3q = new THREE.Quaternion();
+const HIP_SCALE = 0.75; // eski poz birimleri (model birimi) → metre
+
+/**
+ * T-poz dinlenme verisini hesaplar (taban model başına bir kez). bones: ad → THREE.Bone (bağlama pozunda),
+ * modelRoot: kök nesne (kimlik dönüşümlü). Dönüş: CharacterRig'in kullandığı paylaşılan veri.
+ */
+export function computeRest(bones, modelRoot) {
+  modelRoot.updateMatrixWorld(true);
+  const rootInv = new THREE.Matrix4().copy(modelRoot.matrixWorld).invert();
+  const saved = new Map();
+  for (const b of Object.values(bones)) saved.set(b, { q: b.quaternion.clone(), p: b.position.clone() });
+  const wq = (b, out = new THREE.Quaternion()) => { _m.multiplyMatrices(rootInv, b.matrixWorld); _m.decompose(_v3, out, _v2); return out; };
+  const wp = (b, out = new THREE.Vector3()) => { _m.multiplyMatrices(rootInv, b.matrixWorld); return out.setFromMatrixPosition(_m); };
+  /** kemiği, model uzayında 'from' yönünü 'to' yönüne çevirecek şekilde döndür */
+  const aim = (bone, from, to) => {
+    const R = new THREE.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
+    const P = wq(bone.parent);
+    // yeni dünya = R · W ; yerel = P⁻¹ · R · W
+    const W = wq(bone);
+    bone.quaternion.copy(P.clone().invert().multiply(R).multiply(W));
+    bone.updateMatrixWorld(true);
+  };
+  // ---- T-poz: kollar yatay (sol +X), bilekler düz; bacaklar dik
+  const shin = {};
+  for (const s of ['L', 'R']) {
+    const sx = s === 'L' ? 1 : -1;
+    const ua = bones['UpperArm' + s], la = bones['LowerArm' + s], wr = bones['Wrist' + s], mid = bones['Middle1' + s];
+    aim(ua, wp(la).sub(wp(ua)), new THREE.Vector3(sx, 0, 0));
+    aim(la, wp(wr).sub(wp(la)), new THREE.Vector3(sx, 0, 0));
+    if (mid) aim(wr, wp(mid).sub(wp(wr)), new THREE.Vector3(sx, 0, 0));
+    const ul = bones['UpperLeg' + s], ll = bones['LowerLeg' + s], ft = bones['Foot' + s];
+    // bilek ≈ ayak kemiği başı (topuk) + biraz yukarı; incik yönü diz → ayak
+    const footW = wp(ft);
+    shin[s] = { len: wp(ll).distanceTo(footW) };
+    aim(ul, wp(ll).sub(wp(ul)), new THREE.Vector3(0, -1, 0));
+    aim(ll, footW.clone().sub(wp(ll)), new THREE.Vector3(0, -1, 0));
+  }
+  modelRoot.updateMatrixWorld(true);
+  const wscale = (b) => { _m.multiplyMatrices(rootInv, b.matrixWorld); _m.decompose(_v3, _q, _v2); return (_v2.x + _v2.y + _v2.z) / 3; };
+  const entries = RIG.map(([name, parent, slot, factor]) => {
+    const b = bones[name];
+    if (!b) return null;
+    const W = wq(b), P = wq(b.parent);
+    return { name, parent: parent ? RIDX[parent] : -1, slot: slot ? IDX[slot] : -1, factor: factor ?? 1, qT: b.quaternion.clone(), pT: b.position.clone(), W, P, Pinv: P.clone().invert(), wpos: wp(b), wscale: wscale(b) };
+  });
+  // ayaklar: T-pozda bilek (incik ucu) konumu ve göreli yönelim
+  const feet = {};
+  let groundFix = 0;
+  for (const s of ['L', 'R']) {
+    const ll = bones['LowerLeg' + s], ft = bones['Foot' + s];
+    const llW = new THREE.Matrix4().multiplyMatrices(rootInv, ll.matrixWorld);
+    const ankleModel = wp(ll).add(new THREE.Vector3(0, -shin[s].len, 0));
+    const ankleLocal = ankleModel.clone().applyMatrix4(llW.clone().invert());
+    const llT = wq(ll);
+    const footRel = llT.clone().invert().multiply(wq(ft));
+    feet[s] = { ankleLocal, footRel, footT: ankleModel, llT, llTinv: llT.clone().invert() };
+    // bacaklar düzleştirilince ayak biraz aşağı iner: gövdeyi o kadar yukarı al
+    groundFix += (wp(ft).y - ankleModel.y) / 2;
+  }
+  // kalça (Body) ebeveyn dönüşü
+  // model uzayı ofsetini Body'nin ebeveyn yerel uzayına çeviren doğrusal dönüşüm (iskelet ölçekli olabilir)
+  const body = bones.Body;
+  const bodyParentLin = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().multiplyMatrices(rootInv, body.parent.matrixWorld).invert());
+  // kol uzunlukları ve T-poz yön vektörleri (IK)
+  const arm = {};
+  for (const s of ['L', 'R']) {
+    const e = (n) => entries[RIDX[n + s]];
+    arm[s] = { upper: e('UpperArm').wpos.distanceTo(e('LowerArm').wpos), lower: e('LowerArm').wpos.distanceTo(e('Wrist').wpos), dirUp: e('LowerArm').wpos.clone().sub(e('UpperArm').wpos).normalize(), dirLo: e('Wrist').wpos.clone().sub(e('LowerArm').wpos).normalize() };
+  }
+  const legLen = {};
+  for (const s of ['L', 'R']) {
+    const e = (n) => entries[RIDX[n + s]];
+    legLen[s] = { thigh: e('LowerLeg').wpos.clone().sub(e('UpperLeg').wpos), shinV: feet[s].footT.clone().sub(e('LowerLeg').wpos) };
+  }
+  // geri yükle (bağlama pozu)
+  for (const [b, v] of saved) { b.quaternion.copy(v.q); b.position.copy(v.p); }
+  modelRoot.updateMatrixWorld(true);
+  return { entries, feet, bodyParentLin, arm, legLen, groundFix };
+}
 
 export class CharacterRig {
-  /** @param {THREE.Object3D} model  SkinnedMesh içeren (kimlik dönüşümlü) model kökü */
-  constructor(model) {
+  /** @param {THREE.Object3D} model  iskelet kökü (klon)  @param rest computeRest() çıktısı */
+  constructor(model, rest) {
     this.model = model;
+    this.restData = rest;
     this.bones = {};
-    // GLTFLoader aynı kitte tekrar eden kemik adlarına _1, _2 ekler: temel adı kullan
-    model.traverse((o) => { if (o.isBone) { const n = o.name.replace(/_\d+$/, ''); if (!this.bones[n]) this.bones[n] = o; } });
-    model.updateMatrixWorld(true);
-    const rootInv = new THREE.Matrix4().copy(model.matrixWorld).invert();
-    this.rest = {};
-    for (const name of BONES) {
-      const b = this.bones[name];
-      if (!b) continue;
-      const wm = new THREE.Matrix4().multiplyMatrices(rootInv, b.matrixWorld);
-      const wq = new THREE.Quaternion(), wp = new THREE.Vector3(), ws = new THREE.Vector3();
-      wm.decompose(wp, wq, ws);
-      const pm = new THREE.Matrix4().multiplyMatrices(rootInv, b.parent.matrixWorld);
-      const pq = new THREE.Quaternion(), pp = new THREE.Vector3(), ps = new THREE.Vector3();
-      pm.decompose(pp, pq, ps);
-      this.rest[name] = { q: b.quaternion.clone(), pos: b.position.clone(), P: pq, Pinv: pq.clone().invert(), W: wq, wpos: wp, pscale: ps.x };
-    }
-    // Kemik yön vektörleri (model uzayı, dinlenme): üst kol → dirsek, ön kol → bilek
-    this.restDir = {};
-    for (const [a, b] of [['LeftArm', 'LeftForeArm'], ['LeftForeArm', 'LeftHand'], ['RightArm', 'RightForeArm'], ['RightForeArm', 'RightHand'], ['LeftUpLeg', 'LeftLeg'], ['RightUpLeg', 'RightLeg']]) {
-      this.restDir[a] = this.rest[b].wpos.clone().sub(this.rest[a].wpos).normalize();
-    }
-    this.armLen = {
-      upper: this.rest.LeftForeArm.wpos.distanceTo(this.rest.LeftArm.wpos),
-      lower: this.rest.LeftHand.wpos.distanceTo(this.rest.LeftForeArm.wpos),
-    };
-    this.R = {};
-    this.Rtot = {};
-    for (const n of BONES) { this.R[n] = new THREE.Quaternion(); this.Rtot[n] = new THREE.Quaternion(); }
+    model.traverse((o) => { if (o.isBone && !this.bones[o.name]) this.bones[o.name] = o; });
+    this.list = rest.entries.map((e) => (e ? this.bones[e.name] : null));
+    const n = RIG.length;
+    this.R = Array.from({ length: n }, () => new THREE.Quaternion());
+    this.Rtot = Array.from({ length: n }, () => new THREE.Quaternion());
+    this.local = Array.from({ length: n }, () => new THREE.Quaternion());
+    this.weights = new Float32Array(n);
     this.pose = new Pose();
     this.ikTargets = { Left: null, Right: null };
     this._ikTmp = { Left: new THREE.Vector3(), Right: new THREE.Vector3() };
     this._polTmp = { Left: new THREE.Vector3(), Right: new THREE.Vector3() };
-    this.hipsCtrl = this.bones.HipsCtrl;
-    this.hipsCtrlRestPos = this.hipsCtrl ? this.hipsCtrl.position.clone() : null;
-    if (this.hipsCtrl) {
-      const pm = new THREE.Matrix4().multiplyMatrices(rootInv, this.hipsCtrl.parent.matrixWorld);
-      this.hipsCtrlParentInv = new THREE.Quaternion();
-      pm.decompose(new THREE.Vector3(), this.hipsCtrlParentInv, new THREE.Vector3());
-      this.hipsCtrlParentInv.invert();
-    }
+    this.foot = { L: this.bones.FootL, R: this.bones.FootR };
+    this.root = this.bones.Root;
+    this.autoGround = false;
+    this.hipY = null; // oturma: kalça (Body) model kökünden bu yükseklikte (m)
+    this._hip = new THREE.Vector3();
   }
 
   /** Model uzayında bir IK hedefi belirler (null → kapalı). pole: dirseğin yöneleceği yön */
@@ -122,106 +213,173 @@ export class CharacterRig {
     this.ikTargets[side] = this._ikTmp[side];
   }
 
-  /** Pozu kemiklere uygular. */
-  apply(pose = this.pose) {
-    const a = pose.a;
-    for (let i = 0; i < BONES.length; i++) {
-      const name = BONES[i];
-      const k = i * 3;
+  /** Pozdan R ve yerel dönüşleri hesapla */
+  _compute(pose) {
+    const a = pose.a, E = this.restData.entries;
+    for (let i = 0; i < RIG.length; i++) {
+      const e = E[i];
+      if (!e) continue;
+      const R = this.R[i];
+      if (e.slot < 0) { R.identity(); continue; }
+      const k = e.slot * 3;
       const x = a[k], y = a[k + 1], z = a[k + 2];
-      if (x === 0 && y === 0 && z === 0) this.R[name].identity();
-      else this.R[name].setFromEuler(_e.set(x, y, z, ORDER[name]));
+      if (x === 0 && y === 0 && z === 0) R.identity();
+      else {
+        R.setFromEuler(_e.set(x, y, z, ORDER[VOCAB[e.slot]]));
+        if (e.factor !== 1) R.slerpQuaternions(_ident, R, e.factor);
+      }
     }
-    // IK (kollar): R değerlerini mutlak yönlere göre yeniden yazar
-    if (this.ikTargets.Left || this.ikTargets.Right) this._solveIK();
-    for (let i = 0; i < CHAIN.length; i++) {
-      const [name, parent] = CHAIN[i];
-      const b = this.bones[name];
+    if (this.ikTargets.Left || this.ikTargets.Right) this._solveIK(pose);
+    for (let i = 0; i < RIG.length; i++) {
+      const e = E[i];
+      if (!e) continue;
+      if (e.parent >= 0) this.Rtot[i].multiplyQuaternions(this.Rtot[e.parent], this.R[i]);
+      else this.Rtot[i].copy(this.R[i]);
+      this.local[i].copy(e.Pinv).multiply(this.R[i]).multiply(e.P).multiply(e.qT);
+    }
+  }
+
+  /** Kalça ofseti: istenirse ayakları yere oturtacak dikey ofset hesaplanır */
+  _hipOffset(pose) {
+    const h = this._hip.copy(pose.hip).multiplyScalar(HIP_SCALE);
+    if (this.hipY !== null) { h.y = this.hipY - this.restData.entries[0].wpos.y; return h; }
+    h.y += this.restData.groundFix;
+    if (!this.autoGround) return h;
+    const E = this.restData.entries, L = this.restData.legLen;
+    let minRise = Infinity;
+    for (const s of ['L', 'R']) {
+      const iu = RIDX['UpperLeg' + s], il = RIDX['LowerLeg' + s];
+      // ayak bileği: Body etrafında dönen bacak zinciri
+      _v.copy(E[iu].wpos).sub(E[0].wpos).applyQuaternion(this.Rtot[0]);
+      _v2.copy(L[s].thigh).applyQuaternion(this.Rtot[iu]);
+      _v3.copy(L[s].shinV).applyQuaternion(this.Rtot[il]);
+      const y = _v.y + _v2.y + _v3.y;
+      const y0 = E[iu].wpos.y - E[0].wpos.y + L[s].thigh.y + L[s].shinV.y;
+      minRise = Math.min(minRise, y - y0);
+    }
+    h.y = -minRise + Math.max(0, pose.hip.y * HIP_SCALE) + this.restData.groundFix;
+    return h;
+  }
+
+  /**
+   * Pozu kemiklere uygular. weights: RIG dizinleri için [0..1] (yoksa tamamı 1 = tam üzerine yazma).
+   * Ağırlık < 1 olan kemiklerde mevcut (klip) dönüşüyle küresel karışım yapılır.
+   */
+  apply(pose = this.pose, weights = null) {
+    this._compute(pose);
+    const E = this.restData.entries;
+    let legW = 0;
+    for (let i = 0; i < RIG.length; i++) {
+      const b = this.list[i];
       if (!b) continue;
-      const rest = this.rest[name];
-      if (parent) this.Rtot[name].multiplyQuaternions(this.Rtot[parent], this.R[name]);
-      else this.Rtot[name].copy(this.R[name]);
-      // yerel = Pinv * R * P * qrest
-      b.quaternion.copy(rest.Pinv).multiply(this.R[name]).multiply(rest.P).multiply(rest.q);
+      const w = weights ? weights[i] : 1;
+      if (w <= 0) continue;
+      if (w >= 1) b.quaternion.copy(this.local[i]);
+      else b.quaternion.slerp(this.local[i], w);
+      if (i === 0) {
+        // kalça konumu (Body)
+        const h = this._hipOffset(pose);
+        _v.copy(h).applyMatrix3(this.restData.bodyParentLin).add(E[0].pT);
+        if (w >= 1) b.position.copy(_v); else b.position.lerp(_v, w);
+      }
     }
-    if (this.hipsCtrl) {
-      _v.copy(pose.hip).applyQuaternion(this.hipsCtrlParentInv);
-      this.hipsCtrl.position.copy(this.hipsCtrlRestPos).add(_v);
+    // bacaklar procedural ise ayaklar bileğe taşınır
+    if (weights) legW = Math.max(weights[RIDX.LowerLegL], weights[RIDX.LowerLegR]); else legW = 1;
+    if (legW > 0) this._placeFeet(weights, pose);
+  }
+
+  _placeFeet(weights, pose) {
+    const F = this.restData.feet;
+    const root = this.root;
+    if (!root) return;
+    root.updateWorldMatrix(true, false);
+    _m.copy(root.matrixWorld).invert();
+    root.getWorldQuaternion(_q2).invert();
+    for (const s of ['L', 'R']) {
+      const ft = this.foot[s];
+      const ll = this.list[RIDX['LowerLeg' + s]];
+      if (!ft || !ll) continue;
+      const w = weights ? weights[RIDX['LowerLeg' + s]] : 1;
+      if (w <= 0) continue;
+      ll.updateWorldMatrix(true, false);
+      _v.copy(F[s].ankleLocal).applyMatrix4(ll.matrixWorld).applyMatrix4(_m);
+      // ayak dünya yönü = incik · (incik T-çerçevesinde ayak bileği pozu) · göreli T yönelimi
+      const k = IDX[s === 'L' ? 'LeftFoot' : 'RightFoot'] * 3;
+      const fx = pose.a[k], fy = pose.a[k + 1], fz = pose.a[k + 2];
+      ll.getWorldQuaternion(_q);
+      if (fx || fy || fz) { _q.multiply(F[s].llTinv); _q.multiply(_e3q.setFromEuler(_e.set(fx, fy, fz, 'XYZ'))); _q.multiply(F[s].llT); }
+      _q.multiply(F[s].footRel);
+      _q3.multiplyQuaternions(_q2, _q);
+      if (w >= 1) { ft.position.copy(_v); ft.quaternion.copy(_q3); } else { ft.position.lerp(_v, w); ft.quaternion.slerp(_q3, w); }
     }
   }
 
-  // Kemiğin T-poz model uzayındaki toplam dönüşünü (ebeveyn zinciri dahil) hesaplar
-  _computeRtot(name) {
+  // ---------------------------------------------------------------- iki kemik kol IK'si
+  _bonePos(i, out, pose) {
+    const E = this.restData.entries;
     const chain = [];
-    let n = name;
-    while (n) { chain.unshift(n); n = PARENT[n]; }
-    const q = _q2.identity();
-    for (const c of chain) q.multiply(this.R[c]);
-    return q;
-  }
-
-  // Model uzayında kemik pozisyonu (kalça ofseti dahil, mevcut R'lere göre)
-  _bonePos(name, out) {
-    // kalçadan başlayarak ileri kinematik
-    const chain = [];
-    let n = name;
-    while (n) { chain.unshift(n); n = PARENT[n]; }
-    out.copy(this.rest[chain[0]].wpos).add(this.pose.hip);
+    let n = i;
+    while (n >= 0) { chain.unshift(n); n = E[n].parent; }
+    out.copy(E[chain[0]].wpos).addScaledVector(pose.hip, HIP_SCALE);
     const q = _q.identity();
-    for (let i = 0; i < chain.length - 1; i++) {
-      q.multiply(this.R[chain[i]]);
-      _v3.copy(this.rest[chain[i + 1]].wpos).sub(this.rest[chain[i]].wpos).applyQuaternion(q);
+    for (let k = 0; k < chain.length - 1; k++) {
+      q.multiply(this.R[chain[k]]);
+      _v3.copy(E[chain[k + 1]].wpos).sub(E[chain[k]].wpos).applyQuaternion(q);
       out.add(_v3);
     }
     return out;
   }
 
-  _solveIK() {
+  _rtotOf(i) {
+    const E = this.restData.entries;
+    const chain = [];
+    let n = i;
+    while (n >= 0) { chain.unshift(n); n = E[n].parent; }
+    const q = new THREE.Quaternion();
+    for (const c of chain) q.multiply(this.R[c]);
+    return q;
+  }
+
+  _solveIK(pose) {
     for (const side of ['Left', 'Right']) {
       const target = this.ikTargets[side];
       if (!target) continue;
-      const upper = side + 'Arm', fore = side + 'ForeArm';
-      const S = this._bonePos(upper, new THREE.Vector3());
-      const a = this.armLen.upper, b = this.armLen.lower;
+      const s = side[0];
+      const iu = RIDX['UpperArm' + s], il = RIDX['LowerArm' + s], ish = RIDX['Shoulder' + s];
+      const A = this.restData.arm[s];
+      const S = this._bonePos(iu, new THREE.Vector3(), pose);
+      const a = A.upper, b = A.lower;
       const toT = _v.copy(target).sub(S);
       let d = toT.length();
       d = Math.min(Math.max(d, Math.abs(a - b) + 1e-3), a + b - 1e-3);
       const dir = toT.normalize();
-      // dirsek: kosinüs teoremi
       const cosA = (a * a + d * d - b * b) / (2 * a * d);
       const sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
       const pole = _v2.copy(this._polTmp[side]);
       pole.sub(_v3.copy(dir).multiplyScalar(pole.dot(dir))).normalize();
       const elbowDir = new THREE.Vector3().copy(dir).multiplyScalar(cosA).addScaledVector(pole, sinA).normalize();
-      const E = new THREE.Vector3().copy(S).addScaledVector(elbowDir, a);
+      const Ep = new THREE.Vector3().copy(S).addScaledVector(elbowDir, a);
       const T = new THREE.Vector3().copy(S).addScaledVector(dir, d);
-      const foreDir = T.sub(E).normalize();
-      // mutlak dönüşler
-      const Aup = new THREE.Quaternion().setFromUnitVectors(this.restDir[upper], elbowDir);
-      const Afore = new THREE.Quaternion().setFromUnitVectors(this.restDir[fore], foreDir);
-      const parentTot = this._computeRtot(side + 'Shoulder').clone();
-      this.R[upper].copy(parentTot.clone().invert().multiply(Aup));
-      this.R[fore].copy(Aup.clone().invert().multiply(Afore));
+      const foreDir = T.sub(Ep).normalize();
+      const Aup = new THREE.Quaternion().setFromUnitVectors(A.dirUp, elbowDir);
+      const Afore = new THREE.Quaternion().setFromUnitVectors(A.dirLo, foreDir);
+      const parentTot = this._rtotOf(ish);
+      this.R[iu].copy(parentTot.invert().multiply(Aup));
+      this.R[il].copy(Aup.clone().invert().multiply(Afore));
     }
   }
 
-  /** El kemiğine bağlı, T-poz model eksenleriyle hizalı bağlantı noktası oluşturur */
+  /** Kemiğe bağlı, T-poz model eksenleriyle hizalı bağlantı noktası oluşturur (birim: metre) */
   makeAnchor(boneName, name) {
     const b = this.bones[boneName];
+    const e = this.restData.entries[RIDX[boneName]];
     const anchor = new THREE.Object3D();
     anchor.name = name || boneName + '_anchor';
-    // anchor dünya yönelimi (dinlenmede) = kimlik → yerel = W⁻¹
-    anchor.quaternion.copy(this.rest[boneName].W).invert();
-    // ölçeği telafi et
-    const s = 1 / (this.rest[boneName].pscale || 1);
-    anchor.scale.setScalar(1);
+    // dinlenmede (T-poz) anchor model yönelimi = kimlik → yerel = W_T⁻¹
+    if (e) { anchor.quaternion.copy(e.W).invert(); anchor.scale.setScalar(1 / (e.wscale || 1)); }
     b.add(anchor);
-    anchor.userData.invScale = s;
     return anchor;
   }
 }
-
-const PARENT = {};
-for (const [n, p] of CHAIN) PARENT[n] = p;
 
 export { D };

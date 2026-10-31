@@ -91,6 +91,8 @@ export class Player {
     if (this.mode === 'drive' || this.mode === 'seat' || this.mode === 'carried') return;
     if (this.mode === 'sleep') { this.vel.set(0, 0, 0); return; }
     if (this.mode === 'climb') { this.updateLadder(dt, input, uiBlocking); this.syncBody(); return; }
+    // ---- takla (koşarken eğil): kısa süreli hızlı kaçınma, alçak kapsül
+    if (this.roll) { this.updateRoll(dt); return; }
     // ---- hareket girdisi
     let mx = 0, mz = 0;
     if (!uiBlocking && this.lockMove <= 0) {
@@ -108,6 +110,7 @@ export class Player {
     if (dl > 0) { dx /= dl; dz /= dl; }
     // ---- duruş geçişleri (tavan kontrolüyle)
     if (!uiBlocking && st && !st.downed) {
+      if (input.wasPressed('crouch') && this.sprinting && this.onGround && !this.swimming && moving && st.stamina > 14 && !this.carrying) { this.startRoll(dx, dz); return; }
       if (input.wasPressed('crouch')) this.wantStance = this.mode === 'crouch' ? 'stand' : 'crouch';
       if (input.wasPressed('prone')) this.wantStance = this.mode === 'prone' ? 'crouch' : 'prone';
     }
@@ -168,6 +171,33 @@ export class Player {
     }
     this.lockMove = Math.max(0, this.lockMove - dt);
     this.recoil = damp(this.recoil, 0, 9, dt);
+  }
+
+  /** Takla başlat: hareket yönünde ~4 m yuvarlanma */
+  startRoll(dx, dz) {
+    const st = this.stats;
+    st.stamina -= 14;
+    this.roll = { t: 0, dur: 0.72, dx, dz, speed: 7.2 };
+    this.yaw = Math.atan2(dx, dz);
+    this.sprinting = false;
+    this.applyStance('crouch');
+    this.mode = 'ground';
+    this.avatar.play('roll', this.roll.dur);
+    this.session.audio && this.session.audio.play('swing', { at: this.pos, vol: 0.35, rate: 0.7 });
+  }
+
+  updateRoll(dt) {
+    const r = this.roll;
+    r.t += dt;
+    const k = Math.min(1, r.t / r.dur);
+    const sp = r.speed * (1 - 0.55 * k * k);
+    this.vel.x = r.dx * sp; this.vel.z = r.dz * sp;
+    this.yaw = Math.atan2(r.dx, r.dz);
+    if (k >= 1) {
+      this.roll = null;
+      this.wantStance = 'stand';
+      this.applyStance('stand');
+    } else if (this.body) this.body.setStance('crouch');
   }
 
   /** Duruşu fizik kapsülüne uygula (kalkacak yer yoksa eğik kalır) */
@@ -361,14 +391,14 @@ export class Player {
   /** Ağ/animasyon durumu */
   animState() {
     const st = this.stats;
-    const mode = this.vault ? 'air' : this.mode === 'swim' ? 'swim' : this.mode;
+    const mode = this.vault ? 'air' : this.roll ? 'ground' : this.mode === 'swim' ? 'swim' : this.mode;
     // hareket yönü (gövdeye göre): strafe/geri animasyonları için
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const moveAngle = sp > 0.3 ? wrapAngle(Math.atan2(this.vel.x, this.vel.z) - this.yaw) : 0;
     return {
       mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
       aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying,
-      mood: st && st.morale < 30 ? 1 : 0, moveAngle, grounded: this.onGround, sprint: this.sprinting,
+      mood: st && st.morale < 30 ? 1 : 0, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
     };
   }
 
