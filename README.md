@@ -48,6 +48,12 @@ Depo herkese açık olduğu için iki yol var:
    **https://adnanerdem2000-sudo.github.io/k-yamete-haz-rl-k/**
    (İstersen `main` dalına birleştirip `.github/workflows/pages.yml` iş akışını da kullanabilirsin.)
 
+3. **Tek dosya (sunucu ve kurulum gerektirmez):** `npm run build:single` → `dist/KiyamettenOnce.html`
+   (~45 MB; bütün kod ve varlıklar içine gömülü). Dosyayı bilgisayara kaydedip çift tıklamak yeterli; oyun
+   tamamen çevrimdışı açılır (yalnız arkadaşlarla internet üzerinden oynamak bağlantı ister). Tarayıcılar
+   `file://` altında modül/dosya yüklemeyi engellediği için oyunun varlık istekleri gömülü veriye yönlendirilir
+   (`tools/build-single.mjs`).
+
 Gereksinim: WebGL 2 destekli güncel bir tarayıcı (Chrome / Edge / Firefox / Safari 16+). Klavye + fare.
 
 ### Arkadaşlarla oynamak

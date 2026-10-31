@@ -4,3 +4,4 @@ node_modules/
 /test-results/
 /tests/e2e/screenshots/
 /tests/dev/_preview/
+/dist/
