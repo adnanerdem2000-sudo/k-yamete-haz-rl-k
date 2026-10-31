@@ -130,6 +130,8 @@ export class Loot {
       if (ITEMS[id].gun) data.ammo = rng.int(0, Math.ceil(ITEMS[id].gun.mag / 2));
       if (ITEMS[id].durability) data.dur = Math.round(ITEMS[id].durability * (0.4 + rng.next() * 0.6));
       if (id === 'jerrycan') data.fuel = rng.int(0, 12);
+      // bozulabilir yiyecekler: bulunduğunda bir süredir raftadır
+      if (ITEMS[id].spoil) data.t0 = Math.round(S.time.total - rng.next() * ITEMS[id].spoil * 0.5 * 1440);
       put(id, qty, data);
     }
     // bölgesel hikâye notları

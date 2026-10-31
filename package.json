@@ -6,8 +6,8 @@
   "type": "module",
   "scripts": {
     "start": "node tools/serve.mjs",
-    "test": "node --test tests/unit/*.test.mjs",
-    "test:e2e": "node tests/e2e/run-all.mjs",
+    "test": "node --import ./tests/unit/register.mjs --test tests/unit/*.test.mjs",
+    "test:e2e": "node tools/scenario.mjs tests/e2e/smoke-menu.mjs && node tools/scenario.mjs tests/e2e/smoke-single.mjs && node tools/scenario.mjs tests/e2e/gameplay.mjs && node tools/scenario.mjs tests/e2e/multiplayer-local.mjs",
     "pack-assets": "node tools/pack-assets.mjs"
   },
   "devDependencies": {

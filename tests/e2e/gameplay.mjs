@@ -14,11 +14,11 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
   await wait(500);
   // 2) tüketim
   log('yemek öncesi', await S(() => { const S = window.__game.session; const i = S.inventory.firstSlotOf('canned_food'); S.localStats.hunger = 40; S.useItem(i); return S.localStats.hunger; }));
-  await wait(4000);
+  await page.waitForFunction(() => !window.__game.ui.prog, null, { timeout: 60000 });
   log('yemek sonrası', await S(() => Math.round(window.__game.session.localStats.hunger)));
   // 3) üretim
   await S(() => { const S = window.__game.session; S.giveLocal('cloth', 4, null); S.crafting.craft('bandage'); });
-  await wait(4500);
+  await page.waitForFunction(() => !window.__game.ui.prog, null, { timeout: 60000 });
   log('bandaj', await S(() => window.__game.session.inventory.count('bandage')));
   // 4) inşa: yerleştirme hayaleti + doğrudan yerleştirip tamamla
   await S(() => { const S = window.__game.session; S.giveLocal('plank', 10); S.giveLocal('nails', 20); S.build.startPlacing('barricade_wood'); });
@@ -55,7 +55,22 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
   // 9) kayıt
   log('kayıt', await S(() => { const S = window.__game.session; S.saves.save('1'); return JSON.parse(localStorage.getItem('kiyamet_saves_index') || '{}'); }));
   log('kayıt boyutu', await S(() => (localStorage.getItem('kiyamet_save_1') || '').length));
-  // 10) harita
+  // 10) yaralı YZ arkadaşı sırtlama → taşıma → bırakma → ayağa kaldırma
+  log('taşıma', await S(() => {
+    const S = window.__game.session; const b = S.bots.list[0];
+    S.bots.damage(b, 5000);
+    const downed = b.stats.downed;
+    S.act('carry', { target: b.id });
+    const carrying = S.local.carrying === b.id;
+    S.local.spawnAt(S.local.pos.x + 6, S.local.pos.y, S.local.pos.z, 0);
+    S.bots.update(0.05);
+    const near = Math.hypot(b.pos.x - S.local.pos.x, b.pos.z - S.local.pos.z) < 1;
+    S.act('carry', { target: b.id, drop: true });
+    const dropped = !S.local.carrying && !b.carriedBy;
+    S.act('revive', { target: b.id, hp: 30 });
+    return { downed, carrying, near, dropped, revived: !b.stats.downed };
+  }));
+  // 11) harita
   await S(() => window.__game.ui.openJournal('map')); await wait(1500); await shot(page, '/tmp/g-map.png');
   await S(() => window.__game.ui.closePanel());
   await wait(500); await shot(page, '/tmp/g-hud.png');

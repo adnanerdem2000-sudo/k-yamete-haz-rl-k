@@ -215,7 +215,7 @@ export class Avatar {
     if (a.yaw !== undefined) this.visYaw = dampAngle(this.visYaw, a.yaw, a.instantYaw ? 40 : 14, dt);
     this.root.rotation.y = this.visYaw;
     // yere yatma modları: kök eğimi
-    const lay = mode === 'prone' ? -Math.PI / 2 + 0.15 : mode === 'downed' || mode === 'dead' ? Math.PI / 2 - 0.05 : mode === 'sleep' ? Math.PI / 2 : 0;
+    const lay = mode === 'prone' ? -Math.PI / 2 + 0.15 : mode === 'downed' || mode === 'dead' ? Math.PI / 2 - 0.05 : mode === 'sleep' ? Math.PI / 2 : mode === 'carried' ? -Math.PI / 2 + 0.3 : 0;
     this.ch.model.rotation.x = damp(this.ch.model.rotation.x, lay, 8, dt);
     const layLift = mode === 'prone' ? 0.25 : mode === 'downed' || mode === 'dead' ? 0.28 : mode === 'sleep' ? 0.3 : 0;
     this.ch.model.position.y = damp(this.ch.model.position.y, layLift, 8, dt);

@@ -15,7 +15,7 @@ import { Geo, materials } from './Geo.js';
 import * as P from './Props.js';
 import { addContainer } from './Furnish.js';
 import { signTexture } from './TextureFactory.js';
-import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD } from './WorldLayout.js';
+import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE } from './WorldLayout.js';
 import { RNG } from '../core/util.js';
 
 const CAR_MODELS = ['car_sedan', 'car_hatchback', 'car_stationwagon', 'car_taxi'];
@@ -503,7 +503,10 @@ export class World {
       const minX = Math.min(ax, bx) - 0.25, maxX = Math.max(ax, bx) + 0.25, minZ = Math.min(az, bz) - 0.25, maxZ = Math.max(az, bz) + 0.25;
       this.physics.addBox(minX, minZ, maxX, maxZ, y - 1, y + 3.6, { kind: 'wall', walkable: false });
     };
-    wall(x0, z0, x1, z0); wall(x0, z1, x1, z1); wall(x1, z0, x1, z1);
+    // kuzey duvarında köprü kapısı (x 398..414)
+    wall(x0, z0, 398, z0); wall(414, z0, x1, z0); wall(x0, z1, x1, z1); wall(x1, z0, x1, z1);
+    P.barrierArm(g, 398, y, z0, 0);
+    this.bridge();
     wall(x0, z0, x0, -256); wall(x0, -240, x0, z1);
     P.barrierArm(g, x0, y, -256, -Math.PI / 2);
     for (const [tx, tz] of [[x0 + 4, z0 + 4], [x1 - 4, z0 + 4], [x0 + 4, z1 - 4], [x1 - 4, z1 - 4]]) {
@@ -528,6 +531,54 @@ export class World {
     }
     this.vehicleSpawns.push({ id: 'military_truck', type: 'military', x: 300, z: -248, rot: Math.PI / 2, fuel: 0.7, health: 0.9 });
     this.vehicleSpawns.push({ id: 'armored_van', type: 'armored', x: 400, z: -250, rot: -Math.PI / 2, fuel: 0.25, health: 0.5, broken: true });
+  }
+
+  /** Anakaraya köprü (araçla kaçış finali): askerî bölgenin kuzey kapısından kuzeydoğuya */
+  bridge() {
+    const g = this.geo, y = REGION_BY_ID.askeri.h;
+    const S0 = BRIDGE.start, E0 = BRIDGE.end;
+    const dx = E0.x - S0.x, dz = E0.z - S0.z, L = Math.hypot(dx, dz);
+    const ux = dx / L, uz = dz / L; // ileri
+    const a = Math.atan2(ux, uz);
+    const deck = y + 0.25;
+    const W = 4.6; // yarı genişlik
+    // tabliye, kaldırımlar, korkuluk
+    P.rbox(g, 'asphalt', S0.x, deck, S0.z, a, -W, -0.7, -2, W, 0, L, '#4b4d52');
+    for (const sd of [-1, 1]) {
+      P.rbox(g, 'concrete', S0.x, deck, S0.z, a, sd > 0 ? W - 0.6 : -W, 0, -2, sd > 0 ? W : -W + 0.6, 0.25, L, '#b9b5a5');
+      P.rbox(g, 'metal', S0.x, deck, S0.z, a, sd * (W - 0.15) - 0.06, 1.05, -2, sd * (W - 0.15) + 0.06, 1.15, L, '#c0392b');
+      for (let t = 0; t <= L; t += 3) P.rbox(g, 'metal', S0.x, deck, S0.z, a, sd * (W - 0.15) - 0.07, 0.25, t - 0.07, sd * (W - 0.15) + 0.07, 1.1, t + 0.07, '#7f8c8d');
+    }
+    // şerit çizgisi ve ayaklar (denize kadar)
+    for (let t = 2; t < L; t += 6) P.rbox(g, 'plain', S0.x, deck, S0.z, a, -0.1, 0.01, t, 0.1, 0.02, t + 3, '#f5f5f5');
+    for (let t = 24; t < L; t += 24) P.rbox(g, 'concrete', S0.x, deck, S0.z, a, -3.2, -deck - 12, t - 0.9, 3.2, -0.7, t + 0.9, '#9a968a');
+    // köprü sonu: anakara tabelası + yıkık bölüm önünde beton bariyer (kaçış bölgesi bitişi)
+    P.rbox(g, 'metal', E0.x, deck, E0.z, a, -3, 2.4, -1, 3, 3.6, -0.9, '#1e6b3a');
+    P.rbox(g, 'concrete', S0.x, deck, S0.z, a, -W, 0, L - 0.4, W, 1.1, L + 0.6, '#d9d4c3');
+    for (let k = -W; k <= W; k += 0.8) {
+      const bx = S0.x + ux * L - uz * k, bz = S0.z + uz * L + ux * k;
+      this.physics.addBoxC(bx, bz, 0.5, 0.5, deck, deck + 1.2, { kind: 'wall', walkable: false });
+    }
+    // çarpışma: eğik şerit, eksen hizalı küçük zemin karolarıyla
+    // (karo aralığı ≤ 1 m ve yarı boyut 3.6 m: korkuluğa kadar boşluksuz kaplar)
+    for (let t = -2; t <= L; t += 1.0) {
+      const px = S0.x + ux * t, pz = S0.z + uz * t;
+      this.physics.addFloor(px - 3.6, pz - 3.6, px + 3.6, pz + 3.6, deck, { kind: 'floor', bridge: true });
+    }
+    for (let t = 0; t <= L; t += 0.8) {
+      const px = S0.x + ux * t, pz = S0.z + uz * t;
+      for (const sd of [-1, 1]) {
+        const rx = px - uz * sd * (W - 0.1), rz = pz + ux * sd * (W - 0.1);
+        this.physics.addBoxC(rx, rz, 0.45, 0.45, deck, deck + 1.2, { kind: 'wall', walkable: false });
+      }
+    }
+    // lambalar
+    for (let t = 15; t < L; t += 30) for (const sd of [-1, 1]) {
+      const lx = S0.x + ux * t - uz * sd * (W - 0.3), lz = S0.z + uz * t + ux * sd * (W - 0.3);
+      P.rbox(g, 'metal', lx, deck, lz, a, -0.08, 0, -0.08, 0.08, 6, 0.08, '#555');
+      this.lamp(lx, deck + 6, lz, 'street');
+    }
+    this.interactable('bridge_end', E0.x, deck + 1, E0.z, { name: 'Anakaraya Köprü' });
   }
 
   port() {

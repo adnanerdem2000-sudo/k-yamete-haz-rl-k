@@ -145,6 +145,7 @@ export class UIManager {
 
   // ======================================================================= ekran geçişleri
   showMainMenu() {
+    this.resultsShown = false;
     this.closePanel(true);
     this.hudLayer.classList.add('hidden');
     clear(this.overlay);
@@ -206,10 +207,19 @@ export class UIManager {
     this.overlay.appendChild(this.specEl);
   }
 
-  showResults(e) { this.closePanel(true); this.hideDowned(); this.hideSleep(); if (this.specEl) { this.specEl.remove(); this.specEl = null; } this.panels.showResults(e); }
+  showResults(e) {
+    this.closePanel(true); this.hideDowned(); this.hideSleep();
+    if (this.specEl) { this.specEl.remove(); this.specEl = null; }
+    this.hudLayer.classList.add('hidden');
+    clear(this.toastLayer);
+    this.bannerQ.length = 0; this.bannerEl.classList.add('hidden');
+    this.resultsShown = true;
+    this.panels.showResults(e);
+  }
 
   // ======================================================================= bildirimler
   toast(text, kind = 'info', dur = 3.5) {
+    if (this.resultsShown && this.game.state === 'playing') return;
     const now = performance.now();
     if (this._lastToast === text && now - this._lastToastT < 1500) return;
     this._lastToast = text; this._lastToastT = now;

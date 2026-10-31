@@ -1,0 +1,62 @@
+# Test Raporu — v0.1 (web prototipi)
+
+Tarih: 31 Ekim 2026 · Ortam: Linux, Node 22, başsız Chromium (Playwright, SwiftShader yazılım GPU'su)
+
+## Özet
+
+| Katman | Kapsam | Sonuç |
+|---|---|---|
+| Birim testleri (`npm test`) | 23 test: envanter (yığın, ağırlık, taşıma, bölme, sıralama, tazelik birleşimi), ihtiyaçlar (açlık/susuzluk, kanama, enfeksiyon, ısı, yere düşme/kaldırma, tüketim), zaman (30 gün, evreler, saat olayları, Son Işık geri sayımı), harita sisi RLE kaydı, hava durumu, ağ-güvenli görev kancaları, kayıt meta bilgisi | ✅ 23/23 |
+| Uçtan uca: menü (`tests/e2e/smoke-menu.mjs`) | Önyükleme, ana menü tabelaları, Karakterler, Özelleştirme (3B vitrin), Ayarlar, Nasıl Oynanır, Krediler, Tek Oyna, Arkadaşlarla Oyna ekranları | ✅ 0 hata |
+| Uçtan uca: tek oyuncu (`smoke-single.mjs`) | Oyun başlatma (2 YZ arkadaşla), HUD, hareket, günlük sekmeleri (envanter/üretim/karakter/görevler/harita), inşa menüsü, takım paneli, duraklatma | ✅ 0 hata |
+| Uçtan uca: oynanış (`gameplay.mjs`) | Konteyner arama + depo paneli + hepsini al, yeme, bandaj üretimi, inşa hayaleti + barikat inşası (savunma puanı), zombi doğurma + YZ arkadaş savaşı (öldürme sayısı), araca binip sürme, gece, uyku oylaması (zaman x40), 2. gün takvim yayını, rastgele olay kartı + seçim, kayıt (yuva + otomatik), yaralı arkadaşı sırtlama/bırakma/kaldırma, harita | ✅ 0 hata |
+| Uçtan uca: çok oyunculu (`multiplayer-local.mjs`) | İki sekme (BroadcastChannel taşıyıcısı): oda kur, katıl, karakter seç, hazır, başlat; iki tarafta oyuncu listesi; konum eşitleme; istemcinin yağma eylemi host'ta işlenip eşyaların istemciye verilmesi; konteynerin host'ta boşalması; zombi anlık görüntülerinin istemciye ulaşması; sohbet; istemcinin ayrılması | ✅ 0 hata |
+| Uçtan uca: final (`ending.mjs`) | 30. gün akşamı, kaçış hazırlık durumları (6 final), sığınak kaçışı → sonuç ekranı (ad, derece, istatistikler) → ana menüye dönüş ve oturumun temizlenmesi | ✅ 0 hata |
+
+## Ölçülen değerler (oynanış testinden)
+- Yeme: açlık 40 → 80 · Üretim: 4 kumaş → 2 bandaj · Barikat inşası → savunma puanı 3
+- 2 zombi doğuruldu → YZ arkadaşlar (Deniz tabanca, Zülal bıçak) ikisini de öldürdü, oyuncu hasar almadı
+- Uyku oylaması: 1/1 → zaman x40 hızlandı · 2. gün sabahı takvim yayını geldi
+- Kayıt: ~8 KB JSON (yuva + otomatik) · Taşıma: yere düşen arkadaş sırtlandı, oyuncuyla birlikte taşındı, bırakıldı, kaldırıldı
+- Çok oyunculu: istemcinin aradığı dolaptaki eşyalar istemcinin envanterine geçti, host'ta konteyner boşaldı; 4/4 zombi istemcide görüldü
+
+## Doğrulanan senaryolardan notlar
+- **Çok oyunculu kimlik:** Aynı tarayıcıdaki ikinci sekme aynı oyuncu jetonunu taşıdığı için host jetonu
+  otomatik olarak ayırır (`…-2`); yeniden bağlanmada aynı jeton kullanılır ve kayıtlı eşyalar iade edilir.
+- **Bulunan ve düzeltilen hatalar (test sürecinde):**
+  - Yavaş yüklenen istemci, yerel taşıyıcının 12 sn'lik zaman aşımıyla düşürülüyordu → 45 sn'ye çıkarıldı,
+    düşürülen eşe "yeniden bağlan" bildirimi eklendi.
+  - Dinamik (olaylardan gelen) görevlerde ilerleme işleyicisi çöküyordu → düzeltildi, istemcilere görev tanımı da gönderiliyor.
+  - Zombi nüfus hesabı aktif zombileri saymadığı için 1. gün evin çevresinde 15+ zombi oluşuyordu →
+    bölge yoğunluğu/gün/gece ölçekli doğru sayım.
+  - Park'taki kayıp çocuk (Can) oyuncu yanına gelmeden zombilerce öldürülebiliyordu → yalnızca eskortta hedef olur.
+  - Köprü üzerindeki araç "suya battı" sayılıyordu → yükseklik kontrolü eklendi; köprü sonuna bariyer.
+  - Başlık yazı tipi Türkçe Ş/İ/Ğ içermiyordu → Türkçe destekli Luckiest Guy'a geçildi.
+  - Arayüz yardımcısında boşluklu sınıf adları öğe türünü bozuyordu (envanter yuvaları) → düzeltildi.
+
+## Performans ölçümü (başsız Chromium, yazılım GPU'su, 960×540, yüksek kalite, %50 çözünürlük)
+
+| Konum | Çizim çağrısı / kare | Üçgen / kare |
+|---|---|---|
+| Üs (mahalle) | ~470 | ~0,75 M |
+| Şehir merkezi | ~1240 | ~1,5 M |
+| Sanayi | ~1310 | ~1,5 M |
+| Orman | ~720 | ~1,1 M |
+| Askerî bölge | ~990 | ~1,2 M |
+
+Yazılım GPU'sunda bile 18–28 FPS ölçüldü; gerçek GPU'larda çok daha yüksek olması beklenir. Düşük kare
+hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indirir.
+
+## Test edilemeyenler
+- PeerJS (WebRTC) ile gerçek internet üzerinden bağlantı ve sesli sohbet: geliştirme ortamının ağ kısıtı
+  nedeniyle çalıştırılamadı. Protokol aynı olduğundan yerel taşıyıcı testleri mantığı doğrular; NAT/TURN
+  kaynaklı sorunlar `KNOWN_ISSUES.md`'de.
+- Gerçek GPU'da kare hızı, ses çıkışı (başsız tarayıcıda ses aygıtı yok) ve fare işaretçi kilidi
+  (başsız modda desteklenmez; savaş girdisi kilit gerektirir).
+
+## Testleri çalıştırma
+```bash
+npm test
+npm start &            # ayrı terminalde
+npm run test:e2e       # her senaryo tek tek: node tools/scenario.mjs tests/e2e/<senaryo>.mjs
+```

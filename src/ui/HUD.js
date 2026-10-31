@@ -238,6 +238,7 @@ export class HUD {
 
   updateVehicle(S) {
     const v = S.local.vehicle;
+    this.root.classList.toggle('driving', !!v);
     if (!v) { this.vehicle.classList.add('hidden'); return; }
     this.vehicle.classList.remove('hidden');
     this.vehicle.innerHTML = `<div class="veh-name">${v.def.name}</div><div class="veh-speed"><b>${Math.round(Math.abs(v.speed) * 3.6)}</b> km/s</div>

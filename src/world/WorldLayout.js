@@ -20,6 +20,8 @@ export const REGIONS = [
 export const REGION_BY_ID = Object.fromEntries(REGIONS.map((r) => [r.id, r]));
 
 export const LAKE = { x: -196, z: -100, r: 34, level: 4.2 };
+// Anakaraya köprü (araç konvoyu finali): askerî bölgenin kuzey kapısından kuzeydoğuya
+export const BRIDGE = { start: { x: 406, z: -321 }, end: { x: 548, z: -540 }, exitR: 34 };
 export const MOUNTAIN = { x: -372, z: -352, r: 190, peak: 78 };
 
 // Yollar: [genişlik, tür, noktalar] — tür: asfalt | toprak | patika (patika araçla geçilemez)
@@ -169,6 +171,7 @@ export const POIS = [
   { id: 'port', name: 'Liman', x: 330, z: 300, icon: 'anchor' },
   { id: 'dock', name: 'İskele', x: 336, z: 368, icon: 'boat' },
   { id: 'lab', name: 'Araştırma Tesisi', x: -20, z: -455, icon: 'lab' },
+  { id: 'bridge', name: 'Anakara Köprüsü', x: 470, z: -420, icon: 'bridge' },
 ];
 
 // Yol tabelaları (konsept sanattaki ahşap yön levhaları)

@@ -5,7 +5,7 @@ import { CHARACTERS } from '../entities/CharacterFactory.js';
 
 export const ICONS = {
   base: '🏠', shop: '🛒', park: '🌳', med: '➕', police: '🚓', fuel: '⛽', fish: '🎣', camp: '⛺', cabin: '🛖', cave: '🕳️', mountain: '⛰️',
-  factory: '🏭', wrench: '🔧', military: '🪖', heli: '🚁', radio: '📡', anchor: '⚓', boat: '⛵', lab: '🧪', quest: '❗', danger: '⚠️', bag: '🎒', pin: '📍',
+  factory: '🏭', wrench: '🔧', military: '🪖', heli: '🚁', radio: '📡', anchor: '⚓', boat: '⛵', lab: '🧪', bridge: '🌉', quest: '❗', danger: '⚠️', bag: '🎒', pin: '📍',
 };
 const REGION_ICON = { mahalle: '🏘️', sehir: '🏙️', hastane: '🏥', benzin: '⛽', orman: '🌲', dag: '⛰️', sanayi: '🏭', askeri: '🪖', liman: '⚓', lab: '☣️' };
 const VEH_ICON = { sedan: '🚗', pickup: '🛻', police: '🚓', ambulance: '🚑', van: '🚐', rv: '🚌', offroad: '🚙', motorcycle: '🏍️', military: '🚚', armored: '🚛', boat: '🚤' };

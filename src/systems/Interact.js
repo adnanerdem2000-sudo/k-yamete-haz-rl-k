@@ -139,6 +139,10 @@ export class Interact {
       return { kind: 'vehicle_exit', label: 'Araçtan İn', key: 'E' };
     }
     if (pl.mode === 'sleep' || pl.mode === 'climb') return null;
+    if (pl.carrying) {
+      const who = S.players.get(pl.carrying) || S.bots.byId(pl.carrying);
+      return { kind: 'carry_drop', label: `${who ? who.name : 'Arkadaşın'} sırtında — Yere bırak`, key: S.game.input.label('reload'), sub: 'Güvenli yere bırakıp E basılı tutarak ayağa kaldır' };
+    }
     const px = pl.pos.x, py = pl.pos.y, pz = pl.pos.z;
     const fx = Math.sin(pl.yaw), fz = Math.cos(pl.yaw);
     // kamera yönünü de hesaba kat
@@ -159,9 +163,10 @@ export class Interact {
     // takım arkadaşları (yere düşmüş)
     for (const p of S.players.values()) {
       if (p.isLocal || !p.summary || !p.summary.downed) continue;
-      consider({ kind: 'revive', id: p.id, name: p.name, label: `${p.name} — Ayağa Kaldır`, holdTime: 4 }, p.pos.x, p.pos.y + 0.5, p.pos.z, 2.2, -1);
+      if (p.carriedBy) continue;
+      consider({ kind: 'revive', id: p.id, name: p.name, label: `${p.name} — Ayağa Kaldır`, holdTime: 4, sub: `${S.game.input.label('reload')}: Sırtla ve taşı` }, p.pos.x, p.pos.y + 0.5, p.pos.z, 2.2, -1);
     }
-    for (const b of S.bots.list) if (b.stats.downed) consider({ kind: 'revive', id: b.id, name: b.name, label: `${b.name} — Ayağa Kaldır`, holdTime: 3 }, b.pos.x, b.pos.y + 0.5, b.pos.z, 2.2, -1);
+    for (const b of S.bots.list) if (b.stats.downed && !b.carriedBy) consider({ kind: 'revive', id: b.id, name: b.name, label: `${b.name} — Ayağa Kaldır`, holdTime: 3, sub: `${S.game.input.label('reload')}: Sırtla ve taşı` }, b.pos.x, b.pos.y + 0.5, b.pos.z, 2.2, -1);
     // yerdeki eşyalar
     for (const it of S.ground.items.values()) consider({ kind: 'ground', id: it.id, label: `Al: ${ITEMS[it.stack.id].name}${it.stack.qty > 1 ? ' x' + it.stack.qty : ''}` }, it.x, it.y + 0.5, it.z, 1.7, -0.3);
     // konteynerler
@@ -226,6 +231,7 @@ export class Interact {
       case 'lab_gate': return S.world.labGate.open ? null : { label: 'Güvenlik Kapısı (Kart Okuyucu)', holdTime: 1 };
       case 'mountain_camp': return { label: 'Dağ Kampı: Erzak Bırak / Durum', holdTime: 0 };
       case 'bed': return { label: 'Uyu (Yatak)' };
+      case 'bridge_end': return { label: 'Anakaraya Köprü — Konvoy Durumu' };
       default: return { label: it.name || it.type };
     }
   }
@@ -258,6 +264,12 @@ export class Interact {
     const t = this.findTarget();
     this.target = t;
     S.ui.setPrompt(t ? { label: t.label, key: t.key || input.label('interact'), sub: t.sub, holdHint: t.holdTime > 0 } : null);
+    // yaralı arkadaşı sırtlama / bırakma
+    if (input.wasPressed('reload')) {
+      if (pl.carrying) { S.act('carry', { target: pl.carrying, drop: true }); return; }
+      if (t && t.kind === 'revive') { S.act('carry', { target: t.id }); return; }
+    }
+    if (t && t.kind === 'carry_drop') return;
     if (t && input.wasPressed('interact')) this.activate(t);
   }
 
@@ -410,6 +422,7 @@ export class Interact {
       }
       case 'mountain_camp': S.endings.useMountainCamp(it); break;
       case 'bed': S.trySleep({ x: it.x, y: it.y, z: it.z, rot: it.rot || 0 }); break;
+      case 'bridge_end': { const r = S.endings.readiness().convoy; S.ui.toast(S.time.day >= 30 && S.time.hour >= 21 ? (r.ok ? 'Köprü açık! Hazır bir araçla buradan anakaraya geç.' : 'Köprüden geçmek için hazır bir araç gerekli: ' + r.detail) : `Konvoy 30. gün 21:00'de köprüden geçecek. Araç: ${r.detail}`, r.ok ? 'good' : 'info', 6); break; }
       default: break;
     }
     void t;

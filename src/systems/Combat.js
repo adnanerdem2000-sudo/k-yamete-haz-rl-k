@@ -56,8 +56,9 @@ export class Combat {
     if (Math.abs(cam.fov - targetFov) > 0.1) { cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 10); cam.updateProjectionMatrix(); }
     S.ui.setCrosshair(pl.aiming || (def && def.gun) ? (this.scoped ? 'scope' : 'aim') : canAct ? 'dot' : null, this.currentSpread(def));
     this.attacking = this.swing !== null;
-    if (!canAct || S.interact.hold) return;
-    if (input.wasPressed('reload') && def && def.gun && !S.build.placing) this.reload();
+    if (!canAct || S.interact.hold || pl.carrying) return;
+    const reviveTarget = S.interact.target && S.interact.target.kind === 'revive';
+    if (input.wasPressed('reload') && def && def.gun && !S.build.placing && !reviveTarget) this.reload();
     if (!(input.mouse.leftPressed || (input.mouse.left && def && def.gun && def.gun.auto))) return;
     if (S.build.placing) return;
     if (!def) { this.melee({ dmg: 9, speed: 1.4, range: 1.3, noise: 3, kind: 'blunt' }, null); return; }

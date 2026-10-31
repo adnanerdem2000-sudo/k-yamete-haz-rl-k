@@ -1,6 +1,6 @@
 // Harita sistemi: araziden üretilen resimli harita, keşif sisi (fog of war), işaretler,
 // takım pingleri ve güvenli noktalar arası hızlı seyahat. Çizim ui/MapView.js'te yapılır.
-import { WORLD, REGIONS, ROADS, POIS, LAKE } from '../world/WorldLayout.js';
+import { WORLD, REGIONS, ROADS, POIS, LAKE, BRIDGE } from '../world/WorldLayout.js';
 import { BIOME } from '../world/Terrain.js';
 import { roadCenterline } from '../world/Roads.js';
 import { clamp, dist, uid, valueNoise, hash2 } from '../core/util.js';
@@ -108,6 +108,14 @@ export function mapBase(world) {
     }
   }
   g.setLineDash([]);
+  // anakara köprüsü
+  {
+    const a = toMap(BRIDGE.start.x, BRIDGE.start.z), b = toMap(BRIDGE.end.x, BRIDGE.end.z);
+    g.lineCap = 'butt';
+    g.strokeStyle = '#2b2b30'; g.lineWidth = 9.2 * S + 3; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    g.strokeStyle = '#c0392b'; g.lineWidth = 9.2 * S; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+    g.strokeStyle = '#e9dfc8'; g.lineWidth = 6 * S; g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+  }
   // binalar
   for (const b of world.buildings) {
     const bx = b.box;

@@ -164,6 +164,7 @@ export class Session {
     // eşya verme (belirli oyuncuya)
     this.onEvt('grant', (e) => {
       for (const s of e.items) {
+        if (ITEMS[s.id] && ITEMS[s.id].spoil && s.t0 === undefined) s.t0 = Math.round(this.time.total);
         const left = this.inventory.addStack({ ...s });
         if (left > 0) { this.act('ground_drop', { stack: { ...s, qty: left }, x: this.local.pos.x, y: this.local.pos.y, z: this.local.pos.z }); this.ui.toast('Envanter dolu! Eşya yere bırakıldı.', 'warn'); }
         else if (!e.silent) this.ui.itemToast(s.id, s.qty);
@@ -176,7 +177,10 @@ export class Session {
     this.onEvt('toast', (e) => this.ui.toast(e.text, e.kind || 'info', e.dur));
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); });
     this.onEvt('dmg_player', (e) => this.damageLocal(e.amount, e.kind, e.from));
-    this.onEvt('revived', (e) => { if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); } });
+    this.onEvt('revived', (e) => {
+      if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
+      if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
+    });
     this.onEvt('time', (e) => { this.time.set(e.total); });
     this.onEvt('sleep', (e) => { this.time.ff = e.ff; this.sleepState = e; });
     this.on('flag', (p, from) => { const v = p.add ? (this.flags[p.flag] || 0) + p.add : p.value ?? true; this.emit({ k: 'flag', flag: p.flag, value: v }); });
@@ -186,6 +190,23 @@ export class Session {
       const fromName = this.players.get(from)?.name || this.bots.byId(from)?.name || 'Takım arkadaşı';
       this.emit({ k: 'revived', target: p.target, hp: p.hp || 30, byName: fromName });
       if (p.target.startsWith('bot_')) this.bots.revive(p.target);
+    });
+    // yaralı arkadaşı sırtlama: hedef yerdeyse taşıyıcı atanır; bırakınca serbest kalır
+    this.on('carry', (p, from) => {
+      if (p.drop) { this.emit({ k: 'carry', target: p.target, by: null, from }); return; }
+      const bot = this.bots.byId(p.target);
+      const rec = this.players.get(p.target);
+      const downed = bot ? bot.stats.downed : rec ? (rec.isLocal ? this.localStats.downed : rec.summary && rec.summary.downed) : false;
+      if (!downed || (bot && bot.carriedBy) || (rec && rec.carriedBy)) return;
+      this.emit({ k: 'carry', target: p.target, by: from });
+    });
+    this.onEvt('carry', (e) => {
+      const name = (id) => (this.players.get(id) || this.bots.byId(id) || {}).name || 'Takım arkadaşı';
+      if (e.by === this.localId) { this.local.carrying = e.target; this.local.avatar.hold(null); this.ui.toast(`${name(e.target)} sırtında. Güvenli yere götür, ${this.game.input.label('reload')} ile bırak, E ile kaldır.`, 'info', 5); }
+      if (!e.by && this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
+      if (e.target === this.localId) { this.local.carriedBy = e.by; if (e.by) this.ui.toast(`${name(e.by)} seni sırtladı.`, 'good'); else if (this.local.mode === 'carried') this.local.mode = 'downed'; }
+      const rec = this.players.get(e.target); if (rec) rec.carriedBy = e.by;
+      const bot = this.bots.byId(e.target); if (bot) bot.carriedBy = e.by;
     });
     this.on('sleep_vote', (p, from) => this.sleepVote(from, p.on));
     this.on('chat', (p, from) => this.emit({ k: 'chat', from, name: this.players.get(from)?.name || '?', text: String(p.text).slice(0, 160) }));
@@ -226,6 +247,7 @@ export class Session {
     if (pl.vault) pl.stepVault(dt);
     else if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.updateLocalDriving(dt, input, blocking);
     else pl.update(dt, input, blocking);
+    if (pl.carriedBy) this.followCarrier(pl);
     this.local.inside = this.world.buildingAt(pl.pos.x, pl.pos.z, pl.pos.y);
     this.combat.update(dt, input, blocking);
     this.interact.update(dt, input, blocking);
@@ -246,6 +268,23 @@ export class Session {
     this.updateRemotes(dt);
     this.updateDowned(dt);
     this.renderOnly(dt);
+  }
+
+  /** Taşınan (yerdeki) yerel oyuncu taşıyıcının omzunda */
+  followCarrier(pl) {
+    const c = this.players.get(pl.carriedBy);
+    const cpos = c ? (c.isLocal ? this.local.pos : c.pos) : null;
+    if (!cpos || !this.localStats.downed) {
+      pl.carriedBy = null;
+      if (pl.mode === 'carried') pl.mode = this.localStats.downed ? 'downed' : 'ground';
+      return;
+    }
+    const yaw = c.anim ? c.anim.yaw || 0 : c.isLocal ? this.local.yaw : 0;
+    pl.pos.set(cpos.x - Math.sin(yaw) * 0.1, cpos.y + 1.2, cpos.z - Math.cos(yaw) * 0.1);
+    pl.vel.set(0, 0, 0);
+    pl.root.position.copy(pl.pos);
+    pl.yaw = yaw + Math.PI / 2;
+    pl.mode = 'carried';
   }
 
   renderOnly(dt) {
@@ -351,6 +390,7 @@ export class Session {
     if (this._downNotified) return;
     this._downNotified = true;
     this.local.mode = 'downed';
+    if (this.local.carrying) this.act('carry', { target: this.local.carrying, drop: true });
     this.results.deaths++;
     if (this.local.vehicle) this.vehicles.exitLocal();
     this.ui.showDowned();
@@ -368,6 +408,7 @@ export class Session {
 
   respawnLocal() {
     const st = this.localStats;
+    if (this.local.carriedBy) { this.act('carry', { target: this.localId, drop: true }); this.local.carriedBy = null; }
     // sırt çantasını düşür (ceza): yarısı yere
     const dropped = [];
     for (let i = 6; i < this.inventory.size; i++) {
@@ -388,6 +429,7 @@ export class Session {
 
   // ======================================================================= envanter işlemleri
   giveLocal(id, qty = 1, data = null) {
+    if (ITEMS[id] && ITEMS[id].spoil && !(data && data.t0 !== undefined)) data = { ...(data || {}), t0: Math.round(this.time.total) };
     const left = this.inventory.add(id, qty, data);
     if (left > 0) this.act('ground_drop', { stack: makeStack(id, left, data), x: this.local.pos.x, y: this.local.pos.y, z: this.local.pos.z });
     return qty - left;
@@ -409,6 +451,14 @@ export class Session {
 
   get heldStack() { return this.inventory.slots[this.hotbarIndex] || null; }
 
+  /** Yiyecek tazeliği: kalan gün (negatif = bozulmuş) */
+  freshDays(s) {
+    const def = ITEMS[s.id];
+    if (!def || !def.spoil || s.t0 === undefined) return null;
+    return def.spoil - (this.time.total - s.t0) / 1440;
+  }
+  isSpoiled(s) { const d = this.freshDays(s); return d !== null && d < 0; }
+
   /** Eşya kullanımı (yeme, içme, tedavi, okuma, giyme) */
   useItem(slot, target = null) {
     const s = this.inventory.slots[slot];
@@ -421,7 +471,10 @@ export class Session {
     if (s.id === 'seeds' || s.id === 'empty_bottle' || s.id === 'jerrycan') { this.ui.toast(s.id === 'seeds' ? 'Tohumları bahçe parseline ekmek için parselin yanına gidip E\'ye bas.' : s.id === 'jerrycan' ? 'Benzin pompası ya da yakıt tankının yanında doldur, aracın yanında E ile aktar.' : 'Bir su kaynağının (göl, yağmur deposu, kaynak) yanında E ile doldur.', 'info'); return; }
     if (!def.use) { this.ui.toast('Bu eşya doğrudan kullanılamaz.', 'warn'); return; }
     if (this._using) return;
-    const use = def.use;
+    let use = def.use;
+    // bozulmuş yiyecek: daha az doyurur, zehirleme riski yüksek
+    const spoiled = this.isSpoiled(s);
+    if (spoiled) use = { ...use, hunger: Math.round((use.hunger || 0) * 0.5), morale: -3, poison: Math.max(use.poison || 0, 0.6) };
     const dur = (use.time || 1) / (use.heal && this.localProfile.stats.heal ? this.localProfile.stats.heal : 1);
     this._using = true;
     const anim = def.cat === 'med' ? 'search' : 'consume';
@@ -437,7 +490,7 @@ export class Session {
       if (out.includes('poisoned')) this.ui.toast('Midesi bulanıyor… Zehirlendin!', 'danger');
       if (use.gives) this.giveLocal(use.gives, 1);
       if (s.id === 'stew' && this.isInBase(this.local.pos)) { this.act('team_morale', { amount: 8 }); }
-      this.ui.toast(`${def.name} kullanıldı.`, 'good', 2);
+      this.ui.toast(spoiled ? `${def.name} bozulmuştu… Tadı berbattı.` : `${def.name} kullanıldı.`, spoiled ? 'warn' : 'good', 2);
     }, () => { this._using = false; });
   }
 

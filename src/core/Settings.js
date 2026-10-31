@@ -19,7 +19,7 @@ export const ACTION_LABELS = {
 };
 
 export const DEFAULTS = {
-  graphics: { quality: 'high', shadows: true, renderScale: 1, viewDistance: 420, fov: 70, bloom: true, grass: true, fpsCounter: false },
+  graphics: { quality: 'medium', shadows: true, renderScale: 1, autoScale: true, viewDistance: 420, fov: 70, bloom: true, grass: true, fpsCounter: false },
   controls: { mouseSens: 1, invertY: false, bindings: { ...DEFAULT_BINDINGS } },
   audio: { master: 0.8, music: 0.55, sfx: 0.85, ambient: 0.7, voice: 1, micGate: 0.02 },
   gameplay: { dayMinutes: 24, cameraShake: true, damageNumbers: true, tutorialHints: true },

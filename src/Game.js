@@ -14,6 +14,7 @@ import { AudioManager } from './systems/AudioManager.js';
 import { UIManager } from './ui/UIManager.js';
 import { Net } from './net/Net.js';
 import { Session } from './Session.js';
+import { mapBase } from './systems/MapSystem.js';
 
 const TIPS = [
   'İpucu: Silah sesleri zombileri çeker. Her sorunu silahla çözme.',
@@ -65,6 +66,9 @@ export class Game {
       await this.world.build((l) => { step++; setP(0.45 + step * 0.07, l); });
       this.env = new Environment(this);
       this.env.setLamps(this.world);
+      setP(0.92, 'Harita çiziliyor…');
+      await new Promise((r) => setTimeout(r, 0));
+      mapBase(this.world);
       setP(0.95, 'Menü hazırlanıyor…');
       this.menu = new MenuScene(this);
       // gölgeleri ilk karede derle

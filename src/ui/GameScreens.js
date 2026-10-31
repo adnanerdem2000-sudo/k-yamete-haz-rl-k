@@ -77,7 +77,7 @@ export class GamePanels {
     S.inventory.slots.forEach((s, i) => {
       const sv = slotView(this.game, s, { index: i, hotkey: i < HOTBAR ? i + 1 : null, cls: i < HOTBAR ? 'hot' : '' });
       this.ui.dnd(sv, { src: 'inv', index: i }, (from) => { if (from.src === 'inv') S.inventory.move(from.index, i); else if (from.src === 'store') m.take(from.index); this.renderStorage(); });
-      sv.addEventListener('click', (e) => { if (!s) return; if (e.shiftKey || true) { const st = S.inventory.takeAt(i, e.ctrlKey ? 1 : Infinity); if (st) m.put(st); this.renderStorage(); } });
+      sv.addEventListener('click', (e) => { if (!s) return; const st = S.inventory.takeAt(i, e.ctrlKey ? 1 : Infinity); if (st) m.put(st); this.renderStorage(); });
       invGrid.appendChild(sv);
     });
     const stGrid = h('div.inv-grid.small.store');
@@ -323,7 +323,7 @@ export class GamePanels {
     const el = h('div.results' + (win ? '.win' : '.lose'),
       h('div.results-kicker', win ? 'HAYATTA KALDINIZ' : 'SON IŞIK HERKESİ YUTTU'),
       h('h1', `${E.icon} ${E.name}`),
-      h('p.results-reason', e.reason || E.desc),
+      h('p.results-reason', `${E.desc} ${{ escaped: win ? 'Takımınız kaçış planını başarıyla tamamladı.' : '', dawn: win ? 'Şafak söktü — Son Işık geçti ve siz hâlâ ayaktasınız.' : 'Şafak söktü ama kimse ayakta kalamadı.' }[e.reason] || ''}`),
       h('div.rating', h('span', 'Derece'), h('b.rank-' + e.rating, e.rating), h('small', `${e.score} puan`)),
       h('div.results-grid',
         ...[['Hayatta kalan', `${e.survivors}/${e.total}`], ['Geçen gün', e.days], ['Üs seviyesi', e.baseLevel], ['Öldürülen zombi', e.kills], ['Aranan yer', e.searched], ['Toplanan kaynak', e.resources], ['Tamamlanan görev', e.quests], ['Kurtarılan kişi', e.rescued], ['İnşa edilen yapı', e.built], ['Yere düşme', e.deaths]].map(([k, v]) => h('div.res-cell', h('small', k), h('b', String(v))))),

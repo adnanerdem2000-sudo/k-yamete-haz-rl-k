@@ -10,6 +10,9 @@ export function stackWeight(s) {
   return (def ? def.weight : 0) * s.qty + (s.fuel ? s.fuel * 0.75 : 0);
 }
 
+/** Yiyecek yığınları birleşirken eski olanın tazeliği geçerli olur */
+function olderT0(into, from) { if (from.t0 !== undefined && (into.t0 === undefined || from.t0 < into.t0)) into.t0 = from.t0; }
+
 function stackable(a, b) {
   if (!a || !b || a.id !== b.id) return false;
   const def = ITEMS[a.id];
@@ -65,6 +68,7 @@ export class Inventory {
         if (left <= 0) break;
         if (s && stackable(s, stack)) {
           const add = Math.min(def.stack - s.qty, left);
+          if (add > 0) olderT0(s, stack);
           s.qty += add; left -= add;
         }
       }
@@ -124,6 +128,7 @@ export class Inventory {
     if (b && stackable(a, b)) {
       const max = ITEMS[a.id].stack;
       const add = Math.min(max - b.qty, a.qty);
+      if (add > 0) olderT0(b, a);
       b.qty += add; a.qty -= add;
       if (a.qty <= 0) this.slots[from] = null;
     } else {

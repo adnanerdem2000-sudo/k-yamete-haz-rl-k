@@ -87,7 +87,9 @@ export class Graphics {
     this.camera.fov = g.fov;
     this.camera.far = g.viewDistance;
     this.camera.updateProjectionMatrix();
-    this.pixelRatio = Math.min(window.devicePixelRatio || 1, g.quality === 'high' ? 1.5 : 1) * (g.renderScale || 1);
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, g.quality === 'high' ? 1.5 : 1) * (g.renderScale || 1);
+    if (!g.autoScale) this.dynScale = 1;
+    this.pixelRatio = this.basePixelRatio * (this.dynScale || 1);
     this.resize();
     this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined && o.castShadow) o.material.needsUpdate = true; });
   }
@@ -107,6 +109,25 @@ export class Graphics {
     this.composer.render(dt);
     this.frameTimes.push(dt);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
+    this.autoScale(dt);
+  }
+
+  /** Dinamik çözünürlük: kare hızı düşükse iç çözünürlüğü azalt, yüksekse geri artır */
+  autoScale(dt) {
+    if (!Settings.get('graphics.autoScale')) return;
+    this._asT = (this._asT || 0) + dt;
+    if (this._asT < 2) return;
+    this._asT = 0;
+    const fps = this.fps;
+    const cur = this.dynScale || 1;
+    let next = cur;
+    if (fps < 38) next = Math.max(0.55, cur - 0.1);
+    else if (fps > 57) next = Math.min(1, cur + 0.05);
+    if (Math.abs(next - cur) > 0.001) {
+      this.dynScale = next;
+      this.pixelRatio = this.basePixelRatio * next;
+      this.resize();
+    }
   }
 
   get fps() {

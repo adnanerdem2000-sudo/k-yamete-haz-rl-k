@@ -4,8 +4,9 @@ import * as THREE from 'three';
 import { ENDINGS } from '../data/story.js';
 import { ITEMS } from '../data/items.js';
 import { dist, clamp } from '../core/util.js';
+import { BRIDGE } from '../world/WorldLayout.js';
 
-export const BRIDGE = { start: { x: 404, z: -388 }, end: { x: 540, z: -540 }, exitR: 40 };
+export { BRIDGE };
 
 export class Endings {
   constructor(session) {
@@ -19,7 +20,7 @@ export class Endings {
     S.on('ending_choose', (p) => S.emit({ k: 'ending_choose', id: p.id }));
     S.onEvt('ending_choose', (e) => { this.chosen = e.id; S.ui.toast(`Final planı: ${ENDINGS[e.id].name}`, 'story', 5); });
     S.on('escape', (p, from) => { S.emit({ k: 'escaped', id: from, how: p.how }); });
-    S.onEvt('escaped', (e) => { this.escaped.add(e.id); if (e.id === S.localId) this.localEscaped(e.how); this.checkAllDone(); });
+    S.onEvt('escaped', (e) => { this.escaped.add(e.id); this.escapedHow = this.escapedHow || e.how; if (e.id === S.localId) this.localEscaped(e.how); this.checkAllDone(); });
     S.on('final_result', (p) => S.emit({ k: 'final_result', ...p }));
     S.onEvt('final_result', (e) => this.showResults(e));
     S.on('lab_gate', () => S.emit({ k: 'lab_gate' }));
@@ -219,7 +220,7 @@ export class Endings {
     this.finished = true;
     const humans = [...S.players.values()];
     const survivors = humans.filter((p) => this.escaped.has(p.id) || !(p.isLocal ? S.localStats.downed : p.summary && p.summary.downed)).length;
-    const how = this.escaped.size ? [...new Set([...this.escaped].map(() => 0))] && this.lastHow() : 'defense';
+    const how = this.escaped.size ? this.lastHow() : 'defense';
     const res = this.computeResults(survivors, humans.length, how, reason);
     S.applyAction('final_result', res, null);
   }

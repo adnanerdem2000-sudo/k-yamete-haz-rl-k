@@ -289,6 +289,7 @@ input[type=range] { width: 200px; accent-color: var(--orange); }
 .mm-n { position: absolute; top: 2px; left: 50%; transform: translateX(-50%); font: 14px var(--title); color: #e74c3c; text-shadow: 0 1px 2px #000; }
 .hud-quest { position: absolute; top: 330px; right: 14px; width: 270px; padding: 10px 12px; background: linear-gradient(90deg, rgba(12,14,18,0), rgba(12,14,18,0.7) 25%); border-radius: 10px; text-align: left; }
 .hud-quest:empty { display: none; }
+@media (max-height: 760px) { .hud.driving .hud-quest { display: none; } }
 .q-title { font: 16px var(--title); color: #fff; margin-bottom: 4px; text-shadow: 0 1px 3px #000; }
 .q-obj { display: flex; align-items: center; gap: 6px; padding: 2px 0; font-size: 13px; text-shadow: 0 1px 2px #000; }
 .q-obj.done { color: #8be3a0; text-decoration: line-through; }

@@ -22,13 +22,14 @@ export class Quests {
     this.notesRead = new Set();
     this.tracked = null;
     const S = session;
-    S.on('quest_start', (p) => { if (!this.st[p.id]) S.emit({ k: 'quest', id: p.id, state: 'active', prog: QUESTS[p.id] ? QUESTS[p.id].objs.map(() => 0) : [] }); });
+    S.on('quest_start', (p) => { const def = this.def(p.id); if (!this.st[p.id] && def) S.emit({ k: 'quest', id: p.id, state: 'active', prog: def.objs.map(() => 0), dyn: this.dyn[p.id] || undefined }); });
     S.on('quest_prog', (p) => {
       const q = this.st[p.id];
       if (!q || q.state !== 'active') return;
       const prog = [...q.prog];
       prog[p.i] = p.value;
-      const def = QUESTS[p.id];
+      const def = this.def(p.id);
+      if (!def) return;
       const done = def.objs.every((o, i) => prog[i] >= (o.count || 1));
       S.emit({ k: 'quest', id: p.id, state: done ? 'done' : 'active', prog });
       if (done) this.complete(p.id);
@@ -36,10 +37,12 @@ export class Quests {
     S.on('quest_deliver', (p) => {
       const q = this.st[p.id];
       if (!q) return;
-      const def = QUESTS[p.id];
+      const def = this.def(p.id);
+      if (!def) return;
       def.objs.forEach((o, i) => { if (o.t === 'deliver' && (o.item === p.item)) S.applyAction('quest_prog', { id: p.id, i, value: o.count }, null); });
     });
     S.onEvt('quest', (e) => {
+      if (e.dyn && !this.dyn[e.id]) this.dyn[e.id] = e.dyn;
       const was = this.st[e.id];
       this.st[e.id] = { state: e.state, prog: e.prog };
       const def = QUESTS[e.id] || this.dyn[e.id];

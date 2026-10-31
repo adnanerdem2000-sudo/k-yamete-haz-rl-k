@@ -109,7 +109,13 @@ export class Weather {
   }
 
   /** HUD için kısa metin */
-  label() { return `${this.def.icon} ${this.def.name} · ${Math.round(this.temperature)}°C`; }
+  label() {
+    const night = this.s.time.isNight;
+    const d = this.def;
+    const icon = night && (this.type === 'clear' || this.type === 'heat') ? '🌙' : d.icon;
+    const name = night && this.type === 'clear' ? 'Açık' : night && this.type === 'heat' ? 'Sıcak' : d.name;
+    return `${icon} ${name} · ${Math.round(this.temperature)}°C`;
+  }
 
   serialize() { return { type: this.type, rem: this.remaining, cold: this.coldOffset }; }
   load(o) {

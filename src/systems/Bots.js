@@ -142,6 +142,7 @@ export class Bots {
     if (!b || !(b instanceof Bot)) return;
     b.stats.revive(35);
     b.mode = 'ground';
+    if (b.carriedBy) { this.s.emit({ k: 'carry', target: b.id, by: null }); b.carriedBy = null; }
     b.say('revived');
   }
 
@@ -183,6 +184,11 @@ export class Bots {
     // ---- yerde
     if (st.downed) {
       b.mode = 'downed'; b.speed = 0;
+      if (b.carriedBy) {
+        const c = b.carriedBy === S.localId ? { pos: S.local.pos, yaw: S.local.yaw } : (() => { const r = S.players.get(b.carriedBy); return r ? { pos: r.pos, yaw: r.anim ? r.anim.yaw || 0 : 0 } : null; })();
+        if (c) { b.pos.set(c.pos.x - Math.sin(c.yaw) * 0.1, c.pos.y + 1.2, c.pos.z - Math.cos(c.yaw) * 0.1); b.yaw = c.yaw + Math.PI / 2; b.mode = 'carried'; }
+        else b.carriedBy = null;
+      }
       b.downT += dt;
       if (b.downT > 100) {
         // kimse kaldırmazsa üste döner (kalıcı ölüm yok)

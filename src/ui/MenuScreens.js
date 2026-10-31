@@ -358,7 +358,7 @@ export class Menus {
       if (this.setTab === 'graphics') {
         body = h('div.set-body',
           this.choice('Kalite', [['low', 'Düşük'], ['medium', 'Orta'], ['high', 'Yüksek']], g.quality, (v) => { Settings.set('graphics.quality', v); render(); this.ui.toast('Gölge çözünürlüğü ve kenar yumuşatma için oyunu yeniden yükle.', 'info', 4); }),
-          toggle('Gölgeler', 'graphics.shadows'), toggle('Parlama (bloom)', 'graphics.bloom'), toggle('Çimen', 'graphics.grass'), toggle('FPS göstergesi', 'graphics.fpsCounter'),
+          toggle('Gölgeler', 'graphics.shadows'), toggle('Parlama (bloom)', 'graphics.bloom'), toggle('Çimen', 'graphics.grass'), toggle('Otomatik çözünürlük (akıcılık)', 'graphics.autoScale'), toggle('FPS göstergesi', 'graphics.fpsCounter'),
           slider('Çözünürlük ölçeği', 'graphics.renderScale', 0.5, 1, 0.05, (v) => `%${Math.round(v * 100)}`),
           slider('Görüş mesafesi', 'graphics.viewDistance', 200, 700, 20, (v) => `${v} m`),
           slider('Görüş açısı (FOV)', 'graphics.fov', 55, 95, 1, (v) => `${v}°`));
@@ -416,7 +416,7 @@ export class Menus {
       sec('🔨 Üretim ve İnşa', `${I.label('crafting')} ile üretim menüsünü aç: bazı tarifler tezgâh, ateş ya da filtre yanında yapılır. ${I.label('build')} ile üs geliştirme menüsünü aç, yapıyı yerleştir, sonra çekiçle E basılı tutarak inşa et. Pencereleri tahtayla güçlendir; jeneratörü onar; bahçe kur; sığınağı 4 aşamada tamamla.`),
       sec('🧟 Zombiler', 'Normal zombiler yavaş ama kalabalıktır. Koşucular hızlıdır, ağır zombiler kapı ve duvar kırar, gece zombileri karanlıkta güçlenir, özel enfekteler zehir saçar, zombi köpekler kokunu alır. Silah sesleri ve koşmak onları çeker; eğilerek sessiz ilerle. Geceleri üste dön!'),
       sec('🚗 Araçlar', 'Araçları bul, onar (parça + İngiliz anahtarı), yakıt bidonuyla doldur. Bagajları ganimet taşımak için kullan. Zırh, tampon, tavan bagajı gibi geliştirmeler tak. Sür: W/S gaz-fren, A/D direksiyon, Boşluk el freni, F far, H korna.'),
-      sec('👥 Çok Oyunculu', 'Arkadaşlarla Oyna → Oda Kur ile oda kodunu ve davet bağlantısını paylaş. Herkes hazır olunca oda sahibi oyunu başlatır. Yere düşen arkadaşını E basılı tutarak kaldır. Envanter kişiseldir; eşyaları sandıklarda paylaşın ya da Envanter → "…\'a ver" ile aktarın. Bağlantı koparsa aynı odaya yeniden bağlanabilirsin.'),
+      sec('👥 Çok Oyunculu', 'Arkadaşlarla Oyna → Oda Kur ile oda kodunu ve davet bağlantısını paylaş. Herkes hazır olunca oda sahibi oyunu başlatır. Yere düşen arkadaşını E basılı tutarak kaldır ya da R ile sırtlayıp güvenli bir yere taşı. Envanter kişiseldir; eşyaları sandıklarda paylaşın ya da Envanter → "…\'a ver" ile aktarın. Bağlantı koparsa aynı odaya yeniden bağlanabilirsin.'),
       sec('🏁 Finaller', 'Görevler → Kaçış Planları ekranında her finalin gereksinimlerini gör. 30. gün 20:00 helikopter, 21:00 köprü konvoyu; 22:00\'de Son Işık başlar. Sonuç ekranında hayatta kalanlar, üs seviyesi, kararlarınız ve derece (S–D) gösterilir.'));
     const root = h('div' + (inGame ? '.panel.howto-panel' : '.screen.howto-screen'),
       h('div.screen-head', banner('NASIL OYNANIR?'), inGame ? h('button.close', { type: 'button', on: { click: () => this.ui.panels.openPause() } }, '✕') : button('← Geri', () => this.back(), 'ghost')), body);

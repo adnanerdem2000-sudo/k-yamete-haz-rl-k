@@ -117,7 +117,7 @@ export class Journal {
     if (def.wear) row('👕 Giyilir', { back: 'Sırt', body: 'Gövde', head: 'Baş', body2: 'Dış giyim', hands: 'Eller' }[def.wear.slot] + (def.wear.carry ? ` (+${def.wear.carry} kg)` : ''));
     if (s.dur !== undefined && def.durability) row('Dayanıklılık', `%${Math.round(s.dur / def.durability * 100)}`);
     if (s.fuel !== undefined) row('⛽ Yakıt', `${Math.round(s.fuel)} / ${def.fuelCap} L`);
-    if (def.spoil) row('⏳ Bozulma', `${def.spoil} gün`);
+    if (def.spoil) { const fd = S.freshDays(s); row('⏳ Tazelik', fd === null ? `${def.spoil} gün dayanır` : fd < 0 ? 'BOZULMUŞ' : `${Math.max(0, fd).toFixed(1)} gün kaldı`); }
     row('⚖️ Ağırlık', formatKg(def.weight * s.qty) + ' kg');
     const acts = [];
     const usable = def.use || def.wear || ['note', 'radio', 'sleeping_bag'].includes(s.id) || s.noteId;
@@ -271,12 +271,13 @@ export class Journal {
     const tip = h('div.map-tip.hidden');
     const travel = h('div.travel.hidden');
     let placing = false;
-    const v = { cx: this.mapFocus ? this.mapFocus.x : S.local.pos.x, cz: this.mapFocus ? this.mapFocus.z : S.local.pos.z, scale: 1.1, w: 800, h: 600 };
+    // ilk açılış: tüm adayı sığdıran genel bakış (konsept haritası gibi); odak varsa ona yakınlaş
+    const v = { cx: this.mapFocus ? this.mapFocus.x : 0, cz: this.mapFocus ? this.mapFocus.z : -10, scale: this.mapFocus ? 1.4 : 0, w: 800, h: 600 };
     this.mapFocus = null;
     const toolbar = h('div.map-tools',
       button('📍 İşaret Koy', (e) => { placing = !placing; e.currentTarget.classList.toggle('active', placing); }, 'tool'),
       button('🔍+ Yakınlaştır', () => { v.scale = Math.min(6, v.scale * 1.4); }, 'tool'),
-      button('🔍− Uzaklaştır', () => { v.scale = Math.max(0.45, v.scale / 1.4); }, 'tool'),
+      button('🔍− Uzaklaştır', () => { v.scale = Math.max(0.3, v.scale / 1.4); }, 'tool'),
       button('🧭 Oyuncu Konumu', () => { v.cx = S.local.pos.x; v.cz = S.local.pos.z; }, 'tool'),
       button('🚶 Hızlı Seyahat', () => { this.travelList(travel); travel.classList.toggle('hidden'); }, 'tool'));
     wrap.append(cv, tip, travel, toolbar, h('div.map-legend', h('span', '🏠 Üs'), h('span', '★ Görev'), h('span', '📍 İşaret'), h('span', '⚠️ Tehlike'), h('span', 'Sağ tık: işareti sil')));
@@ -286,11 +287,12 @@ export class Journal {
       const r = wrap.getBoundingClientRect();
       if (cv.width !== Math.round(r.width) || cv.height !== Math.round(r.height)) { cv.width = Math.max(10, Math.round(r.width)); cv.height = Math.max(10, Math.round(r.height)); }
       v.w = cv.width; v.h = cv.height;
+      if (!v.scale) v.scale = Math.min(v.w, v.h) / 1180;
       this.ui.mapView.drawFull(cv.getContext('2d'), v, S, { hover: this.hoverPoi });
       raf = requestAnimationFrame(draw);
     };
     raf = requestAnimationFrame(draw);
-    cv.addEventListener('wheel', (e) => { e.preventDefault(); const k = e.deltaY < 0 ? 1.15 : 1 / 1.15; const before = this.ui.mapView.toWorld(v, e.offsetX, e.offsetY); v.scale = Math.max(0.45, Math.min(6, v.scale * k)); const after = this.ui.mapView.toWorld(v, e.offsetX, e.offsetY); v.cx += before.x - after.x; v.cz += before.z - after.z; }, { passive: false });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); const k = e.deltaY < 0 ? 1.15 : 1 / 1.15; const before = this.ui.mapView.toWorld(v, e.offsetX, e.offsetY); v.scale = Math.max(0.3, Math.min(6, v.scale * k)); const after = this.ui.mapView.toWorld(v, e.offsetX, e.offsetY); v.cx += before.x - after.x; v.cz += before.z - after.z; }, { passive: false });
     cv.addEventListener('mousedown', (e) => { if (e.button === 0) drag = { x: e.clientX, y: e.clientY, cx: v.cx, cz: v.cz, moved: false }; });
     const mm = (e) => {
       if (drag) { const dx = e.clientX - drag.x, dy = e.clientY - drag.y; if (Math.abs(dx) + Math.abs(dy) > 4) drag.moved = true; v.cx = drag.cx - dx / v.scale; v.cz = drag.cz - dy / v.scale; }

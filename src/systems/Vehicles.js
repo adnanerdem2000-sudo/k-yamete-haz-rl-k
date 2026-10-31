@@ -463,7 +463,7 @@ export class Vehicles {
       v.pitch = damp(v.pitch, Math.atan2(hf - hb, L * 0.8), 10, dt);
       v.roll = damp(v.roll, Math.atan2(hl - hr, W * 0.8), 10, dt);
       // derin su: stop
-      if (T.heightAt(nx, nz) < T.waterLevelAt(nx, nz) - 1.0) { v.speed *= 0.8; if (!v._sunk) { v._sunk = true; S.ui.toast('Araç suya battı! Motor stop etti.', 'danger'); S.act('vehicle_damage', { id: v.id, dmg: 40 }); } }
+      if (T.heightAt(nx, nz) < T.waterLevelAt(nx, nz) - 1.0 && v.pos.y < T.waterLevelAt(nx, nz) + 0.4) { v.speed *= 0.8; if (!v._sunk) { v._sunk = true; S.ui.toast('Araç suya battı! Motor stop etti.', 'danger'); S.act('vehicle_damage', { id: v.id, dmg: 40 }); } }
       v.pos.x = nx; v.pos.z = nz;
     }
     // zombilere çarpma (yerel tespit)
