@@ -248,8 +248,8 @@ export class Combat {
     // oyuncunun kendi gövdesini atlamak için kameradan başlayan ışında en az 1.5 m
     for (const [id, v] of S.zombies.views) {
       if (v.state.dead || !v.root.visible) continue;
-      const r = v.type === 'heavy' || v.type === 'leader' ? 0.7 : v.type === 'dog' ? 0.45 : 0.42;
-      const h = v.type === 'dog' ? 0.9 : v.type === 'heavy' || v.type === 'leader' ? 2.6 : 1.85;
+      const r = v.type === 'heavy' || v.type === 'leader' ? 0.7 : v.type === 'bloater' ? 0.62 : v.type === 'crawler' ? 0.55 : v.type === 'dog' ? 0.45 : 0.42;
+      const h = v.type === 'dog' ? 0.9 : v.type === 'crawler' ? 0.55 : v.type === 'heavy' || v.type === 'leader' ? 2.6 : 1.85;
       const t = rayCyl(o, d, v.pos.x, v.pos.z, r, v.pos.y, v.pos.y + h);
       if (t !== null && t > 1.5 && t < best) {
         best = t;

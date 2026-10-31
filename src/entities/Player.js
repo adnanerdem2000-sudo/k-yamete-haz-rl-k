@@ -132,6 +132,7 @@ export class Player {
       else target = this.aiming ? 2.4 : base;
       target *= sm;
       if (this.carrying) target *= 0.6;
+      if (this.grabT > 0) target *= 0.35;
       // geri geri yürürken yavaş
       if (mz < 0 && this.aiming) target *= 0.8;
     }
@@ -170,6 +171,7 @@ export class Player {
       S.audio && S.audio.play('jump', { at: this.pos, vol: 0.4 });
     }
     this.lockMove = Math.max(0, this.lockMove - dt);
+    this.grabT = Math.max(0, (this.grabT || 0) - dt);
     this.recoil = damp(this.recoil, 0, 9, dt);
   }
 

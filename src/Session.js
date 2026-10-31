@@ -178,7 +178,7 @@ export class Session {
     this.onEvt('rel', (e) => { this.relations[e.faction] = clamp((this.relations[e.faction] || 0) + e.delta, -100, 100); this.quests.onFlag('rel:' + e.faction); });
     this.onEvt('toast', (e) => this.ui.toast(e.text, e.kind || 'info', e.dur));
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); });
-    this.onEvt('dmg_player', (e) => this.damageLocal(e.amount, e.kind, e.from));
+    this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
     this.onEvt('revived', (e) => {
       if (e.target === this.localId) { this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
       if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
@@ -224,6 +224,18 @@ export class Session {
   }
 
   // ======================================================================= ana güncelleme
+  /** Oyun zamanına bağlı gecikmeli çağrı (duraklatmada bekler; oturum kapanınca iptal) */
+  later(sec, fn) { (this.timers || (this.timers = [])).push({ t: sec, fn }); }
+
+  updateTimers(dt) {
+    const L = this.timers;
+    if (!L || !L.length) return;
+    for (let i = L.length - 1; i >= 0; i--) {
+      L[i].t -= dt;
+      if (L[i].t <= 0) { const f = L[i].fn; L.splice(i, 1); try { f(); } catch (e) { console.error(e); } }
+    }
+  }
+
   update(dt) {
     if (this.disposed) return;
     const ui = this.ui;
@@ -251,6 +263,7 @@ export class Session {
     else pl.update(dt, input, blocking);
     // sabit adımlı fizik (oyuncu kapsülü, araçlar, dinamik nesneler) + enterpolasyonlu çizim
     this.game.phys.update(dt);
+    this.updateTimers(dt);
     if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.postPhysicsLocal(dt);
     else pl.postPhysics(dt);
     if (pl.carriedBy) this.followCarrier(pl);

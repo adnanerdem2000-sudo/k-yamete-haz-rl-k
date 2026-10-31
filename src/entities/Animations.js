@@ -442,17 +442,20 @@ export function emote(p, kind, t) {
 // ---------------------------------------------------------------- ZOMBİLER
 
 /** Zombi yürüyüşü: topallayan, kollar önde, baş yana yatık */
-export function zombieWalk(p, phase, speed01, t, style = 0) {
+export function zombieWalk(p, phase, speed01, t, style = 0, move = 1) {
   p.reset();
-  const s = sin(phase), c = cos(phase);
+  // move: 0 = yerinde sallanarak bekleme, 1 = tam adım
+  const mv = min(1, max(0, move));
+  const s = sin(phase) * mv, c = cos(phase) * mv;
   const run = min(1, speed01);
   const limp = style % 2 === 0 ? 1 : -1;
-  p.set('LeftUpLeg', (-s * (20 + run * 25) - run * 10) * D, 0, -4 * D);
-  p.set('RightUpLeg', (s * (16 + run * 25) - run * 10) * D, limp * 6 * D, 4 * D);
-  p.set('LeftLeg', (10 + max(0, c) * (30 + run * 50)) * D, 0, 0);
-  p.set('RightLeg', (14 + max(0, -c) * (20 + run * 50)) * D, 0, 0);
-  p.set('LeftFoot', (-8 - max(0, c) * 10) * D, 0, 0);
-  p.set('RightFoot', (-8 - max(0, -c) * 10) * D, limp * 10 * D, 0);
+  const idleSway = (1 - mv) * sin(t * 1.3) * 4;
+  p.set('LeftUpLeg', (-s * (20 + run * 25) - run * 10 + idleSway) * D, 0, -4 * D);
+  p.set('RightUpLeg', (s * (16 + run * 25) - run * 10 - idleSway) * D, limp * 6 * D, 4 * D);
+  p.set('LeftLeg', (6 + 4 * mv + max(0, c) * (30 + run * 50)) * D, 0, 0);
+  p.set('RightLeg', (8 + 6 * mv + max(0, -c) * (20 + run * 50)) * D, 0, 0);
+  p.set('LeftFoot', (-4 * mv - max(0, c) * 10) * D, 0, 0);
+  p.set('RightFoot', (-4 * mv - max(0, -c) * 10) * D, limp * 10 * D, 0);
   const sway = sin(phase * 0.5) * 8;
   p.set('Hips', 0, s * 6 * D, (sway * 0.5 + limp * 3) * D);
   p.set('Spine', (12 + run * 14) * D, s * 6 * D, (-sway * 0.6 - limp * 4) * D);
@@ -474,6 +477,46 @@ export function zombieWalk(p, phase, speed01, t, style = 0) {
   }
   relaxHands(p, 35);
   p.hip.set(0, -abs(s) * 0.04 - 0.02 - run * 0.03, 0);
+  return p;
+}
+
+/** Sürünen zombi: model kökü yüzüstü yatırılır; kollar sırayla çeker, bacaklar sürüklenir */
+export function zombieCrawl(p, phase, speed01, t) {
+  p.reset();
+  const s = sin(phase), c = cos(phase);
+  const m = 0.35 + 0.65 * min(1, speed01);
+  p.set('Neck', -50 * D, sin(t * 0.8) * 12 * D, 0);
+  p.set('Head', -25 * D, 0, sin(t * 1.1) * 10 * D);
+  p.set('Spine', 0, s * 10 * m * D, s * 4 * D);
+  p.set('LeftArm', (-150 + s * 35 * m) * D, 0, (-30 + max(0, s) * 15) * D);
+  p.set('RightArm', (-150 - s * 35 * m) * D, 0, (30 - max(0, -s) * 15) * D);
+  p.set('LeftForeArm', 0, (-35 - max(0, c) * 50 * m) * D, 0);
+  p.set('RightForeArm', 0, (35 + max(0, -c) * 50 * m) * D, 0);
+  p.set('LeftUpLeg', 6 * D, 0, -10 * D);
+  p.set('RightUpLeg', (4 + s * 4) * D, 0, 14 * D);
+  p.set('LeftLeg', 12 * D, 0, 0);
+  p.set('RightLeg', (30 + s * 8) * D, 0, 0);
+  relaxHands(p, 50);
+  return p;
+}
+
+/** Çığlık: baş geride, kollar açık, gövde titrer */
+export function zombieScream(p, t) {
+  p.reset();
+  const j = sin(t * 30) * 2;
+  p.set('Spine', (-14 + j) * D, 0, 0);
+  p.set('Chest', -12 * D, 0, 0);
+  p.set('Neck', -18 * D, 0, 0);
+  p.set('Head', (-35 + j * 2) * D, sin(t * 3) * 8 * D, 0);
+  p.set('LeftArm', (-30 + j) * D, 0, (-20 + j) * D);
+  p.set('RightArm', (-30 - j) * D, 0, (20 - j) * D);
+  p.set('LeftForeArm', 0, -25 * D, 0);
+  p.set('RightForeArm', 0, 25 * D, 0);
+  p.set('LeftUpLeg', -6 * D, 0, -8 * D);
+  p.set('RightUpLeg', 4 * D, 0, 8 * D);
+  p.set('LeftLeg', 12 * D, 0, 0);
+  p.set('RightLeg', 8 * D, 0, 0);
+  grip(p, 'Left', 0.9); grip(p, 'Right', 0.9);
   return p;
 }
 

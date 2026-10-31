@@ -53,7 +53,24 @@ export class Zombies {
     const S = session;
     S.on('zombie_hit', (p, from) => this.hit(p.id, p.dmg, p.dir, from, p.kind, p.force));
     S.onEvt('zdie', (e) => this.onDieEvt(e));
-    S.onEvt('zfx', (e) => { const v = this.views.get(e.id); if (!v) return; if (e.a === 'attack') v.attack(); if (e.a === 'flinch') v.flinch(); });
+    // şişko patlaması: herkes görür/duyar; hasarı her istemci kendi oyuncusuna, host zombilere uygular
+    S.onEvt('zburst', (e) => {
+      S.fx.toxic(e.x, e.y + 1, e.z);
+      S.props.explosion(e.x, e.y + 0.9, e.z, 4.2);
+      const p = S.local.pos;
+      if (dist(p.x, p.z, e.x, e.z) < 5.5) { S.localStats.cond.poisoned = Math.max(S.localStats.cond.poisoned || 0, 90); S.ui.toast('Şişko patladı! Zehirlendin.', 'danger'); }
+    });
+    S.onEvt('zfx_scream', (e) => {
+      S.audio.play('scream', { at: e, vol: 1, range: 90 });
+      const v = this.views.get(e.id); if (v) v.screamT = 1.6;
+      if (dist(S.local.pos.x, S.local.pos.z, e.x, e.z) < 70) S.ui.toast('😱 Çığlıkçı! Çevredeki zombiler geliyor!', 'danger', 3);
+    });
+    S.onEvt('zfx', (e) => {
+      const v = this.views.get(e.id); if (!v) return;
+      if (e.a === 'attack') v.attack();
+      if (e.a === 'flinch') v.flinch();
+      if (e.a === 'ricochet') { S.fx.sparks(v.pos.x, v.pos.y + 1.3, v.pos.z); S.audio.play('hit', { at: v.pos, vol: 0.6, rate: 2.2 }); }
+    });
   }
 
   init() {
@@ -79,7 +96,7 @@ export class Zombies {
   }
 
   makeView(id, type, x, y, z) {
-    const v = new ZombieView(this.s.game, ZOMBIE_TYPES[type]);
+    const v = new ZombieView(this.s.game, ZOMBIE_TYPES[type], id);
     if (ZOMBIE_TYPES[type].human) this.armRaider(v);
     v.root.position.set(x, y, z);
     this.group.add(v.root);
@@ -94,8 +111,7 @@ export class Zombies {
   armRaider(v) {
     const gun = this.s.game.itemModels.make(this.rng.chance(0.5) ? 'pistol' : 'shotgun');
     const h = new THREE.Group();
-    h.position.set(-0.12, -0.03, 0.08); h.rotation.set(0, -Math.PI / 2, Math.PI / 2);
-    gun.scale.setScalar(1 / 0.74);
+    h.position.set(-0.08, -0.015, 0.035); h.rotation.set(0, -Math.PI / 2, Math.PI / 2);
     h.add(gun);
     v.ch.anchors.handR.add(h);
   }
@@ -144,6 +160,7 @@ export class Zombies {
           if (night && day >= 13 && this.rng.chance(0.3)) type = 'night';
           if (day >= 13 && type === 'normal' && this.rng.chance(0.15)) type = 'runner';
           if (ZOMBIE_TYPES[type].nightOnly && !night) type = 'normal';
+          if ((ZOMBIE_TYPES[type].minDay || 0) > day) type = 'normal';
           if (this.spawn(type, x, z, { zone: zn })) { zn.pop--; break; }
         }
       }
@@ -211,6 +228,8 @@ export class Zombies {
   hit(id, dmg, dir, from, kind, force = 0) {
     const zb = this.list.get(id);
     if (!zb || zb.dead) return;
+    // çevik kuvvet yeleği: kurşun hasarı azalır
+    if (zb.def.armor && kind === 'gun') { dmg *= zb.def.armor; if (Math.random() < 0.35) this.s.emit({ k: 'zfx', id, a: 'ricochet' }); }
     zb.hp -= dmg;
     zb.lastHit = { kind, dir: dir || null, force: force || 0 };
     zb.stagger = Math.max(zb.stagger, kind === 'melee' ? 0.35 * (1 - (zb.def.knockResist || 0)) : 0.15);
@@ -238,6 +257,7 @@ export class Zombies {
     S.emit({ k: 'zdie', id: zb.id, x: zb.x, y: zb.y, z: zb.z, type: zb.type, by: from, hk: lh.kind || null, hd: lh.dir ? [Math.round(lh.dir[0] * 100) / 100, Math.round(lh.dir[1] * 100) / 100] : null, hf: Math.round((lh.force || 0) * 10) / 10 });
     if (drop) S.applyAction('ground_drop', { stack: { id: drop[0], qty: drop[1] }, x: zb.x, y: zb.y, z: zb.z }, from);
     if (zb.def.toxic) S.emit({ k: 'toast', text: 'Zehirli bulut! Uzak dur!', kind: 'danger' });
+    if (zb.def.bloat) S.emit({ k: 'zburst', x: zb.x, y: zb.y, z: zb.z });
     if (zb.def.leader) { S.emit({ k: 'toast', text: 'Sürü lideri öldü! Sürü dağılıyor!', kind: 'good', dur: 5 }); for (const z of this.list.values()) if (z.horde && !z.dead && this.rng.chance(0.6)) { z.horde = false; z.state = 'wander'; z.target = null; } }
     S.quests.onKill(zb.type, from);
   }
@@ -375,11 +395,47 @@ export class Zombies {
     const speedMul = (def.nightOnly ? (night ? 1.25 : 0.75) : 1) * (zb.boost || 1) * (1 - zb.slow);
     zb.boost = 1; zb.slow = Math.max(0, zb.slow - dt);
     let goal = null, run = false;
+    // çığlıkçı: hedefi görünce çığlık atar (sesle tüm çevreyi çağırır), sonra mesafeyi korur
+    if (def.screamer && (zb.state === 'chase' || zb.state === 'attack' || zb.state === 'scream')) {
+      const tp = this.targetPos(zb, players);
+      zb.screamCd = (zb.screamCd ?? 0) - dt;
+      if (zb.state === 'scream') {
+        zb.speed = 0;
+        if (tp) zb.yaw = Math.atan2(tp.x - zb.x, tp.z - zb.z);
+        zb.screamT -= dt;
+        if (zb.screamT <= 0) zb.state = 'chase';
+        return;
+      }
+      if (tp) {
+        const d = dist(tp.x, tp.z, zb.x, zb.z);
+        if (zb.screamCd <= 0 && d < 30) {
+          zb.state = 'scream'; zb.screamT = 1.6; zb.screamCd = 11 + this.rng.next() * 5;
+          S.emit({ k: 'zfx_scream', id: zb.id, x: zb.x, y: zb.y, z: zb.z });
+          S.applyAction('noise', { x: zb.x, z: zb.z, r: 75, src: 'scream' }, null);
+          return;
+        }
+        // mesafe: 9-16 m arasında kal
+        if (d < 9) { goal = { x: zb.x + (zb.x - tp.x), z: zb.z + (zb.z - tp.z) }; run = true; }
+        else if (d > 16) { goal = tp; run = false; }
+        else { zb.speed = Math.max(0, zb.speed - dt * 4); zb.yaw = Math.atan2(tp.x - zb.x, tp.z - zb.z); return; }
+        const sp = (run ? def.run : def.walk) * speedMul;
+        this.navigate(zb, goal, sp, dt);
+        return;
+      }
+    }
     if (zb.state === 'chase' || zb.state === 'attack') {
       const tp = this.targetPos(zb, players);
       if (tp) {
         goal = tp; run = true;
         const d = dist(tp.x, tp.z, zb.x, zb.z);
+        // kuşatma: aynı hedefi kovalayanlar çevresine dağılır (tek sıra yerine çember)
+        if (!def.ranged && d > 2.6 && d < 22) {
+          const slot = (parseInt(zb.id.slice(1), 10) * 2.399) % (Math.PI * 2);
+          const off = Math.min(2.4, d * 0.28);
+          goal = { x: tp.x + Math.cos(slot) * off, z: tp.z + Math.sin(slot) * off, y: tp.y };
+        }
+        // atılma: koşucular ve köpekler son metrelerde hızlanır
+        if ((def.dog || zb.type === 'runner') && d < 5 && d > 1.6 && (zb.lungeCd ?? 0) <= 0) { zb.lunge = 0.45; zb.lungeCd = 3; }
         // menzilli (yağmacı)
         if (def.ranged) {
           if (d < 25 && S.world.physics.lineOfSight(zb.x, zb.y + 1.5, zb.z, tp.x, tp.y + 1.2, tp.z)) {
@@ -396,7 +452,7 @@ export class Zombies {
             zb.attackCd = def.rate;
             S.emit({ k: 'zfx', id: zb.id, a: 'attack' });
             const tgt = tp;
-            setTimeout(() => this.landHit(zb, tgt), 280);
+            S.later(0.28, () => this.landHit(zb, tgt));
           }
         } else zb.state = 'chase';
       }
@@ -432,7 +488,10 @@ export class Zombies {
       if (zb.horde && zb.target) goal = zb.target;
     }
     if (!goal) { zb.speed = Math.max(0, zb.speed - dt * 4); return; }
-    const sp = (run ? def.run : def.walk * (zb.state === 'investigate' ? 1.3 : 0.7)) * speedMul;
+    zb.lungeCd = (zb.lungeCd ?? 0) - dt;
+    let lungeMul = 1;
+    if (zb.lunge > 0) { zb.lunge -= dt; lungeMul = 1.7; }
+    const sp = (run ? def.run : def.walk * (zb.state === 'investigate' ? 1.3 : 0.7)) * speedMul * lungeMul;
     this.navigate(zb, goal, sp, dt);
   }
 
@@ -445,7 +504,7 @@ export class Zombies {
     const kind = zb.def.hp > 300 ? 'heavy' : 'zombie';
     if (tgt.kind === 'player') {
       if (tgt.vehicle) S.applyAction('vehicle_damage', { id: tgt.vehicle.id || tgt.vehicle, dmg: dmg * 0.4 }, null);
-      else S.emit({ k: 'dmg_player', to: tgt.id, amount: dmg, kind, from: zb.id });
+      else S.emit({ k: 'dmg_player', to: tgt.id, amount: dmg, kind, from: zb.id, grab: !zb.def.dog && !zb.def.crawl && zb.def.hp < 200 && this.rng.chance(0.22) ? 1 : 0 });
     } else if (tgt.kind === 'bot') tgt.bot && S.bots.damage(tgt.bot, dmg);
     else if (tgt.kind === 'npc') tgt.npc && S.npcs.damage(tgt.npc, dmg);
     S.audio.play(zb.def.dog ? 'bark' : 'zattack', { at: zb, vol: 0.9 });
@@ -586,7 +645,7 @@ export class Zombies {
     const out = [];
     for (const zb of this.list.values()) {
       if (dist(zb.x, zb.z, x, z) > 150) continue;
-      out.push([zb.id, zb.type, Math.round(zb.x * 50) / 50, Math.round(zb.y * 50) / 50, Math.round(zb.z * 50) / 50, Math.round(zb.yaw * 100) / 100, zb.state === 'chase' || zb.state === 'attack' ? 1 : zb.state === 'bash' ? 2 : 0, Math.round(zb.speed * 10) / 10, zb.dead ? 1 : 0]);
+      out.push([zb.id, zb.type, Math.round(zb.x * 50) / 50, Math.round(zb.y * 50) / 50, Math.round(zb.z * 50) / 50, Math.round(zb.yaw * 100) / 100, zb.state === 'chase' || zb.state === 'attack' ? 1 : zb.state === 'bash' ? 2 : zb.state === 'scream' ? 3 : 0, Math.round(zb.speed * 10) / 10, zb.dead ? 1 : 0]);
     }
     return out;
   }
@@ -598,7 +657,7 @@ export class Zombies {
       let v = this.views.get(id);
       if (!v) v = this.makeView(id, type, x, y, z);
       v.target.set(x, y, z);
-      v.state.yaw = yaw; v.state.speed = speed; v.state.bashing = st === 2; v.state.state = st === 1 ? 'chase' : 'idle';
+      v.state.yaw = yaw; v.state.speed = speed; v.state.bashing = st === 2; v.state.state = st === 1 ? 'chase' : st === 3 ? 'scream' : 'idle';
       if (dead && !v.state.dead) { v.state.dead = true; v.deadAt = this.s.t; }
     }
     for (const [id, v] of this.views) if (!seen.has(id) && !v.state.dead) { v.dispose(); this.views.delete(id); }

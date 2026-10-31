@@ -71,7 +71,7 @@ function forceRewrite(mixer) {
 }
 
 /** Bir klibin seçili kemik izlerini elle örnekleyip mevcut poza karıştırır */
-class ClipLayer {
+export class ClipLayer {
   constructor(model, clip, re) {
     this.clip = clip;
     this.re = re;

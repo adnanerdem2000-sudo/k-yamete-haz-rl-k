@@ -147,6 +147,20 @@ export class AudioManager {
     };
     S.zattack = (v, p) => S.groan(v * 1.3, p, { pitch: 1.5 });
     S.zdeath = (v, p) => S.groan(v * 1.1, p, { pitch: 0.7 });
+    // çığlıkçı: tiz, titreşimli, uzun çığlık + hırıltı
+    S.scream = (v, p) => {
+      const c = self.ctx, t = c.currentTime, dur = 1.5;
+      for (const [f0, f1, type, g0] of [[620, 980, 'sawtooth', 0.22], [1240, 1700, 'square', 0.08]]) {
+        const o = c.createOscillator(); o.type = type;
+        o.frequency.setValueAtTime(f0, t); o.frequency.linearRampToValueAtTime(f1, t + 0.35); o.frequency.linearRampToValueAtTime(f0 * 0.8, t + dur);
+        const lfo = c.createOscillator(); lfo.frequency.value = 11; const lg = c.createGain(); lg.gain.value = 40; lfo.connect(lg); lg.connect(o.frequency);
+        const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 1400; f.Q.value = 0.9;
+        const g = c.createGain(); self.env(g, t, 0.04, v * g0, dur);
+        o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + dur + 0.1); lfo.start(t); lfo.stop(t + dur + 0.1);
+      }
+      const n = self.noiseSrc(dur); const nf = c.createBiquadFilter(); nf.type = 'highpass'; nf.frequency.value = 2200; const ng = c.createGain(); self.env(ng, t, 0.05, v * 0.12, dur);
+      n.connect(nf); nf.connect(ng); ng.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + dur);
+    };
     S.bark = (v, p) => { const c = self.ctx; for (let i = 0; i < 2; i++) { const t = c.currentTime + i * 0.18; const o = c.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(420, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.1); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1500; const g = c.createGain(); self.env(g, t, 0.005, v * 0.35, 0.12); o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.15); } };
     S.door = (v, p) => { const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.6); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 18; f.frequency.setValueAtTime(600, t); f.frequency.linearRampToValueAtTime(900 + Math.random() * 400, t + 0.45); const g = c.createGain(); self.env(g, t, 0.05, v * 0.6, 0.45); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.6); };
     S.bash = (v, p) => { S.hit(v * 1.2, p); const c = self.ctx, t = c.currentTime; const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g = c.createGain(); self.env(g, t, 0.002, v * 0.7, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.3); };

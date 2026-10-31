@@ -102,6 +102,7 @@ const _m = new THREE.Matrix4();
 const _ident = new THREE.Quaternion();
 const _e3q = new THREE.Quaternion();
 const HIP_SCALE = 0.75; // eski poz birimleri (model birimi) → metre
+const FOOT_LEVEL = 0.7; // ayak yönü: 0 = inciği izle, 1 = gövdeye göre yatay
 
 /**
  * T-poz dinlenme verisini hesaplar (taban model başına bir kez). bones: ad → THREE.Bone (bağlama pozunda),
@@ -123,6 +124,16 @@ export function computeRest(bones, modelRoot) {
     bone.quaternion.copy(P.clone().invert().multiply(R).multiply(W));
     bone.updateMatrixWorld(true);
   };
+  // ---- ayak-incik ilişkisi BAĞLAMA pozundan (botun deri ağırlıkları bu ilişkiye göredir)
+  const footBind = {};
+  for (const s of ['L', 'R']) {
+    const ll = bones['LowerLeg' + s], ft = bones['Foot' + s];
+    const llInv = new THREE.Matrix4().multiplyMatrices(rootInv, ll.matrixWorld).invert();
+    const fh = wp(ft);
+    // ayak bileği eklemi ≈ topuğun (ayak kemiği başı) biraz üstü ve önü
+    const ank = fh.clone().add(new THREE.Vector3(0, 0.085, 0.025));
+    footBind[s] = { headLocal: fh.clone().applyMatrix4(llInv), ankleLocal: ank.applyMatrix4(llInv), rel: wq(ll).invert().multiply(wq(ft)) };
+  }
   // ---- T-poz: kollar yatay (sol +X), bilekler düz; bacaklar dik
   const shin = {};
   for (const s of ['L', 'R']) {
@@ -156,7 +167,7 @@ export function computeRest(bones, modelRoot) {
     const ankleLocal = ankleModel.clone().applyMatrix4(llW.clone().invert());
     const llT = wq(ll);
     const footRel = llT.clone().invert().multiply(wq(ft));
-    feet[s] = { ankleLocal, footRel, footT: ankleModel, llT, llTinv: llT.clone().invert() };
+    feet[s] = { ankleLocal, footRel, footT: ankleModel, llT, llTinv: llT.clone().invert(), bindLocal: saved.get(ft).q.clone(), bind: footBind[s] };
     // bacaklar düzleştirilince ayak biraz aşağı iner: gövdeyi o kadar yukarı al
     groundFix += (wp(ft).y - ankleModel.y) / 2;
   }
@@ -294,23 +305,30 @@ export class CharacterRig {
     if (!root) return;
     root.updateWorldMatrix(true, false);
     _m.copy(root.matrixWorld).invert();
-    root.getWorldQuaternion(_q2).invert();
+    root.getWorldQuaternion(_q2); // kökün dünya yönelimi
     for (const s of ['L', 'R']) {
       const ft = this.foot[s];
       const ll = this.list[RIDX['LowerLeg' + s]];
       if (!ft || !ll) continue;
       const w = weights ? weights[RIDX['LowerLeg' + s]] : 1;
       if (w <= 0) continue;
+      const B = F[s].bind;
       ll.updateWorldMatrix(true, false);
-      _v.copy(F[s].ankleLocal).applyMatrix4(ll.matrixWorld).applyMatrix4(_m);
-      // ayak dünya yönü = incik · (incik T-çerçevesinde ayak bileği pozu) · göreli T yönelimi
-      const k = IDX[s === 'L' ? 'LeftFoot' : 'RightFoot'] * 3;
-      const fx = pose.a[k], fy = pose.a[k + 1], fz = pose.a[k + 2];
-      ll.getWorldQuaternion(_q);
-      if (fx || fy || fz) { _q.multiply(F[s].llTinv); _q.multiply(_e3q.setFromEuler(_e.set(fx, fy, fz, 'XYZ'))); _q.multiply(F[s].llT); }
-      _q.multiply(F[s].footRel);
-      _q3.multiplyQuaternions(_q2, _q);
-      if (w >= 1) { ft.position.copy(_v); ft.quaternion.copy(_q3); } else { ft.position.lerp(_v, w); ft.quaternion.slerp(_q3, w); }
+      // bağlama ilişkisiyle varsayılan ayak dönüşümü (dünya)
+      const fp0 = _v.copy(B.headLocal).applyMatrix4(ll.matrixWorld);
+      const ank = _v2.copy(B.ankleLocal).applyMatrix4(ll.matrixWorld);
+      const fq0 = ll.getWorldQuaternion(_q).multiply(B.rel);
+      // tabanı gövdeye göre yataya doğru, ayak bileği ekleminin etrafında döndür
+      _e3q.multiplyQuaternions(_q2, F[s].bindLocal); // yatay ayak (dünya)
+      _q3.copy(fq0).invert();
+      _e3q.multiply(_q3); // Δ = yatay · fq0⁻¹
+      _q3.identity().slerp(_e3q, FOOT_LEVEL); // kısmi düzeltme
+      fp0.sub(ank).applyQuaternion(_q3).add(ank);
+      fq0.premultiply(_q3);
+      // kök yerel uzayına çevir
+      fp0.applyMatrix4(_m);
+      _q3.copy(_q2).invert().multiply(fq0);
+      if (w >= 1) { ft.position.copy(fp0); ft.quaternion.copy(_q3); } else { ft.position.lerp(fp0, w); ft.quaternion.slerp(_q3, w); }
     }
   }
 

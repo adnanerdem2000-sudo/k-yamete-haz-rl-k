@@ -1,11 +1,17 @@
-// Zombi görseli: Kenney zombi tabanlı iskeletli model (ya da prosedürel köpek) + prosedürel animasyon.
+// Zombi görseli. İnsan zombiler: Quaternius insan tabanı + hastalıklı ten, yıpranmış kanlı kıyafet,
+// türe özgü ekler (çevik kuvvet kaskı/yeleği, şişkonun karnı, parlayan gözler) ve prosedürel yürüyüş;
+// ölünce gerçek "Death" klibiyle yere yığılır. Zombi köpek: iskeletli husky modeli (çürümüş, kızıl gözlü).
 import * as THREE from 'three';
 import { Pose } from './CharacterRig.js';
 import * as A from './Animations.js';
+import { ClipLayer } from './Avatar.js';
+import { AnimalView } from './AnimalView.js';
 import { damp, dampAngle } from '../core/util.js';
 
+const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o });
+
 export class ZombieView {
-  constructor(game, type) {
+  constructor(game, type, seed = null) {
     this.game = game;
     this.def = type; // tür tanımı (Zombies.makeView this.type'a tür adını yazar)
     this.type = type;
@@ -16,94 +22,94 @@ export class ZombieView {
     this.attackT = -1;
     this.hitT = -1;
     this.lod = 0;
-    if (type.dog) { this.buildDog(); return; }
-    this.ch = game.charFactory.create(null, { zombie: type });
+    this.lay = 0;
+    if (type.dog) {
+      this.animal = new AnimalView(game, Math.random() < 0.5 ? 'husky' : 'wolf', { zombie: true, scale: 0.95 });
+      this.root = this.animal.root;
+      return;
+    }
+    this.ch = game.charFactory.create(null, { zombie: type, seed });
     this.root = this.ch.root;
     this.rig = this.ch.rig;
     this.pose = new Pose();
-    this.tmp = new Pose();
-    if (type.human) {
-      // yağmacı: insan görünümü + silah
-      game.charFactory.applyLook(this.ch, raiderLook(type));
-    }
+    if (type.human) game.charFactory.applyLook(this.ch, raiderLook());
+    this.addExtras(type);
   }
 
-  buildDog() {
-    const g = new THREE.Group();
-    const c = new THREE.Color(this.def.tint);
-    const M = (col, o = {}) => new THREE.MeshStandardMaterial({ color: col, roughness: 0.85, ...o });
-    const body = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.38, 0.95), M(c));
-    body.position.y = 0.62;
-    g.add(body);
-    // kaburgalar
-    for (let i = 0; i < 4; i++) { const r = new THREE.Mesh(new THREE.BoxGeometry(0.44, 0.05, 0.05), M('#d8c8b0')); r.position.set(0, 0.62, -0.15 + i * 0.12); g.add(r); }
-    const head = new THREE.Group();
-    const skull = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.3, 0.36), M(c.clone().multiplyScalar(0.9)));
-    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.16, 0.24), M(c.clone().multiplyScalar(0.8)));
-    snout.position.set(0, -0.05, 0.27);
-    const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.05, 0.2), M('#5a1a1a'));
-    jaw.position.set(0, -0.15, 0.25);
-    for (const s of [-1, 1]) {
-      const ear = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 4), M(c));
-      ear.position.set(s * 0.1, 0.2, -0.05);
-      head.add(ear);
-      const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), new THREE.MeshBasicMaterial({ color: 0xff3020 }));
-      eye.position.set(s * 0.09, 0.05, 0.18);
-      head.add(eye);
+  /** Türe özgü görsel ekler */
+  addExtras(z) {
+    const an = this.ch.anchors;
+    const add = (anchor, mesh) => { mesh.castShadow = true; mesh.userData.acc = true; anchor.add(mesh); return mesh; };
+    if (z.riot) {
+      // kask (vizörlü) ve çelik yelek
+      const helm = add(an.head, new THREE.Mesh(new THREE.SphereGeometry(0.135, 14, 10, 0, Math.PI * 2, 0, Math.PI / 1.7), M('#1d2533', { metalness: 0.3, roughness: 0.5 })));
+      helm.position.set(0, 0.105, -0.005); helm.scale.set(1, 0.95, 1.1);
+      const visor = add(an.head, new THREE.Mesh(new THREE.SphereGeometry(0.14, 14, 8, -0.9, 1.8, 0.9, 0.75), M('#2a3a4a', { transparent: true, opacity: 0.45, roughness: 0.1, metalness: 0.4 })));
+      visor.position.set(0, 0.09, 0.0);
+      const vest = add(an.chest, new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.42, 0.28), M('#232b36', { roughness: 0.7 })));
+      vest.position.set(0, -0.08, 0.0);
+      const plate = add(an.chest, new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.03), M('#c8c8c8')));
+      plate.position.set(0, -0.02, 0.155);
     }
-    head.add(skull, snout, jaw);
-    head.position.set(0, 0.86, 0.55);
-    g.add(head);
-    this.dogHead = head; this.dogJaw = jaw;
-    this.legs = [];
-    for (const [x, z] of [[-0.14, 0.34], [0.14, 0.34], [-0.14, -0.34], [0.14, -0.34]]) {
-      const pivot = new THREE.Group(); pivot.position.set(x, 0.5, z);
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.1), M(c.clone().multiplyScalar(0.85)));
-      leg.position.y = -0.25; pivot.add(leg); g.add(pivot);
-      this.legs.push(pivot);
+    if (z.bloat) {
+      // şişmiş karın
+      const belly = add(an.chest, new THREE.Mesh(new THREE.SphereGeometry(0.26, 14, 10), M(z.tint, { roughness: 0.6 })));
+      belly.position.set(0, -0.25, 0.1); belly.scale.set(1.1, 1.0, 1.05);
     }
-    const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.35), M(c));
-    tail.position.set(0, 0.75, -0.62); tail.rotation.x = -0.6;
-    g.add(tail);
-    g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    this.root = new THREE.Group();
-    this.root.add(g);
-    this.body = g;
+    if (z.screamer) {
+      // açık ağız (koyu leke)
+      const mouth = add(an.head, new THREE.Mesh(new THREE.CircleGeometry(0.022, 10), new THREE.MeshBasicMaterial({ color: 0x1a0505 })));
+      mouth.position.set(0, 0.02, 0.105); mouth.scale.set(1, 1.6, 1);
+    }
   }
 
   /** s: {state, speed, yaw, dead, bashing} */
   update(dt, s, lodSkip = false) {
     this.t += dt;
+    const def = this.def;
     const run = Math.min(1, Math.max(0, (s.speed - 1.6) / 2.5));
-    this.phase += s.speed * dt * (this.def.dog ? 3.4 : 2.1);
+    this.phase += s.speed * dt * (def.crawl ? 2.6 : 2.1);
     this.visYaw = dampAngle(this.visYaw, s.yaw, 10, dt);
+    if (this.animal) { this.updateDog(dt, s); return; }
     if (!this.corpse) this.root.rotation.y = this.visYaw;
-    if (this.def.dog) { this.updateDog(dt, s); return; }
     if (lodSkip) return;
     const p = this.pose;
+    const m = this.ch.model;
     if (s.dead) {
       this.deadT += dt;
-      A.downed(p, 0, 0);
-      p.set('Head', 30 * Math.PI / 180, 0.4, 0);
-      this.rig.apply(p);
       if (this.corpse) return; // fizik gövdesi devirir
-      const k = Math.min(1, this.deadT * 3);
-      this.ch.model.rotation.x = k * (Math.PI / 2 - 0.05);
-      this.ch.model.position.y = k * 0.25;
-      this.ch.model.position.z = k * 0.7;
+      if (def.crawl) {
+        A.zombieCrawl(p, this.phase, 0, this.t);
+        this.rig.apply(p);
+        return;
+      }
+      // gerçek ölüm klibi: önce klip pozu (kemikler), son karede sabit
+      if (!this.deathLayer) {
+        this.deathLayer = new ClipLayer(m, this.ch.clips.Death, null);
+        this.layDamp(0, 0, 0, 1);
+      }
+      const D0 = this.deathLayer.clip.duration;
+      this.deathLayer.apply(Math.min(D0 - 1e-3, this.deadT * 1.15), 1);
       return;
     }
-    if (this.def.human) {
+    if (def.crawl) {
+      A.zombieCrawl(p, this.phase, s.speed / 1.2, this.t);
+      this.layDamp(-Math.PI / 2 + 0.12, 0.15, -0.85, dt);
+    } else if (def.human) {
       if (s.speed > 0.2) A.locomotion(p, this.phase, run, this.t); else A.idle(p, this.t);
       if (s.state === 'attack' || s.state === 'aim') A.aim(p, 'rifle', 0, this.attackT > 0 ? 0.6 : 0);
+    } else if (s.state === 'scream') {
+      A.zombieScream(p, this.t);
     } else {
-      A.zombieWalk(p, this.phase, run, this.t, this.def.style || 0);
+      this.moveK = damp(this.moveK ?? 0, Math.min(1, s.speed / 0.5), 6, dt);
+      A.zombieWalk(p, this.phase, run, this.t, def.bloat ? 0 : (def.style || 0), this.moveK);
+      if (def.bloat) { p.add('LeftUpLeg', 0, 0, -10 * Math.PI / 180); p.add('RightUpLeg', 0, 0, 10 * Math.PI / 180); p.add('Spine', -0.15, 0, 0); }
       if (s.bashing) A.zombieBash(p, this.t);
     }
     if (this.attackT >= 0) {
       this.attackT += dt;
       const k = this.attackT / 0.6;
-      if (!this.def.human) A.zombieAttack(p, k);
+      if (!def.human && !def.crawl) A.zombieAttack(p, k);
       if (k >= 1) this.attackT = -1;
     }
     if (this.hitT >= 0) {
@@ -114,33 +120,32 @@ export class ZombieView {
     this.rig.apply(p);
   }
 
+  /** Kök eğimi (sürünen: yüzüstü) */
+  layDamp(rx, y, z, dt) {
+    const m = this.ch.model;
+    m.rotation.x = damp(m.rotation.x, rx, 8, dt);
+    m.position.y = damp(m.position.y, y, 8, dt);
+    m.position.z = damp(m.position.z, z, 8, dt);
+  }
+
   updateDog(dt, s) {
-    if (s.dead) {
-      this.deadT += dt;
-      if (this.corpse) return;
-      this.body.rotation.z = Math.min(1, this.deadT * 3) * Math.PI / 2;
-      this.body.position.y = -0.3 * Math.min(1, this.deadT * 3);
-      return;
-    }
-    const sw = Math.sin(this.phase) * Math.min(1, s.speed / 3) * 0.7;
-    this.legs[0].rotation.x = sw; this.legs[3].rotation.x = sw;
-    this.legs[1].rotation.x = -sw; this.legs[2].rotation.x = -sw;
-    this.body.position.y = Math.abs(Math.sin(this.phase)) * 0.05 * Math.min(1, s.speed / 3);
-    this.dogJaw.position.y = -0.15 - (this.attackT >= 0 ? 0.06 : Math.abs(Math.sin(this.t * 8)) * 0.02);
-    this.dogHead.rotation.x = this.attackT >= 0 ? -0.4 : Math.sin(this.t * 2) * 0.1;
-    if (this.attackT >= 0) { this.attackT += dt; if (this.attackT > 0.5) this.attackT = -1; }
+    const a = this.animal;
+    if (s.dead) { if (!a.dead && !this.corpse) a.die(); a.update(dt, { speed: 0 }); return; }
+    if (this.attackT >= 0) { this.attackT = -1; a.attack(0.5); }
+    if (this.hitT >= 0) { this.hitT = -1; a.flinch(); }
+    a.update(dt, { speed: s.speed, yaw: this.corpse ? undefined : s.yaw });
   }
 
   attack() { this.attackT = 0; }
   flinch() { this.hitT = 0; }
-  dispose() { if (this.root.parent) this.root.parent.remove(this.root); }
+  dispose() { if (this.animal) this.animal.mixer.stopAllAction(); if (this.root.parent) this.root.parent.remove(this.root); }
 }
 
 function raiderLook() {
   const tops = ['#1b1b1b', '#3a2a2a', '#2c3a2c', '#4a3a2a'];
   return {
-    base: Math.random() < 0.5 ? 'survivor-male' : 'male', skin: ['#e0a07a', '#c98a5e', '#a86b45'][Math.floor(Math.random() * 3)], hairStyle: 'short', hairColor: '#1d1410',
-    beard: Math.random() < 0.6 ? 'stubble' : 'none', hat: Math.random() < 0.6 ? 'bandana' : 'beanie', hatColor: '#7a1a1a',
+    base: 'male', skin: ['#e0a07a', '#c98a5e', '#a86b45'][Math.floor(Math.random() * 3)], hairStyle: 'short', hairColor: '#1d1410',
+    beard: Math.random() < 0.6 ? 'stubble' : 'full', hat: Math.random() < 0.6 ? 'bandana' : 'beanie', hatColor: '#7a1a1a',
     top: { style: 'vest', color: tops[Math.floor(Math.random() * tops.length)], color2: '#5a3a2a' }, pants: { style: 'cargo', color: '#2c2c2c' }, shoes: '#1b1b1b',
     backpack: 'tactical', backpackColor: '#2c2c2c', glasses: Math.random() < 0.4 ? 'sunglasses' : 'none', gloves: 'tactical', accessory: 'bandolier', build: 1.05, dirt: 0.6,
   };

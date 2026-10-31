@@ -2,6 +2,7 @@
 // (geyik, tavşan, tilki, yaban domuzu, kurt, ayı), avcılık ve balıkçılık.
 import * as THREE from 'three';
 import { Avatar } from '../entities/Avatar.js';
+import { AnimalView, ANIMAL_MODELS } from '../entities/AnimalView.js';
 import { NPCS, QUESTS } from '../data/story.js';
 import { ITEMS } from '../data/items.js';
 import { RNG, dist, clamp, dampAngle, wrapAngle } from '../core/util.js';
@@ -9,11 +10,12 @@ import { forestMask } from '../world/Terrain.js';
 import { rayCyl } from './Combat.js';
 
 const ANIMALS = {
-  deer: { name: 'Geyik', hp: 60, speed: 7, size: [0.45, 1.1, 1.3], color: '#b07a4a', flee: true, drops: [['raw_meat', 3], ['leather', 1]], leg: 0.75, antlers: true },
+  deer: { name: 'Geyik', hp: 60, speed: 7.5, size: [0.45, 1.1, 1.3], color: '#b07a4a', flee: true, herd: [2, 4], drops: [['raw_meat', 3], ['leather', 1]], leg: 0.75, antlers: true },
+  stag: { name: 'Erkek Geyik', hp: 130, speed: 8, size: [0.5, 1.3, 1.5], color: '#8a5a32', flee: true, charge: true, dmg: 22, drops: [['raw_meat', 5], ['leather', 2]], leg: 0.85, antlers: true },
   rabbit: { name: 'Tavşan', hp: 12, speed: 6.5, size: [0.25, 0.3, 0.4], color: '#c8b8a0', flee: true, drops: [['raw_meat', 1]], leg: 0.18 },
   fox: { name: 'Tilki', hp: 25, speed: 6, size: [0.3, 0.45, 0.8], color: '#d2691e', flee: true, drops: [['leather', 1], ['raw_meat', 1]], leg: 0.3 },
   boar: { name: 'Yaban Domuzu', hp: 90, speed: 5.5, size: [0.55, 0.75, 1.2], color: '#5b4636', aggro: 6, dmg: 14, drops: [['raw_meat', 3], ['leather', 1]], leg: 0.35, tusks: true },
-  wolf: { name: 'Kurt', hp: 70, speed: 7.5, size: [0.38, 0.7, 1.15], color: '#7d7d7d', aggro: 16, dmg: 12, drops: [['raw_meat', 2], ['leather', 1]], leg: 0.5, pack: true },
+  wolf: { name: 'Kurt', hp: 70, speed: 7.8, size: [0.38, 0.7, 1.15], color: '#7d7d7d', aggro: 22, dmg: 10, drops: [['raw_meat', 2], ['leather', 1]], leg: 0.5, pack: true },
   bear: { name: 'Ayı', hp: 320, speed: 6, size: [0.9, 1.3, 1.9], color: '#4a3020', aggro: 10, dmg: 30, drops: [['raw_meat', 6], ['leather', 3]], leg: 0.55 },
 };
 const FISH = { lake: ['Alabalık', 'Sazan', 'Levrek', 'Turna'], sea: ['Lüfer', 'Kefal', 'Somon', 'Levrek'] };
@@ -45,7 +47,12 @@ class Animal {
     this.x = x; this.z = z; this.y = sys.s.world.terrain.heightAt(x, z);
     this.yaw = Math.random() * 6; this.speed = 0; this.state = 'graze'; this.t = Math.random() * 5; this.phase = 0;
     this.dead = false; this.atkCd = 0;
-    this.build();
+    if (ANIMAL_MODELS[type]) {
+      this.view = new AnimalView(sys.s.game, type);
+      this.root = this.view.root;
+      this.root.position.set(x, this.y, z);
+      sys.group.add(this.root);
+    } else this.build();
   }
   build() {
     const d = this.def, [w, h, l] = d.size;
@@ -99,7 +106,7 @@ export class NPCs {
     S.on('npc_state', (p) => S.emit({ k: 'npc_state', ...p }));
     S.onEvt('npc_state', (e) => { const n = this.byId(e.id); if (!n) return; if (e.visible !== undefined) n.setVisible(e.visible); if (e.follow !== undefined) n.follow = e.follow; if (e.x !== undefined) { n.pos.set(e.x, S.world.physics.groundHeight(e.x, e.z, 1e9), e.z); n.home = { x: e.x, z: e.z }; } if (e.alive === false) { n.alive = false; n.setVisible(false); } });
     S.on('animal_hit', (p, from) => this.hitAnimal(p.id, p.dmg, from));
-    S.onEvt('animal_die', (e) => { const a = this.animals.find((x) => x.id === e.id); if (a) { a.dead = true; a.deadT = 0; } });
+    S.onEvt('animal_die', (e) => { const a = this.animals.find((x) => x.id === e.id); if (a) { a.dead = true; a.deadT = 0; if (a.view) a.view.die(); } });
   }
 
   init() {
@@ -124,17 +131,10 @@ export class NPCs {
 
   spawnDog(x, z) {
     const S = this.s;
-    const m = S.game.assets.model('props', 'dogue');
-    const box = new THREE.Box3().setFromObject(m);
-    const g = new THREE.Group();
-    m.scale.setScalar(0.38);
-    m.position.y = -box.min.y * 0.38;
-    m.rotation.y = 0;
-    g.add(m);
-    g.position.set(x, S.world.terrain.heightAt(x, z), z);
-    m.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-    this.group.add(g);
-    this.dog = { root: g, model: m, x, z, yaw: 0, follow: false, t: 0, found: false, barkT: 0 };
+    const view = new AnimalView(S.game, 'husky');
+    view.root.position.set(x, S.world.terrain.heightAt(x, z), z);
+    this.group.add(view.root);
+    this.dog = { root: view.root, view, x, z, yaw: 0, follow: false, t: 0, found: false, barkT: 0, biteT: 0, prey: null };
   }
 
   // ======================================================================= konuşma
@@ -236,8 +236,12 @@ export class NPCs {
     const a = this.animals.find((x) => x.id === id);
     if (!a || a.dead) return;
     a.hp -= dmg;
-    a.state = a.def.flee ? 'flee' : 'attack';
+    // erkek geyik yaralanınca saldırır; kurtlar yaralanınca sürüyle birlikte saldırır, çok yaralıysa kaçar
+    a.state = a.def.charge && a.hp > a.def.hp * 0.25 ? 'attack' : a.def.flee ? 'flee' : a.def.pack && a.hp < a.def.hp * 0.35 ? 'flee' : 'attack';
     a.target = from;
+    if (a.view) a.view.flinch();
+    if (a.def.pack && a.state === 'attack') for (const o of this.animals) if (o !== a && !o.dead && o.type === a.type && dist(o.x, o.z, a.x, a.z) < 30) o.state = 'attack';
+    if (a.def.herd) for (const o of this.animals) if (o !== a && !o.dead && o.def.flee && dist(o.x, o.z, a.x, a.z) < 25) o.state = 'flee';
     if (a.hp <= 0) {
       S.emit({ k: 'animal_die', id: a.id });
       const hunt = from && S.players.get(from) && S.players.get(from).charId === 'elif' ? 1.5 : 1;
@@ -343,21 +347,36 @@ export class NPCs {
       S.ui.toast('🐕 Karabaş seni buldu! Artık ekibin bir parçası.', 'good', 4);
     }
     let tx = d.x, tz = d.z, sp = 0;
-    if (d.follow) {
+    d.biteT -= dt;
+    // zombi avı: sahibine yakın zombilere saldırır (host hasar verir)
+    if (d.follow && S.isHost) {
+      if (!d.prey || d.prey.v.state.dead || dist(d.prey.v.pos.x, d.prey.v.pos.z, p.x, p.z) > 18) d.prey = S.zombies.nearestTo(d.x, d.z, 10);
+    } else d.prey = null;
+    if (d.prey && pd < 20) {
+      const zv = d.prey.v;
+      const zd = dist(zv.pos.x, zv.pos.z, d.x, d.z);
+      tx = zv.pos.x; tz = zv.pos.z; sp = zd > 1.3 ? 6.8 : 0;
+      if (zd < 1.6 && d.biteT <= 0) {
+        d.biteT = 1.1;
+        d.view.attack(0.55);
+        S.act('zombie_hit', { id: d.prey.id, dmg: 14, dir: [(zv.pos.x - d.x) / (zd || 1), (zv.pos.z - d.z) / (zd || 1)], kind: 'melee' });
+        S.audio.play('bark', { at: d.root.position, vol: 0.9, rate: 0.9 });
+      }
+    } else if (d.follow) {
       const base = S.world.home;
       const inBase = S.isInBase(p);
       const tgt = inBase || pd < 40 ? p : { x: base.spec.x + 4, z: base.spec.z - 12 };
       const td = dist(tgt.x, tgt.z, d.x, d.z);
-      if (td > 3) { tx = tgt.x; tz = tgt.z; sp = td > 8 ? 6.5 : 3; }
+      if (td > 3) { tx = tgt.x; tz = tgt.z; sp = td > 8 ? Math.min(7.5, 3 + td * 0.3) : 2.2; }
     }
     if (sp > 0) {
-      const dx = tx - d.x, dz = tz - d.z, l = Math.hypot(dx, dz);
+      const dx = tx - d.x, dz = tz - d.z, l = Math.hypot(dx, dz) || 1;
       const r = S.world.physics.resolveCircle(d.x + dx / l * sp * dt, d.z + dz / l * sp * dt, 0.3, d.root.position.y, d.root.position.y + 0.8, 0.55);
       d.x = r.x; d.z = r.z;
       d.yaw = dampAngle(d.yaw, Math.atan2(dx, dz), 8, dt);
-    }
-    d.root.position.set(d.x, S.world.physics.groundHeight(d.x, d.z, d.root.position.y + 0.5, 0.6) + (sp > 0 ? Math.abs(Math.sin(d.t * 12)) * 0.08 : 0), d.z);
-    d.root.rotation.y = d.yaw;
+    } else if (d.follow && pd < 6) d.yaw = dampAngle(d.yaw, Math.atan2(p.x - d.x, p.z - d.z), 3, dt);
+    d.root.position.set(d.x, S.world.physics.groundHeight(d.x, d.z, d.root.position.y + 0.5, 0.6), d.z);
+    d.view.update(dt, { speed: sp, yaw: d.yaw, graze: !d.follow });
     // zombi yaklaşınca havla (alarm)
     d.barkT -= dt;
     if (d.follow && d.barkT <= 0) {
@@ -376,13 +395,16 @@ export class NPCs {
         this._spawnT = 3;
         const alive = this.animals.filter((a) => !a.dead).length;
         const fm = forestMask(p.x, p.z);
-        if (alive < 7 && (fm > 0.3 || p.y > 25)) {
+        if (alive < 9 && (fm > 0.3 || p.y > 25)) {
           const a = Math.random() * Math.PI * 2, r = 45 + Math.random() * 40;
           const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
           if (!S.world.terrain.isWater(x, z) && !S.world.buildingAt(x, z) && forestMask(x, z) > 0.25) {
-            const type = this.rng.weighted([['deer', 4], ['rabbit', 5], ['fox', 2], ['boar', 2], ['wolf', S.time.isNight ? 3 : 1], ['bear', 0.3]]);
-            const n = ANIMALS[type].pack ? 3 : 1;
-            for (let i = 0; i < n; i++) this.animals.push(new Animal(this, type, x + i * 1.5, z + i));
+            const night = S.time.isNight;
+            const type = this.rng.weighted([['deer', 4], ['stag', 1.2], ['rabbit', 5], ['fox', 2], ['boar', 2], ['wolf', night ? 3.5 : 1], ['bear', 0.3]]);
+            const def = ANIMALS[type];
+            const n = def.pack ? 3 + (night && S.time.day > 10 ? 1 : 0) : def.herd ? this.rng.int(def.herd[0], def.herd[1]) : 1;
+            const group = 'g' + Math.random().toString(36).slice(2, 6);
+            for (let i = 0; i < n; i++) { const an = new Animal(this, type, x + (i % 3) * 1.6, z + Math.floor(i / 3) * 1.6 + i * 0.4); an.group = group; an.slot = i; this.animals.push(an); }
           }
         }
       }
@@ -392,38 +414,94 @@ export class NPCs {
       const pd = dist(a.x, a.z, p.x, p.z);
       if (a.dead) {
         a.deadT += dt;
-        a.root.rotation.z = Math.min(1, a.deadT * 3) * Math.PI / 2;
-        if (a.deadT > 20) { this.group.remove(a.root); this.animals.splice(i, 1); }
+        if (a.view) a.view.update(dt, { speed: 0 });
+        else a.root.rotation.z = Math.min(1, a.deadT * 3) * Math.PI / 2;
+        if (a.deadT > 30) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); }
         continue;
       }
-      if (pd > 160) { this.group.remove(a.root); this.animals.splice(i, 1); continue; }
+      if (pd > 170) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); continue; }
       a.t += dt;
       a.atkCd -= dt;
-      // davranış
-      if (a.def.flee) { if (pd < (S.local.mode === 'crouch' ? 9 : 18)) a.state = 'flee'; else if (a.state === 'flee' && pd > 35) a.state = 'graze'; }
-      else if (a.def.aggro && pd < a.def.aggro) a.state = 'attack';
-      else if (a.state === 'attack' && pd > a.def.aggro * 2.5) a.state = 'graze';
+      const def = a.def;
+      // ---- algı
+      const sneak = S.local.mode === 'crouch' || S.local.mode === 'prone';
+      if (def.flee && !def.charge) {
+        if (pd < (sneak ? 9 : 20)) a.state = 'flee';
+        else if (a.state === 'flee' && pd > 40) a.state = 'graze';
+      } else if (def.charge) {
+        if (a.state !== 'attack') { if (pd < (sneak ? 8 : 16)) a.state = 'flee'; else if (a.state === 'flee' && pd > 40) a.state = 'graze'; }
+        else if (pd > 30) a.state = 'graze';
+      } else if (def.aggro && pd < def.aggro * (sneak ? 0.6 : 1) && a.state !== 'flee') a.state = 'attack';
+      else if (a.state === 'attack' && pd > def.aggro * 2.5) a.state = 'graze';
+      else if (a.state === 'flee' && pd > 50) a.state = 'graze';
+      // sürü/küme: kaçan bir üye diğerlerini de kaçırır
+      if (a.state === 'flee' && def.herd) for (const o of this.animals) if (o.group === a.group && !o.dead && o.state !== 'flee') o.state = 'flee';
       let sp = 0, ty = a.yaw;
-      if (a.state === 'flee') { ty = Math.atan2(a.x - p.x, a.z - p.z); sp = a.def.speed; }
-      else if (a.state === 'attack') {
-        ty = Math.atan2(p.x - a.x, p.z - a.z); sp = pd > 1.6 ? a.def.speed * 0.9 : 0;
-        if (pd < 1.9 && a.atkCd <= 0 && S.isHost) { a.atkCd = 1.4; S.damageLocal(a.def.dmg, a.type === 'bear' ? 'heavy' : 'zombie'); S.audio.play('bark', { at: a, vol: 0.8, rate: a.type === 'bear' ? 0.5 : 1 }); }
+      if (a.state === 'flee') {
+        // sürü halinde kaç: tehditten uzağa, ortak yöne
+        ty = Math.atan2(a.x - p.x, a.z - p.z) + (a.slot ? Math.sin(a.slot * 1.7) * 0.25 : 0);
+        sp = def.speed;
+      } else if (a.state === 'attack') {
+        const toP = Math.atan2(p.x - a.x, p.z - a.z);
+        if (def.pack) {
+          // kurt sürüsü taktiği: bir kurt saldırır, diğerleri çevrede döner; sıra değişir
+          const pack = this.animals.filter((o) => o.group === a.group && !o.dead && o.state === 'attack');
+          const leader = pack.reduce((m, o) => (o.atkCd < m.atkCd ? o : m), pack[0]);
+          if (leader === a || pd < 2.2) {
+            ty = toP; sp = pd > 1.5 ? def.speed : 0;
+          } else {
+            // yörünge: 7-9 m yarıçapta teğet hareket
+            const want = 7.5 + (a.slot || 0) * 0.6;
+            const radial = (pd - want) * 0.6;
+            const tang = (a.slot % 2 ? 1 : -1);
+            const ax = Math.sin(toP), az = Math.cos(toP);
+            const vx = ax * radial + az * tang * 3.2, vz = az * radial - ax * tang * 3.2;
+            ty = Math.atan2(vx, vz); sp = Math.min(def.speed * 0.8, Math.hypot(vx, vz));
+          }
+        } else { ty = toP; sp = pd > 1.6 ? def.speed * (def.charge ? 1 : 0.9) : 0; }
+        this.packNext = this.packNext || new Map();
+        const packReady = !def.pack || (this.packNext.get(a.group) || 0) <= S.t;
+        if (pd < (def.charge ? 2.4 : 1.9) && a.atkCd <= 0 && packReady && S.isHost && Math.abs(wrapAngle(a.yaw - toP)) < 0.8) {
+          a.atkCd = def.charge ? 2.2 : def.pack ? 2.4 + Math.random() * 1.2 : 1.4;
+          if (def.pack) this.packNext.set(a.group, S.t + 1.9 + Math.random() * 0.6); // sürü sırayla, aralıklı saldırır
+          if (a.view) a.view.attack(def.charge ? 0.65 : 0.6);
+          const dmg = def.dmg;
+          S.later(def.charge ? 0.3 : 0.26, () => {
+            if (a.dead) return;
+            if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < (def.charge ? 2.8 : 2.3)) {
+              S.damageLocal(dmg, a.type === 'bear' || def.charge ? 'heavy' : 'zombie');
+              if (def.charge) { S.local.vel.x += Math.sin(a.yaw) * 7; S.local.vel.z += Math.cos(a.yaw) * 7; S.local.vel.y = 3; }
+            }
+          });
+          S.audio.play(a.type === 'wolf' ? 'bark' : 'hit', { at: a, vol: 0.8, rate: a.type === 'bear' ? 0.5 : a.type === 'wolf' ? 0.8 : 1 });
+          // kurt saldırıdan sonra geri çekilir (vur-kaç)
+          if (def.pack) a.retreatT = 0.9;
+        }
+        if (a.retreatT > 0) { a.retreatT -= dt; ty = toP + Math.PI; sp = def.speed * 0.7; }
       } else {
-        if (a.t > 4) { a.t = 0; a.wy = Math.random() * 6.28; a.walk = Math.random() < 0.5; }
-        ty = a.wy ?? a.yaw; sp = a.walk ? 1.2 : 0;
+        if (a.t > 4) { a.t = 0; a.wy = Math.random() * 6.28; a.walk = Math.random() < 0.45; a.graze = !a.walk && Math.random() < 0.6; }
+        // sürü üyeleri liderin yanında kalır
+        const lead = def.herd || def.pack ? this.animals.find((o) => o.group === a.group && !o.dead) : null;
+        if (lead && lead !== a && dist(lead.x, lead.z, a.x, a.z) > 5) { ty = Math.atan2(lead.x - a.x, lead.z - a.z); sp = 1.6; }
+        else { ty = a.wy ?? a.yaw; sp = a.walk ? (def.pack ? 1.4 : 1.1) : 0; }
       }
       a.yaw = dampAngle(a.yaw, ty, 5, dt);
       if (sp > 0) {
-        const r = S.world.physics.resolveCircle(a.x + Math.sin(a.yaw) * sp * dt, a.z + Math.cos(a.yaw) * sp * dt, a.def.size[0] * 0.6, a.y, a.y + 1.2, 0.6);
+        const r = S.world.physics.resolveCircle(a.x + Math.sin(a.yaw) * sp * dt, a.z + Math.cos(a.yaw) * sp * dt, def.size[0] * 0.6, a.y, a.y + 1.2, 0.6);
         if (!S.world.terrain.isWater(r.x, r.z)) { a.x = r.x; a.z = r.z; }
         a.y = S.world.terrain.heightAt(a.x, a.z);
       }
-      a.phase += sp * dt * 4;
-      const sw = Math.sin(a.phase) * Math.min(1, sp / 3) * 0.7;
-      a.legs[0].rotation.x = sw; a.legs[3].rotation.x = sw; a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
-      a.head.rotation.x = sp === 0 && a.state === 'graze' ? 0.6 : 0;
+      a.speed = sp;
       a.root.position.set(a.x, a.y, a.z);
-      a.root.rotation.y = a.yaw;
+      if (a.view) {
+        a.view.update(dt, { speed: sp, yaw: a.yaw, graze: a.state === 'graze' && a.graze });
+      } else {
+        a.phase += sp * dt * 4;
+        const sw = Math.sin(a.phase) * Math.min(1, sp / 3) * 0.7;
+        a.legs[0].rotation.x = sw; a.legs[3].rotation.x = sw; a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
+        a.head.rotation.x = sp === 0 && a.state === 'graze' ? 0.6 : 0;
+        a.root.rotation.y = a.yaw;
+      }
     }
   }
 

@@ -7,8 +7,9 @@
   "scripts": {
     "start": "node tools/serve.mjs",
     "test": "node --import ./tests/unit/register.mjs --test tests/unit/*.test.mjs",
-    "test:e2e": "node tools/scenario.mjs tests/e2e/smoke-menu.mjs && node tools/scenario.mjs tests/e2e/smoke-single.mjs && node tools/scenario.mjs tests/e2e/gameplay.mjs && node tools/scenario.mjs tests/e2e/multiplayer-local.mjs",
-    "pack-assets": "node tools/pack-assets.mjs"
+    "test:e2e": "node tools/scenario.mjs tests/e2e/smoke-menu.mjs && node tools/scenario.mjs tests/e2e/smoke-single.mjs && node tools/scenario.mjs tests/e2e/gameplay.mjs && node tools/scenario.mjs tests/e2e/multiplayer-local.mjs && node tools/scenario.mjs tests/e2e/physics.mjs && node tools/scenario.mjs tests/e2e/ai.mjs",
+    "pack-assets": "node tools/pack-assets.mjs",
+    "pack-rigged": "node tools/pack-rigged.mjs"
   },
   "devDependencies": {
     "@dimforge/rapier3d-compat": "^0.21.0",
