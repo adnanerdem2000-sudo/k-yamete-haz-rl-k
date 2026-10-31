@@ -253,6 +253,9 @@ export const POIS = [
 ];
 
 // Yol tabelaları (konsept sanattaki ahşap yön levhaları)
+/** Sürekli tüten duman sütunları: şehirdekiler yanmış araç enkazlarının üstünde, biri sanayide */
+export const SMOKE_SITES = [[3, -18], [140, 5], [205, -60], [110, -102], [92, -300], [-2, 62]];
+
 export const SIGNPOSTS = [
   { x: -36, z: 160, rot: 0.6, lines: ['ŞEHİR MERKEZİ →', 'HASTANE →', 'BENZİNLİK ↓', 'LİMAN ↓'] },
   { x: -312, z: 160, rot: -0.3, lines: ['ORMAN ↑', 'DAĞ KAMPI ↑', 'SANAYİ ↑'] },

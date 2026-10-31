@@ -6,7 +6,7 @@ import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 import { unpackBytes, packToClips } from '../entities/AnimPack.js';
 import { loadSurfaces } from '../world/Surfaces.js';
-import { mergeParts } from './PartMerge.js';
+import { mergeParts, burntParts } from './PartMerge.js';
 
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items', 'city'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
@@ -97,9 +97,15 @@ export class Assets {
   }
 
   /** Modeli birleştirilebilir/örneklenebilir parçalara ayırır: [{geometry, material, matrix}] (model uzayında) */
-  parts(kit, name) {
-    const key = `${kit}/${name}`;
+  parts(kit, name, variant = null) {
+    const key = `${kit}/${name}${variant ? '#' + variant : ''}`;
     if (this.partsCache.has(key)) return this.partsCache.get(key);
+    // görünüm çeşitleri (yanmış araç enkazı vb.) temel parçalardan türetilir
+    if (variant) {
+      const v = variant === 'burnt' ? burntParts(this.parts(kit, name)) : this.parts(kit, name);
+      this.partsCache.set(key, v);
+      return v;
+    }
     const src = this.index[key];
     const out = [];
     if (src) {

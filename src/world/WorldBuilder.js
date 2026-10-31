@@ -15,7 +15,8 @@ import { Geo, materials } from './Geo.js';
 import * as P from './Props.js';
 import { addContainer } from './Furnish.js';
 import { signTexture, dropSignTextures } from './TextureFactory.js';
-import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE } from './WorldLayout.js';
+import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE, SMOKE_SITES } from './WorldLayout.js';
+import { buildDressing } from './Dressing.js';
 import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
 
@@ -87,6 +88,8 @@ export class World {
     await step('Orman büyüyor…', () => {
       this.vegetation = new Vegetation(this);
       for (const [x, z, a, y] of this._planters || []) this.vegetation.add('flowerBush', x, z, a, 0.7, y);
+      // kıyamet sonrası sokak dokusu (zemin izleri, ot, çöp, moloz): bitkiler kurulmadan önce
+      this.dressing = buildDressing(this, this._crashSpots || []);
       this.manualTrees();
       this.vegetation.scatter((x, z, r) => this.blocked(x, z, r));
       this.vegetation.build(this.root);
@@ -367,10 +370,12 @@ export class World {
 
   lamp(x, y, z, kind = 'street', color = 0xffd9a0) { this.lamps.push({ x, y, z, kind, color }); }
 
-  abandonedCar(x, z, rot, rng, crashed = false) {
+  abandonedCar(x, z, rot, rng, crashed = false, burnt = false) {
     const name = rng.pick(CAR_MODELS);
-    this.placeModel('vehicles', name, x, z, rot, 4.6, { collide: true, kind: 'vehicle' });
-    this.container('car_trunk', x - Math.sin(rot) * 1.8, z - Math.cos(rot) * 1.8, { h: 0.7, label: crashed ? 'Kaza Yapmış Araç' : 'Terk Edilmiş Araç Bagajı' });
+    this.placeModel('vehicles', name, x, z, rot, 4.6, { collide: true, kind: 'vehicle', variant: burnt ? 'burnt' : null });
+    this.container('car_trunk', x - Math.sin(rot) * 1.8, z - Math.cos(rot) * 1.8, { h: 0.7, label: burnt ? 'Yanmış Araç Enkazı' : crashed ? 'Kaza Yapmış Araç' : 'Terk Edilmiş Araç Bagajı' });
+    // kaza yeri izleri (Dressing): yanık, cam kırığı, yağ, fren izi; yananların yanında moloz
+    if (crashed) (this._crashSpots = this._crashSpots || []).push({ x, z, r: 3.2, kinds: burnt ? ['scorch', 'glass', 'oil', 'stain'] : ['glass', 'oil', 'skid'], rubble: burnt });
   }
 
   buildPanes() {
@@ -574,7 +579,8 @@ export class World {
     this.vehicleSpawns.push({ id: 'ambulance', type: 'ambulance', x: -60, z: -38, rot: Math.PI / 2, fuel: 0.35, health: 0.6 });
     this.vehicleSpawns.push({ id: 'city_van', type: 'van', x: 66, z: 30, rot: 0, fuel: 0.3, health: 0.55 });
     // kaza yapmış araç yığınları (konsept sanattaki kaotik sokaklar)
-    for (const [x, z, r] of [[3, -18, 0.6], [-2, 62, 2.5], [66, -96, 1.2], [140, 5, 0.2], [143, 60, 2.9], [205, -60, 1.7], [35, 98, 1.4], [110, -102, 0.4]]) this.abandonedCar(x, z, r, rng, true);
+    // dumanı tüten kaza yerlerindeki araçlar yanmış enkaz
+    for (const [x, z, r] of [[3, -18, 0.6], [-2, 62, 2.5], [66, -96, 1.2], [140, 5, 0.2], [143, 60, 2.9], [205, -60, 1.7], [35, 98, 1.4], [110, -102, 0.4]]) this.abandonedCar(x, z, r, rng, true, SMOKE_SITES.some(([sx, sz]) => sx === x && sz === z));
     // çöp konteynerleri, banklar, yangın muslukları
     for (const [x, z, r] of [[55, -88, 0], [128, -64, 0], [12, 4, Math.PI / 2], [60, 12, 0], [150, 30, 0], [176, -36, 0], [-60, -20, 0]]) {
       this.instancer.place('props', 'dumpster', x, T.heightAt(x, z), z, r, 6);

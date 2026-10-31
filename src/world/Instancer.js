@@ -20,9 +20,9 @@ export class Instancer {
     const e = matrix.elements;
     const C = opts.interior ? ICHUNK : CHUNK, off = opts.interior ? 0 : CHUNK_OFF;
     const cx = Math.floor((e[12] + off) / C), cz = Math.floor((e[14] + off) / C);
-    const key = `${kit}/${name}@${cx},${cz}${opts.noShadow ? '!' : ''}${opts.interior ? '#i' : ''}`;
+    const key = `${kit}/${name}@${cx},${cz}${opts.noShadow ? '!' : ''}${opts.interior ? '#i' : ''}${opts.variant ? '~' + opts.variant : ''}`;
     let g = this.groups.get(key);
-    if (!g) { g = { kit, name, matrices: [], shadow: !opts.noShadow, recv: opts.receive !== false, interior: !!opts.interior }; this.groups.set(key, g); }
+    if (!g) { g = { kit, name, matrices: [], shadow: !opts.noShadow, recv: opts.receive !== false, interior: !!opts.interior, variant: opts.variant || null }; this.groups.set(key, g); }
     g.matrices.push(matrix.clone());
     return g.matrices.length - 1;
   }
@@ -39,7 +39,7 @@ export class Instancer {
 
   build() {
     for (const g of this.groups.values()) {
-      const parts = this.assets.parts(g.kit, g.name);
+      const parts = this.assets.parts(g.kit, g.name, g.variant);
       for (const p of parts) {
         const im = new THREE.InstancedMesh(p.geometry, p.material, g.matrices.length);
         for (let i = 0; i < g.matrices.length; i++) {

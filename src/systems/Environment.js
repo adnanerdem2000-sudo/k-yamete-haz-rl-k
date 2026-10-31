@@ -106,10 +106,21 @@ export class Environment {
     this.world = world;
     const lamps = world.lamps;
     const g = new THREE.BufferGeometry();
-    const pos = new Float32Array(lamps.length * 3);
-    lamps.forEach((l, i) => { pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z; });
+    const pos = new Float32Array(lamps.length * 3), col = new Float32Array(lamps.length * 3).fill(1);
+    // bakımsız şebeke: sokak lambalarının bir kısmı hiç yanmaz, bir kısmı titrer (konuma göre deterministik)
+    this.flickerLamps = [];
+    lamps.forEach((l, i) => {
+      pos[i * 3] = l.x; pos[i * 3 + 1] = l.y; pos[i * 3 + 2] = l.z;
+      const h = Math.abs(Math.sin(l.x * 12.9898 + l.z * 78.233) * 43758.5453) % 1;
+      l.state = l.kind !== 'street' ? 'ok' : h < 0.1 ? 'dead' : h < 0.24 ? 'flicker' : 'ok';
+      l.seed = h * 100;
+      l.level = l.state === 'dead' ? 0 : 1;
+      if (l.state === 'dead') col.fill(0, i * 3, i * 3 + 3);
+      if (l.state === 'flicker') this.flickerLamps.push(i);
+    });
     g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    this.lampSprites = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffd08a, size: 1.6, map: softDot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    this.lampSprites = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffd08a, vertexColors: true, size: 1.6, map: softDot(), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }));
     this.lampSprites.frustumCulled = false;
     this.scene.add(this.lampSprites);
   }
@@ -280,6 +291,17 @@ export class Environment {
     const night = minuteOfDay > 1170 || minuteOfDay < 370;
     const on = night && this.streetPower;
     if (this.lampSprites) this.lampSprites.material.opacity = lerp(this.lampSprites.material.opacity, on ? 0.95 : 0, Math.min(1, dt * 2));
+    // arızalı lambalar: çoğunlukla yanık, ara ara sönüp yanan kesik titreme (sprite rengi + ışık havuzu)
+    if (on && this.lampSprites && this.flickerLamps.length) {
+      const t = (this._flT = (this._flT || 0) + dt), col = this.lampSprites.geometry.attributes.color;
+      for (const i of this.flickerLamps) {
+        const l = this.world.lamps[i];
+        const n = Math.sin(t * 2.3 + l.seed) + Math.sin(t * 7.9 + l.seed * 1.7) * 0.6 + Math.sin(t * 31 + l.seed * 3.1) * 0.25;
+        l.level = n > 1.15 ? 0.05 : n > 0.95 ? 0.45 : 1;
+        col.setXYZ(i, l.level, l.level, l.level);
+      }
+      col.needsUpdate = true;
+    }
     // tabelalar (gece ışıklı)
     for (const b of this.world.buildings) if (b.signMat) b.signMat.emissiveIntensity = on ? 0.6 : 0;
     // ışık havuzu: en yakın lambalar + ekstra ışıklar
@@ -287,8 +309,9 @@ export class Environment {
     const cands = [];
     if (on) {
       for (const l of this.world.lamps) {
+        if (l.state === 'dead') continue;
         const d2 = (l.x - cx) ** 2 + (l.z - cz) ** 2;
-        if (d2 < 90 * 90) cands.push({ x: l.x, y: l.y, z: l.z, d2, color: l.color, intensity: l.kind === 'flood' ? 60 : 38, range: l.kind === 'flood' ? 30 : 20 });
+        if (d2 < 90 * 90) cands.push({ x: l.x, y: l.y, z: l.z, d2, color: l.color, intensity: (l.kind === 'flood' ? 60 : 38) * (l.level ?? 1), range: l.kind === 'flood' ? 30 : 20 });
       }
     }
     for (const e of this.extraLights) {

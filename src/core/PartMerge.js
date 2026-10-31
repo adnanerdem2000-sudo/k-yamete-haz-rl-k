@@ -115,6 +115,31 @@ export function mergeParts(parts) {
   return out;
 }
 
+/** Yanmış görünüm: kömürleşmiş koyu gövde, yer yer pas; ışıklar sönük, pürüzlü yüzey */
+export function burntParts(parts) {
+  const hash = (x, y, z) => { const s = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453; return s - Math.floor(s); };
+  return parts.map((p) => {
+    const g = p.geometry.clone();
+    if (g.attributes.color && g.attributes.aRM) {
+      const c = g.attributes.color, rm = g.attributes.aRM, e = g.attributes.aEmi, pos = g.attributes.position;
+      for (let i = 0; i < c.count; i++) {
+        const n = hash(Math.round(pos.getX(i) * 3), Math.round(pos.getY(i) * 3), Math.round(pos.getZ(i) * 3));
+        // kömür karası taban, yer yer pas (turuncu-kahve) ve kül grisi lekeler
+        const k = 0.022 + 0.05 * n, rust = n > 0.5 ? (n - 0.5) * 0.55 : 0, ash = n < 0.12 ? 0.06 : 0;
+        c.setXYZ(i, k + rust + ash, k * 0.8 + rust * 0.42 + ash, k * 0.7 + rust * 0.16 + ash);
+        rm.setXY(i, 0.95, 0.2);
+        if (e) e.setXYZ(i, 0, 0, 0);
+      }
+      return { ...p, geometry: g };
+    }
+    const m = p.material.clone();
+    m.color = m.color.clone().multiplyScalar(0.1);
+    m.roughness = 1;
+    if (m.emissive) m.emissive.setScalar(0);
+    return { ...p, geometry: g, material: m };
+  });
+}
+
 function sameAttributes(a, b) {
   const ka = Object.keys(a.attributes).sort().join(), kb = Object.keys(b.attributes).sort().join();
   if (ka !== kb) return false;

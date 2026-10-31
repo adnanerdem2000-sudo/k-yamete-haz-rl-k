@@ -18,6 +18,7 @@ import { PhysProps } from './systems/PhysProps.js';
 import { Interact } from './systems/Interact.js';
 import { Effects } from './systems/Effects.js';
 import { Birds, SmokeColumns } from './world/LivingWorld.js';
+import { SMOKE_SITES } from './world/WorldLayout.js';
 import { Combat } from './systems/Combat.js';
 import { Zombies } from './systems/Zombies.js';
 import { Build } from './systems/Build.js';
@@ -91,7 +92,7 @@ export class Session {
         { x: -640, z: 120, alt: 30, r: 36, n: 10, v: 6 }, { x: -205, z: 185, alt: 34, r: 26, n: 8, v: 5.5, dir: -1 },
         { x: 330, z: 300, alt: 26, r: 30, n: 10, v: 6.5 }, { x: 120, z: -760, alt: 40, r: 50, n: 12, v: 7, dir: -1 },
       ]),
-      smoke: new SmokeColumns(this.game.scene, [[3, -18], [140, 5], [205, -60], [110, -102], [92, -300], [-2, 62]].map(([x, z], i) => ({ x, z, y: this.world.terrain.heightAt(x, z) + 0.8, h: 34 + i * 3, life: 14 + i, size: 2.8 + (i % 3) * 0.6, dense: 0.95 })), 26),
+      smoke: new SmokeColumns(this.game.scene, SMOKE_SITES.map(([x, z], i) => ({ x, z, y: this.world.terrain.heightAt(x, z) + 0.8, h: 34 + i * 3, life: 14 + i, size: 2.8 + (i % 3) * 0.6, dense: 0.95 })), 26),
     };
     this.loot = new Loot(this);
     this.ground = new GroundItems(this);
@@ -364,6 +365,17 @@ export class Session {
     a.loop('amb_day', 'ambience', { vol: night ? 0.05 : 0.22 * (1 - W.rain), bus: 'ambient' });
     this._sirenT = (this._sirenT ?? 20) - dt;
     if (this._sirenT < 0) { this._sirenT = 25 + Math.random() * 40; if (this.time.day < 20) a.play('siren', { vol: 0.5, bus: 'ambient' }); }
+    // uzaktan gelen olay sesleri (köpek havlaması, tek tük silah, çığlık, inilti, korna): görüş dışındaki dünya da
+    // yaşıyor; 140–300 m ötede rastgele yönde konumlanır (süzgeçli, yönlü), oyunun gürültü sistemine girmez
+    this._distT = (this._distT ?? 15) - dt;
+    if (this._distT < 0) {
+      this._distT = 16 + Math.random() * 32;
+      const p = this.local.pos, ang = Math.random() * Math.PI * 2, r = 140 + Math.random() * 160;
+      const table = night ? [['bark', 3], ['rifle', 2], ['pistol', 2], ['scream', 1], ['groan', 3]] : [['bark', 4], ['rifle', 1], ['pistol', 1], ['horn', 1], ['groan', 1]];
+      let w = Math.random() * table.reduce((s, [, k]) => s + k, 0), name = table[0][0];
+      for (const [n, k] of table) { w -= k; if (w <= 0) { name = n; break; } }
+      if (!(this.endings && this.endings.active)) a.play(name, { at: { x: p.x + Math.cos(ang) * r, y: p.y + 4, z: p.z + Math.sin(ang) * r }, range: 520, vol: name === 'bark' || name === 'groan' ? 0.55 : 0.4, bus: 'ambient', vary: 0.2 });
+    }
     // dinamik müzik yoğunluğu
     const threat = this.zombies.threatLevel || 0;
     const inBase = this.isInBase(this.local.pos);
