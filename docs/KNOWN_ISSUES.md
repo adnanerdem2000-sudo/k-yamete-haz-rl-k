@@ -46,5 +46,7 @@
   "sahte aydınlık iç mekân" dokulu vitrinleri uzaktan parlak kırmızı bir bant gibi okunur (kit tasarımı).
 - Yazılım GPU'lu test ortamında oyun içi kare süresi saniyelere çıkabilir (gölgelendirme CPU'da); fizik ve
   oyun mantığı sabit adımlı olduğu için senaryolar fizik adımı sayarak bekler. Gerçek GPU'da bu görülmez.
+- Araç kapı/bagaj kanatları gövde ağından ayrı değildir: kanat açılınca gövde yüzeyi altında kalır (Kenney
+  modellerinde kapı parçası yok); kabin tüm araçlarda aynı prosedürel koltuk/gösterge setidir.
 - Eşya simgeleri ilk görüldüklerinde bir kare sonra belirir (karede en fazla bir simge GPU'da çizilir); o ana dek
   yuva saydam görünür.

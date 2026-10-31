@@ -134,6 +134,27 @@ _(aşamalar ilerledikçe doldurulur)_
 - **Yapılmadı / kısmi:** PBR doku atlası ve ek PBR malzeme seti (mevcut nötr ayrıntı + normal haritası yolu
   korundu; yeni doku indirilmedi), balkon ve klima üniteleri cephelerde (yalnız düz çatı üstünde klima var),
   kuşların yere (çatı dışına) konması, yansımalı ıslak zemin (ekran uzayı yansıması yok; yalnız pürüzlülük).
+### Aşama 5 — Araçlar
+- **Kabin ve kanatlar (`VehicleVisuals`):** her araçta koltuklar, gösterge paneli, direksiyona bağlı dönen simit; camlar
+  yarı saydam (araç başına klon); kapı kanatları binince/inince açılıp kapanır (test: açılış 1,05 rad → 2,5 sn'de 0);
+  bagaj kapağı depo paneliyle açılır/kapanır (1,15 rad → 0; `vehicle_set {trunkOpen}` ile herkeste); far camı ışıması
+  F ile (ışıma 2,2 / spot 35 → 0).
+- **Hasar görselleri:** 53 km/sa ile duvara çarpma → sağlık 100 → 33, gövdede 2 göçük, boya koyulaştı (R −0,135),
+  çatlak cam; içinden geçme yok (duvara 2,1 m). Ağır hasar (%20): 3 göçük + çatlak cam + bir far bozuk; onarım
+  görselleri sıfırlar.
+- **Yüzeye göre sürüş:** `Terrain.surfaceAt` + `SURFACES` (asfalt/beton/toprak/çim/kum/kaya/kar): 3 sn tam gazda
+  aile arabası asfaltta 19,2 m (45,6 km/sa), çimde 16,8 m (39,8 km/sa); arazi aracı çimde 19,9 m (48 km/sa). Dururken
+  zıplama 0, dört teker yerde, sürüşte sıçrama ≤ 1,9 cm, batma 0,7 cm.
+- **Araçla yapıya çarpma:** pikap 28 km/sa ile evin dış kapısına → kapı 160 → 93 HP (`vehicle_ram`; üs yapısı ve
+  pencere de aynı yoldan).
+- **Bulunan hatalar:** (1) düz zeminde 2 sn duran aracın şasisi uyuyor, araç denetleyicisi uyuyan gövdeyi
+  sürmüyordu → sürücü girdisinde/binince uyandırılır; (2) SUV'un gövdeye asılı yedek lastiği fizik tekerleği sayılıyordu
+  (5 tekerlek) → yedek lastikler dışlandı; (3) başsız tarayıcıda işaretçi kilidi anında düştüğü için duraklatma
+  menüsü açılıp sürüş girdilerini engelliyordu (yalnız test ortamı; senaryo kilit olayını susturur); (4) inceleme
+  iş akışının bulduğu `onRoad` TDZ hatası uygulanmadan düzeltildi.
+- **Yapılmadı:** araç türüne özel kabin modelleri (ortak prosedürel kabin), kapı/bagaj kanatları gövdeden ayrı
+  modellenmedi (gövde üstünde ince panel), lastik izi/çamur sıçraması, hasarlı aracın sürüş davranışı (yalnız
+  azami hız düşer).
 ## 6. Test edilemeyenler
 - Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
 - Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).

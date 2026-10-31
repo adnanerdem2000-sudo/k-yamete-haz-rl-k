@@ -218,6 +218,22 @@ export class Terrain {
 
   slopeAt(x, z) { return 1 - this.normalAt(x, z).y; }
 
+  /** Yüzey sınıfı (araç tutunması, ses, toz): asphalt | concrete | dirt | grass | sand | rock | snow */
+  surfaceAt(x, z) {
+    const ix = Math.round((x + this.half) / this.cell), iz = Math.round((z + this.half) / this.cell);
+    const k = this.idx(Math.max(0, Math.min(this.N, ix)), Math.max(0, Math.min(this.N, iz)));
+    if (this.roadMask && this.roadMask[k] >= 1) return 'asphalt';
+    if (this.roadMask && this.roadMask[k] > 0) return 'dirt'; // toprak yol
+    switch (this.biome[k]) {
+      case BIOME.URBAN: return 'concrete';
+      case BIOME.DIRT: case BIOME.FIELD: return 'dirt';
+      case BIOME.SAND: case BIOME.SEA: return 'sand';
+      case BIOME.ROCK: return 'rock';
+      case BIOME.SNOW: return 'snow';
+      default: return 'grass';
+    }
+  }
+
   regionAt(x, z) {
     for (const r of REGIONS) {
       if (!r.plateau) continue;

@@ -2,9 +2,21 @@
 // devrilme önleyici, çarpışma hasarı), yakıt, bagaj, tamir, geliştirme, farlar, korna, zombilere çarpma.
 // Sürücü istemci aracın fiziğinde otoritedir; diğerleri aracı ağdan kinematik olarak izler.
 import * as THREE from 'three';
+import { VehicleVisuals, prepareWindowMaterials } from './VehicleVisuals.js';
 import { ITEMS } from '../data/items.js';
 import { clamp, damp, dampAngle, wrapAngle, dist, uid, lerp } from '../core/util.js';
 import { G, ALL, groups, quatYaw, yawOf } from '../physics/PhysicsWorld.js';
+
+/** Yüzeye göre sürüş: tutunma çarpanı, yuvarlanma direnci, toz; ıslakta çamur/kar daha kaygan */
+export const SURFACES = {
+  asphalt: { grip: 1.0, roll: 0.0, dust: 0, wet: 0.82 },
+  concrete: { grip: 0.95, roll: 0.0, dust: 0.2, wet: 0.85 },
+  dirt: { grip: 0.78, roll: 0.04, dust: 1.0, wet: 0.6 },
+  grass: { grip: 0.7, roll: 0.06, dust: 0.5, wet: 0.65 },
+  sand: { grip: 0.6, roll: 0.14, dust: 1.2, wet: 0.8 },
+  rock: { grip: 0.85, roll: 0.03, dust: 0.3, wet: 0.7 },
+  snow: { grip: 0.42, roll: 0.1, dust: 0.4, wet: 0.9 },
+};
 
 export const VEHICLE_TYPES = {
   sedan: { name: 'Aile Arabası', mass: 1250, drive: 'fwd', model: 'sedan', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 16, hp: 100, grip: 1.0, offroad: 0.55, seats: 4, len: 4.2, wid: 2.2 },
@@ -37,6 +49,7 @@ const PAINTS = ['#c0392b', '#2980b9', '#27ae60', '#f39c12', '#8e44ad', '#2c3e50'
 const _res = { x: 0, z: 0, hit: false, hits: [] };
 const UP = new THREE.Vector3(0, 1, 0);
 const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _ax = new THREE.Vector3(), _qq = new THREE.Quaternion();
+const _rt = new THREE.Vector3();
 
 class Vehicle {
   constructor(session, spec) {
@@ -94,7 +107,9 @@ class Vehicle {
       const gw = wgroups.find((x) => x.c.distanceTo(wc) < 0.4);
       if (gw) gw.meshes.push(w); else wgroups.push({ c: wc, meshes: [w] });
     }
-    for (const gw of wgroups) {
+    // yedek lastik (gövdeye asılı 'wheel_back' / 'spare'): en alçak tekerlek merkezinden 0,35 m yukarıdaysa fizik tekerleği değil
+    const lowestY = wgroups.length ? Math.min(...wgroups.map((x) => x.c.y)) : 0;
+    for (const gw of wgroups.filter((x) => x.c.y - lowestY < 0.35 && !x.meshes.some((w) => /spare/i.test(w.name + (w.parent ? w.parent.name : '')) || /^wheel_back$/.test(w.name) || (w.parent && /^wheel_back$/.test(w.parent.name))))) {
       const wb = new THREE.Box3();
       for (const w of gw.meshes) wb.expandByObject(w);
       const wc = wb.getCenter(new THREE.Vector3());
@@ -135,6 +150,9 @@ class Vehicle {
     this.root = g;
     this.armorVis = null;
     this.updateUpgradeVisuals();
+    // kabin, kapı/bagaj kanatları, far ışıması, hasar görselleri; camlar yarı saydam
+    prepareWindowMaterials(m);
+    try { this.visuals = new VehicleVisuals(this); this.visuals.applyDamage(this.health / this.maxHealth); } catch (e) { console.warn('Araç görselleri kurulamadı', this.id, e); this.visuals = null; }
     S.game.scene.add(g);
     this.sync();
   }
@@ -261,6 +279,7 @@ class Vehicle {
   }
 
   dispose() {
+    if (this.visuals) { this.visuals.dispose(); this.visuals = null; }
     this.s.game.scene.remove(this.root);
     const pw = this.s.game.phys;
     if (pw && this.body) { try { pw.w.removeRigidBody(this.body); } catch { /* zaten silinmiş */ } if (pw.vehicleBodies) pw.vehicleBodies.delete(this.body); this.body = null; }
@@ -284,7 +303,13 @@ export class Vehicles {
     });
     S.on('vehicle_exit', (p, from) => { const v = this.byId(p.id); if (v) { const seat = v.seats.indexOf(from); if (seat >= 0) S.emit({ k: 'veh_seat', id: v.id, seat, player: null }); } });
     S.on('vehicle_state', (p, from) => { const v = this.byId(p.id); if (v && v.seats[0] === from) { this.applyState(v, p); S.net.active && S.net.broadcast({ t: 'evt', e: { k: 'veh_state', ...p } }, from); } });
-    S.on('vehicle_damage', (p) => { const v = this.byId(p.id); if (v) S.emit({ k: 'veh_set', id: v.id, health: Math.max(0, v.health - p.dmg * (1 - (v.upgrades.armor ? 0.4 : 0) - (v.def.armor || 0))) }); });
+    S.on('vehicle_damage', (p) => { const v = this.byId(p.id); if (v) S.emit({ k: 'veh_set', id: v.id, health: Math.max(0, v.health - p.dmg * (1 - (v.upgrades.armor ? 0.4 : 0) - (v.def.armor || 0))), dir: p.dir || null }); });
+    // araçla yapıya/kapıya/pencereye çarpma: yerel sürücü tespit eder, host hasarı uygular
+    S.on('vehicle_ram', (p, from) => {
+      if (p.struct) S.applyAction('struct_damage', { id: p.struct, dmg: p.dmg }, from);
+      if (p.door) { const d = S.interact && S.interact.doorById ? S.interact.doorById.get(p.door) : null; if (d && !d.broken) { const hp = Math.max(0, d.hp - p.dmg); S.emit(hp <= 0 ? { k: 'door', id: d.id, hp: 0, broken: true, barricade: 0 } : { k: 'door', id: d.id, hp }); } }
+      if (p.window) { const w = S.interact && S.interact.winById ? S.interact.winById.get(p.window) : null; if (w && !w.broken) S.emit({ k: 'window', id: w.id, broken: true, barricade: 0, hp: 0 }); }
+    });
     S.on('vehicle_set', (p) => S.emit({ k: 'veh_set', ...p }));
     S.on('trunk_take', (p, from) => {
       const v = this.byId(p.id); if (!v) return;
@@ -305,8 +330,11 @@ export class Vehicles {
     S.onEvt('veh_state', (e) => { const v = this.byId(e.id); if (v && v !== this.local) this.applyState(v, e); });
     S.onEvt('veh_set', (e) => {
       const v = this.byId(e.id); if (!v) return;
+      if (e.trunkOpen !== undefined) { v.trunkOpen = !!e.trunkOpen; if (v.visuals) v.visuals.setTrunkOpen(v.trunkOpen); if (v.trunkOpen) S.audio.play('door', { at: v.pos, vol: 0.5, rate: 0.9 }); }
       if (e.health !== undefined) {
+        const prevH = v.health;
         v.health = e.health;
+        if (v.visuals && Math.abs(prevH - v.health) > 0.01) v.visuals.applyDamage(v.health / v.maxHealth, e.dir || null);
         if (v.health <= 0 && !v.wrecked) {
           v.wrecked = true;
           if (v === this.local) { this.exitLocal(); S.ui.toast('Araç kullanılamaz hale geldi!', 'danger'); }
@@ -363,7 +391,7 @@ export class Vehicles {
     switch (opt.act) {
       case 'drive': S.act('vehicle_enter', { id: v.id, seat: 0 }); break;
       case 'ride': S.act('vehicle_enter', { id: v.id, seat: 1 }); break;
-      case 'trunk': S.ui.openStorage({ kind: 'trunk', id: v.id, label: `${v.def.name} — Bagaj` }); S.audio.play('door', { at: v.pos, vol: 0.6, rate: 0.8 }); break;
+      case 'trunk': S.ui.openStorage({ kind: 'trunk', id: v.id, label: `${v.def.name} — Bagaj` }); v._trunkLocal = true; S.act('vehicle_set', { id: v.id, trunkOpen: true }); break;
       case 'refuel': {
         S.interact.startHold('Yakıt aktarılıyor…', 2, () => {
           const jc = inv.slots.find((s) => s && s.id === 'jerrycan' && (s.fuel || 0) > 0);
@@ -433,11 +461,13 @@ export class Vehicles {
     if (!v) return;
     const prev = v.seats[e.seat];
     v.seats[e.seat] = e.player;
+    if (v.visuals && (!!e.player) !== (!!prev)) v.visuals.swingDoor(e.seat);
     if (e.seat === 0) {
       // sürücü uzaktaysa gövde ağdan izlenir; yerel sürücü ya da boş araç dinamik
       const remote = !!e.player && e.player !== S.localId;
       v.setRemote(remote);
       if (!remote) v.netTarget = null;
+      if (e.player && v.body && !v.body.isKinematic()) v.body.wakeUp();
     }
     if (e.player === S.localId) {
       this.local = v;
@@ -556,19 +586,30 @@ export class Vehicles {
     const hpF = v.health / v.maxHealth;
     const maxSp = d.maxSpeed * (v.upgrades.engine ? 1.15 : 1) * (hpF < 0.3 ? 0.6 : 1);
     const thr = local ? v.inThr : 0, steerIn = local ? v.inSteer : 0, hb = local && v.inHB;
+    // uyuyan şasi: araç denetleyicisi uyuyan gövdeyi hareket ettirmez (düz zeminde 2 sn durunca uyur) → sürücü girdi verince uyandır
+    if (local && (thr || steerIn || hb) && v.body.isSleeping()) v.body.wakeUp();
     const force = v.mass * d.accel * (v.upgrades.engine ? 1.2 : 1) * 0.62;
+    // zemin tipi: yüzey sınıfı (asfalt/beton/toprak/çim/kum/kaya/kar) × aracın arazi yeteneği; ıslakta kayganlaşır
+    const surf = T.surfaceAt ? T.surfaceAt(t.x, t.z) : 'asphalt';
+    const SF = SURFACES[surf] || SURFACES.asphalt;
+    v.surface = surf;
+    const offCap = Math.min(1, d.offroad + (v.upgrades.tires ? 0.25 : 0));
+    const terrainGrip = surf === 'asphalt' ? 1 : SF.grip + (1 - SF.grip) * offCap * 0.6;
+    const snow = S.env.weather.snow > 0.3 ? 0.75 : 1;
+    const wet = (S.env.weather.rain > 0.3 ? SF.wet : 1) * snow;
+    const onRoad = surf === 'asphalt';
+    // yumuşak zemin: çekiş (motor kuvveti) ve azami hız tutunmayla ölçeklenir — çimde/kumda asfalttaki gibi fırlanmaz
+    const tractionK = onRoad ? 1 : 0.55 + 0.45 * terrainGrip;
+    const maxSpSurf = maxSp * (onRoad ? 1 : 0.72 + 0.28 * terrainGrip);
     let eng = 0, brake = 0;
     // ters yöne basmak fren yapar (motor çalışmasa da); durunca vites değişir
-    if (thr > 0) { if (speed < -0.6) brake = 1; else if (canRun && speed < maxSp) eng = force * thr; }
-    else if (thr < 0) { if (speed > 0.6) brake = 1; else if (canRun && speed > -maxSp * 0.35) eng = force * 0.55 * thr; }
+    if (thr > 0) { if (speed < -0.6) brake = 1; else if (canRun && speed < maxSpSurf) eng = force * thr * tractionK; }
+    else if (thr < 0) { if (speed > 0.6) brake = 1; else if (canRun && speed > -maxSpSurf * 0.35) eng = force * 0.55 * thr * tractionK; }
     if (!local) brake = 0.35; // park freni
     else if (!eng && !brake) brake = canRun ? 0.06 : 0.14; // yuvarlanma direnci / motor freni
+    // yumuşak zemin (kum, çamur, kar): ek yuvarlanma direnci; arazi aracı daha az etkilenir
+    if (!onRoad) brake += SF.roll * (1 - Math.min(1, d.offroad) * 0.6); // yumuşak zemin yuvarlanma direnci
     const brakeV = brake * v.mass * 0.036;
-    // zemin tipi: yol / arazi
-    const ix = Math.round((t.x + T.half) / T.cell), iz = Math.round((t.z + T.half) / T.cell);
-    const onRoad = !!S.world.roads && T.roadMask[T.idx(clamp(ix, 0, T.N), clamp(iz, 0, T.N))] > 0;
-    const terrainGrip = onRoad ? 1 : 0.62 + 0.38 * Math.min(1, d.offroad + (v.upgrades.tires ? 0.25 : 0));
-    const wet = S.env.weather.rain > 0.3 ? 0.82 : 1;
     // lastik sürtünme katsayısı (µ): kuru asfaltta ~1.5
     const baseSlip = 1.5 * d.grip * (v.upgrades.tires ? 1.1 : 1) * terrainGrip * wet;
     // hıza ve tutunmaya duyarlı direksiyon: v²/R ≤ µg (biraz fazlasına izin: kayma/drift mümkün)
@@ -611,7 +652,13 @@ export class Vehicles {
     const dv = Math.hypot(lv.x - lvv.x, lv.y - lvv.y, lv.z - lvv.z);
     if (local && dv > 5.5 && !v.wrecked) {
       const dmg = (dv - 5.5) * 6 * (v.upgrades.armor ? 0.6 : 1) * (1 - (d.armor || 0));
-      S.act('vehicle_damage', { id: v.id, dmg });
+      // çarpma yönü (araç uzayı): hız değişimi vektörü
+      const ddx = lvv.x - lv.x, ddz = lvv.z - lv.z, dl = Math.hypot(ddx, ddz) || 1;
+      _rt.set(1, 0, 0).applyQuaternion(_qq);
+      const dirF = (ddx * _fw.x + ddz * _fw.z) / dl, dirR = (ddx * _rt.x + ddz * _rt.z) / dl;
+      const dir = Math.abs(dirF) > Math.abs(dirR) ? [0, 0, Math.sign(dirF)] : [Math.sign(dirR), 0, 0];
+      S.act('vehicle_damage', { id: v.id, dmg, dir });
+      this.ramStructures(v, dv, dir);
       S.audio.play('impact', { at: v.pos, vol: clamp(dv / 14, 0.35, 1) });
       S.local.camShake = clamp(dv / 12, 0.2, 1);
       if (dv > 13) { S.localStats.damage((dv - 13) * 2.2, 'fall'); S.ui.toast('Kaza! Yaralandın.', 'danger'); }
@@ -625,6 +672,21 @@ export class Vehicles {
     if (canRun && eng) v.fuel = Math.max(0, v.fuel - (Math.abs(speed) * 0.0025 + 0.004) * h * 6);
     // zombilere çarpma (yerel sürücü tespit eder, host'a bildirir)
     if (local && Math.abs(speed) > 4) this.hitZombies(v, speed);
+  }
+
+  /** Araç çarpması: önündeki/arkasındaki yapı (üs parçası), bina kapısı ya da pencere hasar alır */
+  ramStructures(v, dv, dir) {
+    const S = this.s;
+    const t = v.body.translation();
+    const px = t.x + _fw.x * dir[2] * v.def.len * 0.5 + _rt.x * dir[0] * v.def.wid * 0.5;
+    const pz = t.z + _fw.z * dir[2] * v.def.len * 0.5 + _rt.z * dir[0] * v.def.wid * 0.5;
+    const dmg = Math.round((dv - 4) * (v.mass / 1400) * 14 * (v.upgrades.bumper ? 1.5 : 1));
+    if (dmg <= 0) return;
+    let best = null, bd = 1.8;
+    if (S.build && S.build.structures) for (const st of S.build.structures.values()) { const dd = Math.hypot(st.x - px, st.z - pz); if (dd < bd && Math.abs(st.y - t.y) < 3) { bd = dd; best = { struct: st.id }; } }
+    for (const d of S.world.doors) { const dd = Math.hypot(d.center.x - px, d.center.z - pz); if (dd < bd && !d.broken && Math.abs(d.y0 - t.y) < 3) { bd = dd; best = { door: d.id }; } }
+    for (const w of S.world.windows) { const dd = Math.hypot(w.center.x - px, w.center.z - pz); if (dd < bd && !w.broken && Math.abs(w.center.y - t.y) < 3) { bd = dd; best = { window: w.id }; } }
+    if (best) { S.act('vehicle_ram', { ...best, dmg }); S.fx.sparks(px, t.y + 0.7, pz); S.audio.play('impact', { at: { x: px, y: t.y, z: pz }, vol: 0.9, rate: 0.8 }); }
   }
 
   hitZombies(v, speed) {
@@ -787,7 +849,8 @@ export class Vehicles {
     const ix = Math.round((v.pos.x + T.half) / T.cell), iz = Math.round((v.pos.z + T.half) / T.cell);
     const k = T.idx(clamp(ix, 0, T.N), clamp(iz, 0, T.N));
     if (T.roadMask[k] >= 1) return; // asfalt (yol kenarı/toprak geçişte toz olur)
-    if (Math.random() > dt * sp * 0.9) return;
+    const dustK = (SURFACES[v.surface || 'grass'] || SURFACES.grass).dust;
+    if (dustK <= 0 || Math.random() > dt * sp * 0.9 * dustK) return;
     const bx = v.pos.x - Math.sin(v.yaw) * v.def.len * 0.45, bz = v.pos.z - Math.cos(v.yaw) * v.def.len * 0.45;
     S.fx.dust(bx + (Math.random() - 0.5) * v.def.wid * 0.8, v.pos.y + 0.25, bz, 2);
   }
@@ -800,6 +863,8 @@ export class Vehicles {
       this.syncVisual(v, alpha);
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
       this.updateTailLights(v, dt, false);
+      if (v.visuals) v.visuals.update(dt);
+      if (v._trunkLocal && !(S.ui.panel && S.ui.panel.name === 'storage' && S.ui.panels.storage && S.ui.panels.storage.id === v.id)) { v._trunkLocal = false; S.act('vehicle_set', { id: v.id, trunkOpen: false }); }
       this.dustTrail(v, dt);
       if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
       else S.audio.stopLoop('engine_' + v.id);
@@ -810,6 +875,7 @@ export class Vehicles {
       const v = this.local;
       for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
       this.updateTailLights(v, dt, true);
+      if (v.visuals) v.visuals.update(dt);
       this.dustTrail(v, dt);
       if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 3) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#555555');
     }

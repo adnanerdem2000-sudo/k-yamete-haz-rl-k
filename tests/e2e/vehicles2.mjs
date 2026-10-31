@@ -11,7 +11,10 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   await evalJS(page, () => {
     const g = window.__game; cancelAnimationFrame(g.raf); g.loop = () => {};
     const S = g.session;
+    // başsız tarayıcıda işaretçi kilidi anında düşer → 'pointerlockchange' duraklatma menüsünü açıp girişleri engelliyor
+    g.ui.onLockChange = () => {};
     for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel();
+    window.__unblock = () => { for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel(); };
     window.__step = (frames, keys = [], each = null) => {
       const inp = g.input;
       for (let i = 0; i < frames; i++) { inp.down.clear(); for (const k of (typeof keys === 'function' ? keys(i) : keys)) inp.down.add(k); S.update(1 / 60); if (each) each(i); inp.endFrame(); }
@@ -28,6 +31,8 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
           if (surf && T.surfaceAt(x + s, z) !== surf) ok = false;
           if (P.overlapsBox(x + s - 0.6, z - hw, x + s + 0.6, z + hw, h + 0.05, h + 2)) ok = false;
           if (S.world.buildingAt(x + s, z)) ok = false;
+          // başka araçlar (Rapier gövdeleri AABB dünyasında yok): şeride 6 m'den yakın araç varsa reddet
+          if (S.vehicles.list.some((v) => Math.hypot(v.pos.x - (x + s), v.pos.z - z) < 6)) ok = false;
         }
         if (ok) return { x, z, y: h };
       }
@@ -85,16 +90,20 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
       const v = window.__car(type); if (!v) return null;
       const f = window.__flat(70, 2.2, surfWant); if (!f) return { err: 'alan yok ' + surfWant };
       v.teleport(f.x, f.y + 0.6, f.z, Math.PI / 2);
+      window.__unblock();
       window.__step(90);
       const yRest = [], ground = [];
       window.__step(120, [], () => { yRest.push(v.pos.y); ground.push(Array.from({ length: v.ctrl.numWheels() }, (_, i) => v.ctrl.wheelIsInContact(i) ? 1 : 0).join('')); });
       const yVar = Math.max(...yRest) - Math.min(...yRest);
       S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
       const p0 = { x: v.pos.x, z: v.pos.z };
-      let maxDy = 0, prevY = v.pos.y, minY = v.pos.y, maxSkid = 0;
-      window.__step(180, ['KeyW'], () => { maxDy = Math.max(maxDy, Math.abs(v.pos.y - prevY)); prevY = v.pos.y; minY = Math.min(minY, v.pos.y); maxSkid = Math.max(maxSkid, v.skid || 0); });
+      let maxDy = 0, prevY = v.pos.y, minY = v.pos.y, maxSkid = 0, thrSeen = 0, engSeen = 0;
+      window.__step(180, ['KeyW'], () => { maxDy = Math.max(maxDy, Math.abs(v.pos.y - prevY)); prevY = v.pos.y; minY = Math.min(minY, v.pos.y); maxSkid = Math.max(maxSkid, v.skid || 0); thrSeen = Math.max(thrSeen, v.inThr || 0); engSeen = Math.max(engSeen, v.ctrl ? v.ctrl.wheelEngineForce(v.driveIdx[0]) || 0 : 0); });
       const dist = Math.hypot(v.pos.x - p0.x, v.pos.z - p0.z);
-      const r = { surf: v.surface, dist3s: +dist.toFixed(1), kmh: +(Math.abs(v.speed) * 3.6).toFixed(1), yVarRest: +yVar.toFixed(3), tekerYerde: ground[ground.length - 1], maxDy: +maxDy.toFixed(3), sink: +(yRest[0] - minY).toFixed(3), skid: +maxSkid.toFixed(2) };
+      // tanı: çevredeki statik çarpıştırıcılar ve dinamik nesneler, araç durumu
+      const near = S.world.physics.query(v.pos.x - 4, v.pos.z - 4, v.pos.x + 4, v.pos.z + 4).map((c) => c.kind || 'box').reduce((a, k) => { a[k] = (a[k] || 0) + 1; return a; }, {});
+      const propsNear = S.props ? S.props.props.filter((p) => p.alive && Math.hypot(p.d.body.translation().x - v.pos.x, p.d.body.translation().z - v.pos.z) < 5).map((p) => p.kind) : [];
+      const r = { surf: v.surface, dist3s: +dist.toFixed(1), kmh: +(Math.abs(v.speed) * 3.6).toFixed(1), yVarRest: +yVar.toFixed(3), tekerYerde: ground[ground.length - 1], maxDy: +maxDy.toFixed(3), sink: +(yRest[0] - minY).toFixed(3), skid: +maxSkid.toFixed(2), tani: { at: [Math.round(p0.x), Math.round(p0.z)], mode: S.local.mode, local: S.vehicles.local === v, thr: thrSeen, eng: Math.round(engSeen), fuel: +v.fuel.toFixed(1), broken: v.broken, wrecked: v.wrecked, hp: Math.round(v.health), near, propsNear, bodyType: v.body.bodyType(), sleeping: v.body.isSleeping(), yaw: +v.yaw.toFixed(2) } };
       S.vehicles.exitLocal(); window.__step(10);
       return r;
     };
@@ -116,15 +125,16 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     const S = window.__game.session, v = window.__car('sedan');
     const f = window.__flat(44, 2.2); if (!f) return { err: 'alan yok' };
     v.health = v.maxHealth; v.visuals.resetBody(); v.visuals.applyDamage(1);
-    v.teleport(f.x, f.y + 0.6, f.z, Math.PI / 2); window.__step(30);
+    v.teleport(f.x, f.y + 0.6, f.z, Math.PI / 2); window.__unblock(); window.__step(30);
     const P = S.world.physics;
     const wall = P.addBox(f.x + 34, f.z - 4, f.x + 35, f.z + 4, f.y - 1, f.y + 3, { kind: 'wall' });
     const col0 = v.bodyMats[0].color.clone();
     S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
-    let hitV = 0;
-    window.__step(300, ['KeyW'], () => { if (v.pos.x < f.x + 31) hitV = Math.max(hitV, Math.abs(v.speed)); });
+    let hitV = 0; const trace = [];
+    window.__step(300, ['KeyW'], (i) => { if (v.pos.x < f.x + 31) hitV = Math.max(hitV, Math.abs(v.speed)); if (i === 2 || i === 30 || i === 120 || i === 299) { const lv = v.body.linvel(); trace.push({ i, sp: +v.speed.toFixed(2), cvs: +v.ctrl.currentVehicleSpeed().toFixed(2), thr: v.inThr, eng: Math.round(v.ctrl.wheelEngineForce(v.driveIdx[0]) || 0), brk: +(v.ctrl.wheelBrake(v.driveIdx[0]) || 0).toFixed(1), steer: +v.steer.toFixed(2), x: +v.pos.x.toFixed(2), y: +v.pos.y.toFixed(2), lv: [+lv.x.toFixed(2), +lv.y.toFixed(2), +lv.z.toFixed(2)], bt: v.body.bodyType(), slp: v.body.isSleeping(), wc: Array.from({ length: v.ctrl.numWheels() }, (_, k) => v.ctrl.wheelIsInContact(k) ? 1 : 0).join(''), mode: S.local.mode, dIdx: v.driveIdx.join(''), fuel: +v.fuel.toFixed(2), surf: v.surface, blocking: window.__game.ui.isBlocking(), panel: window.__game.ui.panel && window.__game.ui.panel.name, modal: !!window.__game.ui.modal, chat: !!window.__game.ui.hud.chatOpen, state: window.__game.state, down: [...window.__game.input.down], fwd: window.__game.input.isDown('forward') }); } });
     window.__step(30);
-    const r = { atKmh: +(hitV * 3.6).toFixed(1), health: +v.health.toFixed(1), dents: v.visuals.dents, cracked: v.visuals.cracked, paintDark: +(col0.r - v.bodyMats[0].color.r).toFixed(3), gap: +(f.x + 34 - v.pos.x).toFixed(2) };
+    window.__trace = trace;
+    const r = { atKmh: +(hitV * 3.6).toFixed(1), health: +v.health.toFixed(1), dents: v.visuals.dents, cracked: v.visuals.cracked, paintDark: +(col0.r - v.bodyMats[0].color.r).toFixed(3), gap: +(f.x + 34 - v.pos.x).toFixed(2), tani: { mode: S.local.mode, seat: S.local.seat, seats: v.seats.map((q) => q ? 1 : 0).join(''), local: S.vehicles.local === v, sleeping: v.body.isSleeping(), surf: v.surface, thr: v.inThr, at: [Math.round(v.pos.x), Math.round(v.pos.z)] } };
     // ağır hasar: doğrudan %20'ye düşür → çatlak cam + bozuk far
     S.applyAction('vehicle_set', { id: v.id, health: v.maxHealth * 0.2 }, S.localId); window.__step(2);
     r.heavy = { dents: v.visuals.dents, cracked: v.visuals.cracked, brokenHead: v.visuals.headGlows.filter((h) => h.broken).length };
@@ -135,6 +145,7 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     return r;
   });
   log('çarpışma', crash);
+  log('çarpışma izi', await evalJS(page, () => window.__trace));
   check(crash.atKmh > 25 && crash.health < 100, 'duvara çarpınca hasar almalı', crash);
   check(crash.dents >= 1 && crash.paintDark > 0.005, 'göçük ve boya koyulaşması', crash);
   check(crash.heavy && crash.heavy.cracked && crash.heavy.brokenHead === 1 && crash.heavy.dents >= 3, 'ağır hasar: çatlak cam, bozuk far, göçükler', crash);
@@ -147,13 +158,15 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     if (!d) return { err: 'kapı yok' };
     const T = S.world.terrain;
     const sx = d.center.x - d.inward.x * 10, sz = d.center.z - d.inward.z * 10;
+    // yaklaşma hattındaki diğer araçları (evin önündeki park) 60 m yana taşı
+    for (const o of S.vehicles.list) if (o !== v) { const t = ((o.pos.x - sx) * d.inward.x + (o.pos.z - sz) * d.inward.z); const px = sx + d.inward.x * t, pz = sz + d.inward.z * t; if (t > -4 && t < 14 && Math.hypot(o.pos.x - px, o.pos.z - pz) < 5) o.teleport(o.pos.x + 60, T.heightAt(o.pos.x + 60, o.pos.z) + 0.6, o.pos.z, o.yaw); }
     v.health = v.maxHealth; v.teleport(sx, T.heightAt(sx, sz) + 0.6, sz, Math.atan2(d.inward.x, d.inward.z));
-    window.__step(30);
+    window.__unblock(); window.__step(30);
     const hp0 = d.hp;
     S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
     let hitV = 0;
     window.__step(240, ['KeyW'], () => { hitV = Math.max(hitV, Math.abs(v.speed)); });
-    const r = { kapi: d.id, hp0, hp: d.hp, broken: d.broken, kmh: +(hitV * 3.6).toFixed(1), mesafe: +Math.hypot(v.pos.x - d.center.x, v.pos.z - d.center.z).toFixed(2) };
+    const r = { kapi: d.id, hp0, hp: d.hp, broken: d.broken, kmh: +(hitV * 3.6).toFixed(1), mesafe: +Math.hypot(v.pos.x - d.center.x, v.pos.z - d.center.z).toFixed(2), tani: { arac: v.type, mode: S.local.mode, seat: S.local.seat, seats: v.seats.map((q) => q ? 1 : 0).join(''), local: S.vehicles.local === v, sleeping: v.body.isSleeping(), broken: v.broken, fuel: +v.fuel.toFixed(1), surf: v.surface } };
     S.vehicles.exitLocal(); window.__step(10);
     return r;
   });
