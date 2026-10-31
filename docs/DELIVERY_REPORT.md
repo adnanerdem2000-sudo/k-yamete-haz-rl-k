@@ -31,10 +31,26 @@ araç iç mekânı ve hasar görseli yok; tüfek klibi yok; host göçü ve TURN
 donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürülerde zombi takılması.
 
 ## 2. Tespit edilen sorunlar
-_(aşamalar ilerledikçe doldurulur)_
+- **Etkileşim adaylarındaki uzaklık alanı kapı nesnesini eziyordu** (`t.d`): E ile kapı açma sessizce çalışmıyordu
+  (taşıma sistemi eklenirken girdi; yayındaki sürümü de etkiliyordu). Aşama 2'de bulundu.
+- **Rapier `addForce` kalıcı**: su kaldırma kuvveti her adımda birikip nesneleri fırlatıyordu. Aşama 3'te bulundu.
+- **Kapı itme algılayıcısı** kapat komutunu geri alıyordu (motor kapatırken "itildi" sanıyordu). Aşama 3.
+- **Eşya simgeleri eşzamanlı GPU çizimi**: envantere eşya girince HUD bildirimi için simge o anda GPU'da çizilip
+  geri okunuyordu (`readRenderTargetPixels`). Oyun mantığının içinde (görev ödülü → `grant`) ve özellikle testlerin
+  sıkı adım döngülerinde yazılım GPU'sunda saniyeler sürüyor, tarayıcı render süreci 7 GB'ı aşıp çöküyordu
+  (`story` senaryosu). Donanım GPU'da fark edilmez ama ilk görülen eşyada tek karelik takılma yapıyordu.
+- **Bitki örtüsü yeniden kurulumu**: iki çağıranın farklı görüş mesafesi vermesi her karede tam yeniden kuruluma
+  yol açıyordu (sabit kare çizen testler). Yazılım GPU'sunda GPU belleği şişiyordu.
+- **Zamanlama denetimleri duvar saatiyle**: yavaş karelerde etkileşim testi yanlış negatif veriyordu.
 
 ## 3. Düzeltilen sorunlar
-_(aşamalar ilerledikçe doldurulur)_
+- `Interact.findTarget`: uzaklık alanı `dist` oldu; `interact` senaryosu kapı adımı bunu yakalar.
+- `Buoyancy`: her adımda `resetForces`. `DoorPhysics`: komuttan sonra 2 sn itme sayılmaz.
+- `IconRenderer.iconInto` + `flush`: simgeler kuyruğa alınır, `Game.loop` karede en fazla bir simge çizer; `<img>`
+  hazır olunca güncellenir. `story` senaryosu render süreci 2,5–3,1 GB'da sabit, 0 hata.
+- `Vegetation.update`: parametre değişse de en sık 0,2 sn'de bir kurulum (kamera 50 m sıçramadıkça).
+- `interact` / `physics2` senaryoları simülasyon zamanıyla ölçer; `physics2` adım/sn denetimi yazılım GPU'sunda
+  bilgi amaçlı.
 
 ## 4. Değiştirilen dosyalar ve eklenen sistemler
 _(aşamalar ilerledikçe doldurulur)_

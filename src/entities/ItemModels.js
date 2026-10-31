@@ -144,12 +144,21 @@ export class ItemModels {
   }
 }
 
-/** Envanter ikonları: her eşya modelini küçük bir dokuya çizer (önbellekli dataURL) */
+/** Saydam 1×1 PNG: simge hazır olana dek <img> kaynağı */
+const PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+
+/**
+ * Envanter ikonları: her eşya modelini küçük bir dokuya çizer (önbellekli dataURL). Çizim GPU'da yapılıp geri
+ * okunduğundan (readRenderTargetPixels) oyun mantığının içinde eşzamanlı çağrılmaz: iconInto() hazır simgeyi
+ * hemen yazar, hazır değilse kuyruğa alır; Game.loop her karede en fazla bir simge çizer (flush). Yazılım
+ * GPU'sunda eşzamanlı çizim saniyeler sürüp belleği şişiriyordu (hikâye senaryosunda sekme çöküyordu).
+ */
 export class IconRenderer {
   constructor(renderer, itemModels) {
     this.renderer = renderer;
     this.models = itemModels;
     this.cache = new Map();
+    this.pending = new Map(); // id → bekleyen <img> listesi (ekleme sırası = çizim sırası)
     this.size = 128;
     this.scene = new THREE.Scene();
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 2.2));
@@ -160,6 +169,28 @@ export class IconRenderer {
     this.canvas.width = this.canvas.height = this.size;
   }
 
+  /** <img> için: hazırsa kaynağı yazar, değilse yer tutucu koyup kuyruğa alır (hazır olunca güncellenir) */
+  iconInto(img, id) {
+    const c = this.cache.get(id);
+    if (c) { img.src = c; return; }
+    img.src = PLACEHOLDER;
+    let list = this.pending.get(id);
+    if (!list) { list = []; this.pending.set(id, list); }
+    list.push(img);
+  }
+
+  /** Her kare: bekleyen simgelerden en fazla max tanesini çiz ve bekleyen <img>'leri güncelle */
+  flush(max = 1) {
+    for (let i = 0; i < max && this.pending.size; i++) {
+      const [id, imgs] = this.pending.entries().next().value;
+      this.pending.delete(id);
+      let url = PLACEHOLDER;
+      try { url = this.icon(id); } catch (e) { console.warn('Simge çizilemedi', id, e); }
+      for (const im of imgs) im.src = url;
+    }
+  }
+
+  /** Eşzamanlı çizim (önbellekte yoksa GPU'da çizer ve geri okur; oyun döngüsü içinde iconInto tercih edilir) */
   icon(id) {
     if (this.cache.has(id)) return this.cache.get(id);
     const obj = this.models.make(id);

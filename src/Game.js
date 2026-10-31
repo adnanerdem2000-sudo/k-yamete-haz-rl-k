@@ -113,6 +113,7 @@ export class Game {
       else if (this.session) this.session.update(dt);
       this.ui.update(dt);
       this.net.update(dt);
+      if (this.icons && this.icons.flush) this.icons.flush(1); // bekleyen eşya simgeleri: karede en fazla bir çizim
     } catch (e) {
       console.error('Döngü hatası:', e);
       this.ui.toast('Bir hata oluştu: ' + e.message, 'danger');

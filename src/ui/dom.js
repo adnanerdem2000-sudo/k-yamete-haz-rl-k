@@ -40,7 +40,7 @@ export const esc = escapeHtml;
 /** Eşya simgesi (3B modelden işlenmiş PNG) */
 export function itemIcon(game, id, cls = 'item-icon') {
   const img = h('img.' + cls, { alt: ITEMS[id] ? ITEMS[id].name : id, draggable: false });
-  try { img.src = game.icons.icon(id); } catch { img.alt = '?'; }
+  try { if (game.icons.iconInto) game.icons.iconInto(img, id); else img.src = game.icons.icon(id); } catch { img.alt = '?'; }
   return img;
 }
 
