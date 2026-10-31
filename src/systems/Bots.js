@@ -254,10 +254,12 @@ export class Bots {
     if (!goal && !b.reviving) {
       let fp = null;
       if (b.order === 'follow') {
+        // dizilim: oyuncunun iki yanında (üçüncü şahıs kamerasının görüşünü kapatmasın)
         const i = this.list.indexOf(b);
         const side = i % 2 ? 1 : -1;
-        const back = 2.2 + Math.floor(i / 2) * 1.6;
-        fp = { x: L.pos.x - Math.sin(L.yaw) * back + Math.cos(L.yaw) * side * 1.4, z: L.pos.z - Math.cos(L.yaw) * back - Math.sin(L.yaw) * side * 1.4 };
+        const back = 0.4 + Math.floor(i / 2) * 1.8;
+        const lat = 2.6 + Math.floor(i / 2) * 0.7;
+        fp = { x: L.pos.x - Math.sin(L.yaw) * back + Math.cos(L.yaw) * side * lat, z: L.pos.z - Math.cos(L.yaw) * back - Math.sin(L.yaw) * side * lat };
         const dl = dist(b.pos.x, b.pos.z, L.pos.x, L.pos.z);
         if (dl > 70) { this.teleportNear(b, L.pos); return; }
         run = dl > 9;
