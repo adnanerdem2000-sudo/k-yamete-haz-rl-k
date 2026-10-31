@@ -4,7 +4,7 @@
 <script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
 </head><body>
 <script type="module">
-// assets/models/nature.glb içeriğini ızgarada gösterir (yakın ve uzak LOD). ?f=filtre&far=1&cols=6&sp=8&dist=40
+// assets/models/<file> (varsayılan nature.glb) içeriğini ızgarada gösterir. ?file=city.glb&f=filtre&cols=6&sp=8&dist=40&yaw=0
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
@@ -16,7 +16,7 @@ const sun = new THREE.DirectionalLight(0xfff1d6, 2.6); sun.position.set(30, 50, 
 const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#6f8f4a', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
 const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 600);
 const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
-const g = await L.loadAsync('../../assets/models/nature.glb');
+const g = await L.loadAsync('../../assets/models/' + (q.get('file') || 'nature.glb'));
 const all = g.scene.children.map((c) => c.name);
 window.__names = all;
 const filt = (q.get('f') || '').split(',').filter(Boolean);
@@ -26,6 +26,7 @@ const cols = +(q.get('cols') || 6), sp = +(q.get('sp') || 10);
 list.forEach((n, i) => {
   const o = g.scene.getObjectByName(n).clone(true);
   o.position.set((i % cols - (cols - 1) / 2) * sp, 0, -Math.floor(i / cols) * sp);
+  o.rotation.y = +(q.get('yaw') || 0);
   o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
   scene.add(o);
   const d = document.createElement('div'); d.className = 'lbl'; d.textContent = n; document.body.appendChild(d); d._p = o.position.clone().setY(-0.5);

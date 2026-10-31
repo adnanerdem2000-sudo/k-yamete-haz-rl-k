@@ -25,6 +25,7 @@
 | İskeletli hayvanlar (kurt, geyik, erkek geyik, husky, tilki, shiba) | Quaternius (quaternius.com) — `@netforge/asset-library-files` paketi üzerinden (meshopt ile optimize) | CC0 1.0 |
 | Bitki örtüsü: "Stylized Nature MegaKit" (meşe, çam, dev çam, huş, kıvrık, kuru ve sakura ağaçları, çalılar, kayalar, çim, eğrelti, çiçek, mantar, çakıl; `assets/models/nature.glb`) | Quaternius (quaternius.com) — GitHub `tilakpatell/tilakverse-assets` deposundaki dağıtım üzerinden; `tools/pack-nature.mjs` ile seçildi, yapraklar doğal renge boyandı, dokular WebP'ye çevrildi | CC0 1.0 |
 | Yüzey dokuları: "Downtown City MegaKit" toprak, beton, asfalt, tuğla, arduvaz çatı (renk + normal) ve doğa kitinin kaya dokusu (`assets/textures/*.webp`) | Quaternius (quaternius.com) — aynı depo; `tools/pack-textures.mjs` ile nötr ayrıntı dokusuna çevrildi | CC0 1.0 |
+| Şehir binaları ve donatısı: "Downtown City MegaKit" hazır tuğla binalar (büyük/orta/küçük), klima, araç babası, beton saksı, rögar, ızgara (`assets/models/city.glb`) | Quaternius (quaternius.com) — aynı depo; `tools/pack-city.mjs` ile paketlendi | CC0 1.0 |
 | Ayak sesi, acı, takla, yere düşme ve kalkma ses efektleri (`step_hard, hurt, whoosh, downed, revive`) | Kenney ses paketleri (Impact Sounds, RPG Audio, Interface Sounds) — aynı paket üzerinden | CC0 1.0 |
 | "Battle Theme A" müziği (`assets/audio/music/battle_theme_a.mp3`) | cynicmusic / The Cynic Project — OpenGameArt | CC0 1.0 |
 | three.js r187 | mrdoob & katkıda bulunanlar | MIT (`vendor/three/LICENSE`) |

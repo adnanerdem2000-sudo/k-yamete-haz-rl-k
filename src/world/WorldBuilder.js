@@ -84,6 +84,7 @@ export class World {
     });
     await step('Orman büyüyor…', () => {
       this.vegetation = new Vegetation(this);
+      for (const [x, z, a, y] of this._planters || []) this.vegetation.add('flowerBush', x, z, a, 0.7, y);
       this.manualTrees();
       this.vegetation.scatter((x, z, r) => this.blocked(x, z, r));
       this.vegetation.build(this.root);
@@ -239,8 +240,24 @@ export class World {
   // ----------------------------------------------------------------- dekor binalar
   decorBuildings() {
     for (const d of DECOR_BUILDINGS) {
-      const rot = (d.rot || 0) * Math.PI / 2;
-      this.placeModel('buildings', d.model, d.x, d.z, rot, d.s, { collide: true, kind: 'wall', walkable: false });
+      let rot = (d.rot || 0) * Math.PI / 2;
+      // ön cephe en yakın yola: dört yönde yol aranır (model önü +Z)
+      if (d.face === 'road') {
+        let best = Infinity;
+        for (const [dx, dz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
+          for (let r = 6; r < 40; r += 2) if (onRoad(d.x + dx * r, d.z + dz * r, 0.5)) { if (r < best) { best = r; rot = Math.atan2(dx, dz); } break; }
+        }
+      }
+      if (this.assets.has(d.kit || 'buildings', d.model)) this.placeModel(d.kit || 'buildings', d.model, d.x, d.z, rot, d.s, { collide: true, kind: 'wall', walkable: false });
+      // şehir binası çatısı: klima üniteleri
+      if (d.kit === 'city' && this.assets.has('city', 'Prop_ACUnit')) {
+        const box = this.assets.bbox('city', d.model);
+        const top = this.terrain.heightAt(d.x, d.z) + (box.max.y - box.min.y) * d.s;
+        for (let i = 0; i < 3; i++) {
+          const ox = (i - 1) * 3.2, oz = -2 + (i % 2) * 2.5, c = Math.cos(rot), sn = Math.sin(rot);
+          this.instancer.place('city', 'Prop_ACUnit', d.x + ox * c + oz * sn, top - 0.05, d.z - ox * sn + oz * c, rot + Math.PI, 2.2, {});
+        }
+      }
     }
   }
 
@@ -422,6 +439,22 @@ export class World {
     // şehir meydanı: çeşme + ağaç saksıları
     this.instancer.place('buildings', 'pavement-fountain', 35, T.heightAt(35, 55), 55, 0, 10);
     this.physics.addBoxC(35, 55, 3.6, 3.6, T.heightAt(35, 55), T.heightAt(35, 55) + 1.3, { kind: 'prop', walkable: true });
+    if (this.assets.has('city', 'Prop_Planter_Single')) {
+      // meydan çevresinde beton saksılar (içinde çalı) ve araç babaları
+      for (let i = 0; i < 6; i++) {
+        const a = i / 6 * Math.PI * 2 + 0.3, x = 35 + Math.cos(a) * 9.5, z = 55 + Math.sin(a) * 9.5;
+        if (this.blocked(x, z, 1.2)) continue;
+        this.instancer.place('city', 'Prop_Planter_Single', x, T.heightAt(x, z), z, a, 1, {});
+        this.physics.addBoxC(x, z, 1.0, 1.0, T.heightAt(x, z), T.heightAt(x, z) + 0.6, { kind: 'prop', walkable: true });
+        if (this.vegetation) this.vegetation.add('flowerBush', x, z, a, 0.7, T.heightAt(x, z) + 0.55);
+        else this._planters = (this._planters || []).concat([[x, z, a, T.heightAt(x, z) + 0.55]]);
+      }
+      for (const [x, z] of [[25, 45], [45, 45], [25, 65], [45, 65], [6, -36], [64, -40], [134, -30], [146, 36]]) {
+        if (this.blocked(x, z, 0.4)) continue;
+        this.instancer.place('city', 'Prop_Bollard', x, T.heightAt(x, z), z, 0, 1.15, {});
+        this.physics.add({ shape: 'circle', x, z, r: 0.14, minY: T.heightAt(x, z), maxY: T.heightAt(x, z) + 1.0, kind: 'prop' });
+      }
+    }
     // polis barikatları
     P.sandbags(g, 96, -30.5, 114, -30.5, T.heightAt(105, -31), 1.0);
     // hastane önü ambulans

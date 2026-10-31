@@ -27,6 +27,8 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     ['city-street', 100, -10, [0, 1.7, 0], [25, 4, 8], 11],
     ['city-above', 100, -10, [-40, 28, -50], [0, 0, 0], 16],
     ['houses', -175, 172, [12, 2.0, 18], [0, 2, 0], 10],
+    ['city-facade', 100, -80, [0, 2.0, -34], [0, 9, 0], 10],
+    ['city-facade2', 30, 75, [-27, 2.0, -6], [0, 10, 0], 15],
   ];
   for (const [name, x, z, off, look, hour] of views) {
     const r = await evalJS(page, ([x, z, off, look, hour]) => {

@@ -7,7 +7,7 @@ import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 import { unpackBytes, packToClips } from '../entities/AnimPack.js';
 import { loadSurfaces } from '../world/Surfaces.js';
 
-const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
+const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items', 'city'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
 const RIGGED = ['men', 'women', 'wolf', 'deer', 'stag', 'husky', 'fox', 'shiba'];
 // insan tabanlarına aktarılmış animasyon kütüphanesi (Universal Animation Library 1+2, tools/retarget-ual.mjs)
