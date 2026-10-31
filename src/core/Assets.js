@@ -5,6 +5,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 import { unpackBytes, packToClips } from '../entities/AnimPack.js';
+import { loadSurfaces } from '../world/Surfaces.js';
 
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
@@ -23,12 +24,13 @@ export class Assets {
     this.bboxCache = new Map();
     this.rigged = {}; // ad → {scene, animations}
     this.anims = {}; // taban adı → {klip adı → THREE.AnimationClip} (aktarılmış kütüphane)
+    this.nature = null; // doğa kiti glTF
     this.loader = new GLTFLoader();
     this.loader.setMeshoptDecoder(MeshoptDecoder);
   }
 
   async loadAll(onProgress = () => {}) {
-    const total = KITS.length + SOUNDS.length + RIGGED.length + ANIM_PACKS.length;
+    const total = KITS.length + SOUNDS.length + RIGGED.length + ANIM_PACKS.length + 2;
     let done = 0;
     const tick = (label) => { done++; onProgress(done / total, label); };
     const kitJobs = KITS.map(async (k) => {
@@ -69,7 +71,13 @@ export class Assets {
       } catch (e) { console.warn('Animasyon paketi yüklenemedi', b, e); }
       tick(`Animasyonlar: ${b}`);
     });
-    await Promise.all([...kitJobs, ...soundJobs, ...rigJobs, ...animJobs]);
+    // doğa kiti (Stylized Nature MegaKit: ağaç, çalı, kaya, çim…; tools/pack-nature.mjs)
+    const natureJob = (async () => {
+      this.nature = await this.loader.loadAsync(`${this.base}assets/models/nature.glb`);
+      tick('Doğa');
+    })();
+    const surfJob = loadSurfaces(this.base).then(() => tick('Yüzey dokuları'));
+    await Promise.all([...kitJobs, ...soundJobs, ...rigJobs, ...animJobs, natureJob, surfJob]);
   }
 
   has(kit, name) { return !!this.index[`${kit}/${name}`]; }

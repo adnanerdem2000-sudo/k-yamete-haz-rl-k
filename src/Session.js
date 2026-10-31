@@ -325,7 +325,7 @@ export class Session {
     const region = this.world.regionAt(pl.pos.x, pl.pos.z);
     this.region = region;
     this.env.update(dt, this.game.time, this.time.minuteOfDay, pl.pos, region);
-    this.world.vegetation.update(cam.position, Settings.get('graphics.viewDistance'), Settings.get('graphics.grass'));
+    this.world.vegetation.update(cam.position, Settings.get('graphics.viewDistance'), Settings.get('graphics.grass'), dt, Settings.get('graphics.quality'));
     this.world.instancer.cull(cam.position, Settings.get('graphics.viewDistance'));
     this.updateRoofs();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - pl.pos.x, cam.position.z - pl.pos.z) + Math.PI);

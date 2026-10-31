@@ -2,28 +2,33 @@
 // Köşe renkleri (vertex color) ile boyama yapılır; UV'ler dünya ölçeğindedir.
 import * as THREE from 'three';
 import { getTexture } from './TextureFactory.js';
+import { SURF, NEUTRAL_GAIN } from './Surfaces.js';
 
 let MATS = null;
 /** Paylaşılan bina malzemeleri */
 export function materials() {
   if (MATS) return MATS;
   const std = (o) => new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0, ...o });
+  // PBR yüzey dokusu varsa (nötr ayrıntı + normal haritası) onu, yoksa prosedürel canvas dokusunu kullan
+  const surf = (c, n, canvasName, o = {}, ns = 0.9) => (SURF[c]
+    ? std({ map: SURF[c], normalMap: n && SURF[n] ? SURF[n] : null, normalScale: new THREE.Vector2(ns, ns), color: new THREE.Color().setScalar(NEUTRAL_GAIN), ...o })
+    : std({ map: getTexture(canvasName), ...o }));
   MATS = {
     siding: std({ map: getTexture('siding') }),
-    brick: std({ map: getTexture('brick') }),
+    brick: surf('brick_c', 'brick_n', 'brick', {}, 1.0),
     plaster: std({ map: getTexture('plaster') }),
-    concrete: std({ map: getTexture('concrete'), roughness: 0.92 }),
+    concrete: surf('concrete_c', 'concrete_n', 'concrete', { roughness: 0.92 }, 0.7),
     metal: std({ map: getTexture('metal'), roughness: 0.6, metalness: 0.25 }),
     interior: std({ map: getTexture('plaster'), roughness: 0.92 }),
     woodfloor: std({ map: getTexture('woodfloor'), roughness: 0.7 }),
     tiles: std({ map: getTexture('tiles'), roughness: 0.4 }),
     carpet: std({ map: getTexture('carpet'), roughness: 1 }),
-    shingles: std({ map: getTexture('shingles'), roughness: 0.9 }),
+    shingles: surf('roofslate_c', 'roofslate_n', 'shingles', { roughness: 0.88 }, 1.0),
     trim: std({ roughness: 0.7 }),
     wood: std({ map: getTexture('wood'), roughness: 0.8 }),
     plain: std({ roughness: 0.8 }),
     shiny: std({ roughness: 0.3, metalness: 0.4 }),
-    asphalt: std({ map: getTexture('asphalt'), roughness: 0.95 }),
+    asphalt: surf('asphalt_c', 'concrete_n', 'asphalt', { roughness: 0.93 }, 0.35),
     emissive: new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0.0, roughness: 0.5 }),
     glass: new THREE.MeshStandardMaterial({ color: 0x9fd4ef, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.38, depthWrite: false }),
   };

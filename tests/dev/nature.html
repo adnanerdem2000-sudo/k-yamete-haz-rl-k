@@ -1,0 +1,39 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Doğa kiti galerisi</title>
+<style>body{margin:0;background:#202630;overflow:hidden;font:12px sans-serif}canvas{display:block}.lbl{position:absolute;color:#fff;text-shadow:0 1px 2px #000;transform:translateX(-50%);white-space:nowrap}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// assets/models/nature.glb içeriğini ızgarada gösterir (yakın ve uzak LOD). ?f=filtre&far=1&cols=6&sp=8&dist=40
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; r.shadowMap.enabled = true; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#9cc3e6'); scene.fog = new THREE.Fog('#9cc3e6', 80, 260);
+scene.add(new THREE.HemisphereLight(0xdfefff, 0x4a5a3a, 1.4));
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.6); sun.position.set(30, 50, 20); sun.castShadow = true; Object.assign(sun.shadow.camera, { left: -60, right: 60, top: 60, bottom: -60, far: 200 }); sun.shadow.mapSize.set(2048, 2048); scene.add(sun);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), new THREE.MeshStandardMaterial({ color: '#6f8f4a', roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+const cam = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.1, 600);
+const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+const g = await L.loadAsync('../../assets/models/nature.glb');
+const all = g.scene.children.map((c) => c.name);
+window.__names = all;
+const filt = (q.get('f') || '').split(',').filter(Boolean);
+const far = q.get('far') === '1';
+const list = all.filter((n) => (far ? n.endsWith('__far') : !n.endsWith('__far')) && (!filt.length || filt.some((f) => n.includes(f))));
+const cols = +(q.get('cols') || 6), sp = +(q.get('sp') || 10);
+list.forEach((n, i) => {
+  const o = g.scene.getObjectByName(n).clone(true);
+  o.position.set((i % cols - (cols - 1) / 2) * sp, 0, -Math.floor(i / cols) * sp);
+  o.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  scene.add(o);
+  const d = document.createElement('div'); d.className = 'lbl'; d.textContent = n; document.body.appendChild(d); d._p = o.position.clone().setY(-0.5);
+});
+const rows = Math.ceil(list.length / cols);
+const dist = +(q.get('dist') || Math.max(30, cols * sp * 0.9));
+cam.position.set(0, dist * 0.35, dist * 0.75); cam.lookAt(0, 3, -rows * sp * 0.35);
+r.render(scene, cam);
+for (const d of document.querySelectorAll('.lbl')) { const p = d._p.clone().project(cam); d.style.left = ((p.x + 1) / 2 * innerWidth) + 'px'; d.style.top = ((1 - p.y) / 2 * innerHeight) + 'px'; }
+window.__ready = true;
+</script></body></html>

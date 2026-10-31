@@ -150,6 +150,34 @@ const makers = {
   },
 };
 
+// Arazi çimen katmanı: nötr ayrıntı (gri, sRGB ortalaması ~0.8) — kısa ot sapları, kenarları sarmalanır
+makers.grassDetail = function grassDetail() {
+  const S = 256, c = canvas(S), g = c.getContext('2d'), r = new RNG('grassDetail');
+  g.fillStyle = '#c4c4c4'; g.fillRect(0, 0, S, S);
+  const wrap = [[0, 0], [S, 0], [-S, 0], [0, S], [0, -S], [S, S], [-S, -S], [S, -S], [-S, S]];
+  // yumuşak lekeler (toprak/kuru ot/gölgeli öbek tonları)
+  for (let i = 0; i < 90; i++) {
+    const x = r.next() * S, y = r.next() * S, rad = 6 + r.next() * 26, v = r.next() < 0.55 ? 40 : 255;
+    for (const [ox, oy] of wrap) {
+      const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, rad);
+      gr.addColorStop(0, `rgba(${v},${v},${v},0.16)`); gr.addColorStop(1, 'rgba(0,0,0,0)');
+      g.fillStyle = gr; g.fillRect(x + ox - rad, y + oy - rad, rad * 2, rad * 2);
+    }
+  }
+  // ot sapları: kısa eğik çizgiler, koyu tabanlı açık uçlu
+  for (let i = 0; i < 4200; i++) {
+    const x = r.next() * S, y = r.next() * S, len = 3 + r.next() * 8, a = -Math.PI / 2 + (r.next() - 0.5) * 1.3;
+    const dark = r.next() < 0.45, v = dark ? Math.floor(50 + r.next() * 70) : Math.floor(200 + r.next() * 55);
+    g.strokeStyle = `rgba(${v},${v},${v},${0.4 + r.next() * 0.45})`;
+    g.lineWidth = 0.6 + r.next() * 1.0;
+    for (const [ox, oy] of wrap) {
+      if (x + ox < -12 || x + ox > S + 12 || y + oy < -12 || y + oy > S + 12) continue;
+      g.beginPath(); g.moveTo(x + ox, y + oy); g.lineTo(x + ox + Math.cos(a) * len, y + oy + Math.sin(a) * len); g.stroke();
+    }
+  }
+  return finish(c);
+};
+
 export function getTexture(name) {
   if (!cache.has(name)) cache.set(name, makers[name]());
   return cache.get(name);

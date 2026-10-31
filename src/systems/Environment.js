@@ -47,6 +47,14 @@ export class Environment {
     scene.add(this.sun.target);
     this.hemi = new THREE.HemisphereLight(0xcfe6ff, 0x6a5a3a, 1.0);
     scene.add(this.hemi);
+    // görüntü tabanlı ortam ışığı: oyunun gökyüzü kubbesi + zemin rengi birkaç saniyede bir PMREM ortam
+    // haritasına çizilir (sabah, gün batımı, gece, bulut, kıyamet göğü yansımalara ve ortam ışığına yansır)
+    this.envScene = new THREE.Scene();
+    this.envGround = new THREE.Mesh(new THREE.CircleGeometry(900, 24), new THREE.MeshBasicMaterial({ color: 0x4a5a32 }));
+    this.envGround.rotation.x = -Math.PI / 2; this.envGround.position.y = -30;
+    this.envScene.add(this.envGround);
+    this.pmrem = new THREE.PMREMGenerator(game.gfx.renderer);
+    this.envRT = null; this.envT = 0; this.envKey = '';
     this.fog = new THREE.FogExp2(0xbfd8e8, 0.0018);
     scene.fog = this.fog;
     this.weather = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
@@ -106,6 +114,22 @@ export class Environment {
     this.scene.add(this.lampSprites);
   }
 
+  /** Gökyüzü kubbesini (paylaşılan malzeme) ve zemin diskini ortam haritasına çiz */
+  updateEnvMap(key, k, isNight, overcast) {
+    this.envT = 4; this.envKey = key;
+    const sky = this.world && this.world.sky;
+    if (!sky) return;
+    if (!this.envSky) { this.envSky = new THREE.Mesh(sky.mesh.geometry, sky.mesh.material); this.envSky.scale.setScalar(500); this.envScene.add(this.envSky); }
+    // zemin: çimen-toprak karışımı, gün ışığıyla aydınlanmış (seken ışık)
+    const lum = isNight ? 0.05 : clamp(k.sun * 0.32 * (1 - overcast * 0.5) + k.hemi * 0.18, 0.06, 0.6);
+    this.envGround.material.color.setRGB(0.36 * lum, 0.42 * lum, 0.24 * lum);
+    const old = this.envRT;
+    this.envRT = this.pmrem.fromScene(this.envScene, 0.04, 1, 1600, { size: 128 });
+    this.scene.environment = this.envRT.texture;
+    this.scene.environmentIntensity = 0.85;
+    if (old) old.dispose();
+  }
+
   /**
    * minuteOfDay: oyun saati; focus: oyuncu konumu; region: bulunulan bölge
    */
@@ -136,7 +160,8 @@ export class Environment {
     this.sun.position.set(sx + lightDir.x * 150, fy + lightDir.y * 150, sz + lightDir.z * 150);
     this.hemi.color.copy(k.hemiSky);
     this.hemi.groundColor.copy(k.hemiGround);
-    this.hemi.intensity = k.hemi * (1 - overcast * 0.3) + this.flash * 3;
+    // ortam haritası varken yarım yarımküre ışığı (ortam ışığının kalanı ortam haritasından)
+    this.hemi.intensity = k.hemi * (this.envRT ? 0.45 : 1) * (1 - overcast * 0.3) + this.flash * 3;
     // gökyüzü
     const sky = this.world.sky.uniforms;
     const grey = _c2.set(isNight ? '#1a1f2c' : '#9aa3ad');
@@ -160,6 +185,10 @@ export class Environment {
     sky.uGlow.value = 1 - overcast;
     if (this.flash > 0) { sky.uTop.value.lerp(_c1.set('#e8ecff'), this.flash); sky.uHorizon.value.lerp(_c1.set('#ffffff'), this.flash); }
     this.world.sky.follow(cam);
+    // ortam haritası: 4 sn'de bir ya da gök belirgin değişince (saat dilimi, hava)
+    this.envT -= dt;
+    const ek = `${Math.round(minuteOfDay / 15)}|${Math.round(overcast * 10)}|${Math.round(this.doom * 10)}|${Math.round(this._blood * 10)}`;
+    if (this.envT <= 0 || (ek !== this.envKey && this.envT < 3.5)) this.updateEnvMap(ek, k, isNight, overcast);
     // bölge renk tonu
     this.targetTint.setRGB(1, 1, 1);
     if (region) {

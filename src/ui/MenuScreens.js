@@ -455,7 +455,7 @@ export class Menus {
         h('ul',
           h('li', 'Kenney (kenney.nl) — karakterler, araçlar, evler, eşyalar, yiyecekler, ağaçlar ve ses efektleri (pmndrs market & Kenney Starter Kits) — CC0 1.0'),
           h('li', 'KayKit / Kay Lousberg — Furniture, Restaurant, Halloween, Prototype, City Builder, Dungeon Remastered, Character Pack Adventures — CC0 1.0'),
-          h('li', 'Quaternius (quaternius.com) — Ultimate Modular Men/Women karakterleri, Universal Animation Library 1+2 hareket kütüphanesi (154 klip), iskeletli hayvanlar — CC0 1.0'),
+          h('li', 'Quaternius (quaternius.com) — Ultimate Modular Men/Women karakterleri, Universal Animation Library 1+2 hareket kütüphanesi (154 klip), Stylized Nature MegaKit bitki örtüsü, Downtown City MegaKit yüzey dokuları, iskeletli hayvanlar — CC0 1.0'),
           h('li', 'Creative Trio — eski karavan, kütüphane, rüzgâr türbini · Sara Vieira — bank · Reuben Sotomayor & Alejandro León — köpek modeli — CC0 1.0 (pmndrs market)'),
           h('li', 'Yazı tipleri: Luckiest Guy (Astigmatic) — Apache 2.0 · Rubik, Rubik Dirt — SIL Open Font License 1.1'),
           h('li', 'three.js — MIT Lisansı · PeerJS — MIT Lisansı · Rapier fizik motoru — Apache 2.0'),

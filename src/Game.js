@@ -65,6 +65,8 @@ export class Game {
       this.world = new World(this.assets, this.scene);
       let step = 0;
       await this.world.build((l) => { step++; setP(0.45 + step * 0.06, l); });
+      // uzak ağaç kartlarının atlası ilk güncellemede oluşturucuyla çizilir
+      if (this.world.vegetation) this.world.vegetation.renderer = this.gfx.renderer;
       setP(0.88, 'Fizik motoru hazırlanıyor…');
       await PhysicsWorld.load();
       this.phys = new PhysicsWorld(this.world);
@@ -285,7 +287,7 @@ class MenuScene {
     this.fireMesh.children.forEach((f, i) => { f.scale.y = 0.8 + Math.sin(this.t * 9 + i) * 0.25; f.rotation.y += dt * (1 + i); });
     g.env.weather.cloud = 0.3;
     g.env.update(dt, g.time, 19 * 60 + 2 + Math.sin(this.t * 0.02) * 6, cam.position, null);
-    g.world.vegetation.update(cam.position, 420, true);
+    g.world.vegetation.update(cam.position, 420, true, dt, Settings.get('graphics.quality'));
     for (const im of g.world.instancer.meshes) im.visible = true;
     g.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - this.F.x, cam.position.z - this.F.z));
     g.audio.loop('menu_fire', 'fire', { at: this.fireMesh.position, vol: 0.25, bus: 'ambient' });

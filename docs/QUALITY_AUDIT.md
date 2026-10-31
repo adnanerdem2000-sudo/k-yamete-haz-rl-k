@@ -186,3 +186,20 @@ Kullanılamayanlar: Mixamo (Adobe hesabı, CC0 değil), Sketchfab (giriş gerekl
 - Ölçüm: karakter başına animasyon güncellemesi ~0,05 ms, zombi başına ~0,03 ms (yazılım GPU'lu test ortamı).
 - Kalanlar (sonraki aşamalar): eğim/merdivende ayak IK'sı, tüfek için klip tabanlı nişan (UAL'de tüfek yok;
   prosedürel kalıyor), kapı açma/çekmece için özel klip (şimdilik "Interact"), ağır nesne taşıma (Walk_Carry).
+
+### Aşama 3 — Kamera ve hareket (kısmen)
+- Kamera: yumuşak takip (yatay hızlı/dikey yumuşak), duruşa göre yumuşak pivot ve omuz, 5 ışınlı engel algılama
+  (yaklaşırken hızlı, açılırken yavaş), adım sallanması, deparda geniş görüş açısı.
+- Ayak IK'sı (eğim/basamak), kenara tırmanma, klip uyumlu engel atlama, yerinde dönüş adımı.
+- Kalanlar: fizik etkileşimleri (itilebilir kutular, menteşeli kapı/çekmece fiziği, kırılabilir cam/ahşap).
+
+### Aşama 4 — Çevre (ilk bölüm)
+- Prosedürel küre/koni ağaçlar yerine Stylized Nature MegaKit: 23 ağaç modeli (+ sonbahar tonları), çalı,
+  kaya, 5 çim türü, eğrelti, çiçek, mantar, çakıl; orman tabanı (eğrelti/mantar), kuru ağaçlar (kıyamet havası).
+- Uzak ağaç kartları (impostor atlası, 28 çeşit), kaliteye bağlı LOD bantları, gölge yalnız yakın ağaçlarda.
+- Arazi: katmanlı PBR ayrıntı (çimen/toprak/kaya/beton), doğal sRGB biyom renkleri, normal haritası.
+- Binalar: tuğla, beton, çatı arduvazı ve asfalt için PBR ayrıntı + normal haritası.
+- Ortam ışığı: gökyüzünden üretilen PMREM ortam haritası (saat/hava/kıyamet göğüyle değişir).
+- Ölçüm (orta kalite, orman içi göz hizası): ~1,7 M üçgen, ~313 çizim çağrısı (yüksek kalitede 2,7 M).
+- Kalanlar: şehir cepheleri ve sokak donatısı (Downtown City kitinin modelleri yalnız FBX/OBJ; glTF yok),
+  yaşayan dünya (kuşlar, uzak zombiler, sallanan tabelalar, duman), su ve ıslaklık yansımaları.

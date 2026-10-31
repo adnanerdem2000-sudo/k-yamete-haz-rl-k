@@ -68,6 +68,20 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Yol bulma:** 0,5 m'lik gezinme ızgarası + pencereli A*; kapı/pencere/yapı hücreleri "kırılabilir" sayılır,
   zombiler engeli kırarak yol açar.
 - **Varlıklar:** CC0 modeller `tools/pack-assets.mjs` ile 7 GLB kitinde birleştirilir (~11 MB).
+- **Bitki örtüsü (`Vegetation`):** Quaternius Stylized Nature MegaKit (`tools/pack-nature.mjs` → `nature.glb`,
+  4,3 MB): 59 model (ağaç, çalı, kaya, çim, eğrelti, çiçek, mantar, çakıl), yapraklar beyaz maske + doğal
+  renk (sonbahar türleri aynı dokudan ton). ~105 bin örnek 64 m'lik hücrelerde; kamera hareket ettikçe
+  bantlara dağıtılır: ağaçlar gölgeli tam model → gölgesiz tam model → uzak kart (impostor: yüklemede her
+  ağaç modeli bir doku atlasına çizilir, uzak ağaç kameraya dönük tek dörtgen, tek çizim çağrısı). Bant
+  mesafeleri grafik kalitesine bağlı (düşük/orta/yüksek). Rüzgâr salınımı köşe gölgelendiricisinde.
+  Not: meshopt nicemlemesinde konumlar [-1,1] tamsayıdır (ölçek düğüm matrisinde); geometri dönüştürülmeden
+  önce kayan noktaya çevrilir.
+- **Yüzeyler (`Surfaces`, `tools/pack-textures.mjs`):** Downtown City MegaKit toprak/beton/asfalt/tuğla/arduvaz
+  ve kaya dokuları "nötr ayrıntı"ya (gri, ortalama sabit) çevrilir; renk köşe renginden (palet) gelir, normal
+  haritaları kabartma verir. Arazi: köşe başına katman ağırlıkları (çimen, toprak, kaya, beton) ve iki ölçekli
+  örnekleme (tekrar deseni gizlenir); çimen katmanı prosedürel ot dokusu. Biyom renkleri sRGB doğal tonlar.
+- **Ortam ışığı:** gökyüzü kubbesi + zemin diski 4 sn'de bir (ya da saat/hava değişince) PMREM ortam
+  haritasına çizilir (`scene.environment`); yarımküre ışığı buna göre azaltılır.
 
 ## Karakterler
 - **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
