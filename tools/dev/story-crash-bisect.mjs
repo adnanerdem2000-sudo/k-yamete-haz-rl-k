@@ -27,6 +27,17 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
     if (dis.includes('interact') && S.interact) S.interact.update = noop;
     if (dis.includes('props') && S.props) S.props.update = noop;
     if (dis.includes('phys') && g.phys) g.phys.update = () => 0;
+    if (dis.includes('ui') && g.ui) g.ui.update = noop;
+    if (dis.includes('env') && S.env) S.env.update = noop;
+    if (dis.includes('npcs') && S.npcs) S.npcs.update = noop;
+    if (dis.includes('vehicles') && S.vehicles) S.vehicles.update = noop;
+    if (dis.includes('story') && S.storyWorld) S.storyWorld.update = noop;
+    if (dis.includes('cull')) { S.world.cullInteriors = noop; S.world.instancer.cull = noop; S.updateRoofs = noop; }
+    if (dis.includes('player') && S.local) { S.local.update = noop; S.local.postPhysics = noop; }
+    if (dis.includes('bots') && S.bots) S.bots.update = noop;
+    if (dis.includes('fx') && S.fx) S.fx.update = noop;
+    if (dis.includes('weather') && S.weather) S.weather.update = noop;
+    if (dis.includes('events') && S.events) S.events.update = noop;
     if (dis.includes('fidget')) { for (const p of S.players.values()) if (p.avatar && p.avatar.updateFidget) p.avatar.updateFidget = noop; if (S.local.avatar) S.local.avatar.updateFidget = noop; }
     window.__pause = () => { cancelAnimationFrame(g.raf); g.raf = 0; };
     window.__step = (frames) => { const inp = g.input; for (let i = 0; i < frames; i++) { inp.down.clear(); S.update(1 / 60); inp.endFrame(); } };
