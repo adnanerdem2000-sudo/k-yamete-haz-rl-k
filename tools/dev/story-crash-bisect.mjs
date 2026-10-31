@@ -23,6 +23,10 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
     if (dis.includes('wet')) S.env.applyWetness = noop;
     if (dis.includes('vegetation')) S.world.vegetation.update = noop;
     if (dis.includes('zombies')) S.zombies.update = noop;
+    if (dis.includes('audio') && S.audio) { S.audio.update = noop; S.audio.play = noop; S.audio.loop = noop; S.audio.impact = noop; S.audio.stopLoop = noop; }
+    if (dis.includes('interact') && S.interact) S.interact.update = noop;
+    if (dis.includes('props') && S.props) S.props.update = noop;
+    if (dis.includes('phys') && g.phys) g.phys.update = () => 0;
     if (dis.includes('fidget')) { for (const p of S.players.values()) if (p.avatar && p.avatar.updateFidget) p.avatar.updateFidget = noop; if (S.local.avatar) S.local.avatar.updateFidget = noop; }
     window.__pause = () => { cancelAnimationFrame(g.raf); g.raf = 0; };
     window.__step = (frames) => { const inp = g.input; for (let i = 0; i < frames; i++) { inp.down.clear(); S.update(1 / 60); inp.endFrame(); } };
