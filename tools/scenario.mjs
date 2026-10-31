@@ -20,6 +20,8 @@ async function newPage(name = 'p' + pages.length, w = 960, h = 540, sameContext 
   if (!mainCtx) mainCtx = await browser.newContext({ viewport: { width: w, height: h } });
   const ctx = sameContext || !pages.length ? mainCtx : await browser.newContext({ viewport: { width: w, height: h } });
   const page = await ctx.newPage();
+  // yazılım GPU'sunda (özellikle iki sekmeli senaryolarda) sayfa yüklemesi 30 sn'yi aşabilir
+  page.setDefaultNavigationTimeout(120000);
   page.on('console', (m) => { const t = `[${name}:${m.type()}] ${m.text()}`; logs.push(t); if (m.type() === 'error') errors.push(t); });
   page.on('pageerror', (e) => { const t = `[${name}:pageerror] ${e.message}\n${(e.stack || '').split('\n').slice(0, 4).join('\n')}`; logs.push(t); errors.push(t); });
   // sekme çökmesi (ör. yazılım GPU'sunda bellek) başarısızlık sayılır
