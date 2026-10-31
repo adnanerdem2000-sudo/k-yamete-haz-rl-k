@@ -1,0 +1,109 @@
+// Zombi ve bot YZ 2 (Aşama 6): üst üste binme yok (sürü ayrışması), oyuncunun içinden geçmeme, şişeyle dikkat
+// dağıtma (kırılma sesi → zombiler araştırır), bot emirleri: yağma (konteyner arar, eşya çantaya girer), inşaat
+// (bitmemiş yapıyı tamamlar), takım ekranı emir metni. Sabit adımlı döngü (physics senaryosu gibi).
+export default async ({ page, url, wait, evalJS, log, errors }) => {
+  const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
+  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+  await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 150000 });
+  await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 2; return g.ui.menus.startSingle(); });
+  await page.waitForFunction(() => window.__game && window.__game.state === 'playing' && window.__game.session, null, { timeout: 150000 });
+  await wait(1500);
+  await evalJS(page, () => {
+    const g = window.__game, S = g.session; cancelAnimationFrame(g.raf); g.loop = () => {};
+    g.ui.onLockChange = () => {};
+    for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel();
+    window.__step = (frames, keys = [], each = null) => { const inp = g.input; for (let i = 0; i < frames; i++) { inp.down.clear(); for (const k of keys) inp.down.add(k); S.update(1 / 60); if (each) each(i); inp.endFrame(); } };
+  });
+  // 1) ayrışma: 12 zombi aynı noktaya doğar, 3 sn sonra en yakın çift ≥ 0,45 m
+  const sep = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local;
+    const x = pl.pos.x + 12, z = pl.pos.z + 12;
+    const ids = [];
+    for (let i = 0; i < 12; i++) { const zb = S.zombies.spawn('normal', x + (i % 3) * 0.1, z + Math.floor(i / 3) * 0.1, {}); if (zb) { zb.state = 'wander'; zb.target = null; ids.push(zb.id); } }
+    window.__step(180);
+    let minD = 99, pairs = 0;
+    const zs = ids.map((id) => S.zombies.list.get(id)).filter(Boolean);
+    for (let i = 0; i < zs.length; i++) for (let j = i + 1; j < zs.length; j++) { const d = Math.hypot(zs[i].x - zs[j].x, zs[i].z - zs[j].z); minD = Math.min(minD, d); if (d < 0.45) pairs++; }
+    return { n: zs.length, minD: +minD.toFixed(2), ustUste: pairs };
+  });
+  log('ayrışma', sep);
+  check(sep.n >= 10 && sep.minD >= 0.45 && sep.ustUste === 0, 'zombiler üst üste binmemeli (≥ 0,45 m)', sep);
+  // 2) oyuncunun içinden geçmeme: zombi oyuncuya kovalarken 3 sn boyunca mesafe ≥ 0,6 m
+  const pass = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local;
+    for (const z of S.zombies.list.values()) z.dead = true; // öncekileri temizle
+    const zb = S.zombies.spawn('normal', pl.pos.x + 3, pl.pos.z, { chase: S.localId });
+    let minD = 99;
+    window.__step(180, [], () => { if (zb && !zb.dead) minD = Math.min(minD, Math.hypot(zb.x - pl.pos.x, zb.z - pl.pos.z)); });
+    return { minD: +minD.toFixed(2), state: zb && zb.state };
+  });
+  log('içinden geçme', pass);
+  check(pass.minD >= 0.6, 'zombi oyuncunun içine girmemeli (≥ 0,6 m)', pass);
+  // 3) dikkat dağıtma: boş şişe fırlat → kırılma sesi → yakın zombi 'investigate' ile sesin yakınına gider
+  const lure = await evalJS(page, async () => {
+    const S = window.__game.session, pl = S.local;
+    const { makeStack, ITEMS } = await import('/src/data/items.js');
+    for (const z of S.zombies.list.values()) z.dead = true;
+    window.__step(5);
+    const zb = S.zombies.spawn('normal', pl.pos.x + 14, pl.pos.z + 2, {}); zb.state = 'idle'; zb.target = null; zb.alert = 0;
+    S.inventory.addStack(makeStack('empty_bottle', 2));
+    const slot = S.inventory.slots.findIndex((s) => s && s.id === 'empty_bottle');
+    S.selectHotbar(slot);
+    // kamera +x yönüne baksın, fırlat (sol tık = fire)
+    pl.yaw = Math.PI / 2; pl.camYaw = pl.yaw + Math.PI; pl.camPitch = -0.1;
+    const before = S.inventory.count('empty_bottle');
+    S.combat.cool = 0;
+    S.combat.throwItem(S.inventory.slots[slot], ITEMS.empty_bottle);
+    let landed = null, investigated = false, dmin = 99;
+    window.__step(240, [], () => { if (!landed && S.combat.projectiles.length === 0) landed = { x: pl.pos.x, z: pl.pos.z }; if (zb.state === 'investigate') investigated = true; if (zb.target && zb.target.kind === 'pos') dmin = Math.min(dmin, Math.hypot(zb.x - zb.target.x, zb.z - zb.target.z)); });
+    return { atildi: before - S.inventory.count('empty_bottle'), investigated, state: zb.state, hedefMesafe: dmin === 99 ? null : +dmin.toFixed(1), zx: +zb.x.toFixed(1), px: +pl.pos.x.toFixed(1) };
+  });
+  log('şişe', lure);
+  check(lure.atildi === 1 && lure.investigated, 'şişe kırılınca zombi sesi araştırmalı', lure);
+  // 4) bot yağma emri: botun 10 m yakınına aranmamış konteyner olan bir noktaya ışınla, emir ver, 30 sn sim
+  const loot = await evalJS(page, () => {
+    const S = window.__game.session, b = S.bots.list[0];
+    if (!b) return { err: 'bot yok' };
+    for (const z of S.zombies.list.values()) z.dead = true;
+    const home = S.world.home;
+    const c = S.world.containers.find((q) => q.building === 'home' && !(S.loot.state.get(q.id) || {}).searched && q.type !== 'safe');
+    if (!c) return { err: 'ev konteyneri yok' };
+    b.pos.set(c.x + 3, home.floorY, c.z + 2); b.path = null;
+    S.local.spawnAt(c.x + 4, home.floorY + 0.1, c.z + 3, 0);
+    const inv0 = b.inv.reduce((a, s) => a + s.qty, 0);
+    S.applyAction('bot_order', { id: b.id, order: 'loot' }, S.localId);
+    let searched = false; let t = 0;
+    window.__step(1800, [], () => { t++; if (!searched && (S.loot.state.get(c.id) || {}).searched) searched = t; });
+    const inv1 = b.inv.reduce((a, s) => a + s.qty, 0);
+    const anySearched = S.world.containers.filter((q) => q.building === 'home' && (S.loot.state.get(q.id) || {}).searched).length;
+    return { order: b.order, searchedAt: searched ? +(searched / 60).toFixed(1) : null, hedefKonteyner: c.id, evdeArananlar: anySearched, cantaOnce: inv0, cantaSonra: inv1, lootDone: b.lootDone ? b.lootDone.size : null };
+  });
+  log('yağma emri', loot);
+  check(loot && !loot.err && loot.evdeArananlar >= 1 && loot.cantaSonra >= loot.cantaOnce, 'bot yağma emrinde konteyner aramalı ve eşyaları almalı', loot);
+  // 5) bot inşaat emri: yarım bir tahta duvar yerleştir, emir ver, 30 sn sonra tamamlanmış olmalı
+  const build = await evalJS(page, () => {
+    const S = window.__game.session, b = S.bots.list[0];
+    if (!b) return { err: 'bot yok' };
+    const home = S.world.home, fr = home.frame;
+    // evin önünde geçerli bir yer: birkaç aday dene (bahçe, yol kenarı değil)
+    let st = null, p = null, y = 0;
+    for (const [tx, tz] of [[home.tpl.w / 2, home.tpl.d + 6], [home.tpl.w / 2 + 4, home.tpl.d + 7], [home.tpl.w / 2 - 4, home.tpl.d + 7], [-5, home.tpl.d / 2], [home.tpl.w + 5, home.tpl.d / 2]]) {
+      p = fr.pt(tx, tz); y = S.world.terrain.heightAt(p.x, p.z);
+      S.applyAction('build_place', { type: 'wood_fence', x: p.x, y, z: p.z, rot: 0 }, S.localId);
+      st = [...S.build.structures.values()].find((q) => q.type === 'wood_fence' && Math.hypot(q.x - p.x, q.z - p.z) < 1);
+      if (st) break;
+    }
+    if (!st) return { err: 'yapı yerleşmedi' };
+    b.pos.set(p.x + 3, y, p.z + 3); b.path = null;
+    S.applyAction('bot_order', { id: b.id, order: 'build' }, S.localId);
+    let doneAt = null, t = 0;
+    window.__step(1800, [], () => { t++; if (!doneAt && st.built >= 1) doneAt = t; });
+    return { order: b.order, built: +st.built.toFixed(2), doneAt: doneAt ? +(doneAt / 60).toFixed(1) : null };
+  });
+  log('inşaat emri', build);
+  check(build && !build.err && build.built >= 1, 'bot inşaat emrinde yapıyı tamamlamalı', build);
+  // 6) takım ekranı: bot kartında emir metni ve çanta sayısı
+  const team = await evalJS(page, () => { const g = window.__game; g.ui.panels.openTeam(); const txt = [...document.querySelectorAll('.team-card')].map((e) => e.textContent); g.ui.closePanel(); return txt; });
+  log('takım ekranı', team);
+  check(team.some((t) => /İnşaata yardım et|Çevreyi yağmala|Takip et/.test(t) && /çanta/.test(t)), 'takım kartında bot emri ve çanta sayısı', team);
+};
