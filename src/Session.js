@@ -22,6 +22,7 @@ import { ContactSounds } from './physics/ContactSounds.js';
 import { Interact } from './systems/Interact.js';
 import { Effects } from './systems/Effects.js';
 import { Birds, SmokeColumns } from './world/LivingWorld.js';
+import { Papers, HangingSigns } from './world/StreetLife.js';
 import { SMOKE_SITES } from './world/WorldLayout.js';
 import { Combat } from './systems/Combat.js';
 import { Zombies } from './systems/Zombies.js';
@@ -90,14 +91,27 @@ export class Session {
     // ---- sistemler
     this.fx = new Effects(this);
     // yaşayan dünya: karga sürüleri ve yanan enkazlardan tüten duman sütunları
+    // kuşların konabileceği yerler: bina çatıları (sürü ara ara iner, oyuncu yaklaşınca havalanır)
+    const perches = [];
+    for (const b of this.world.buildings) if (b.box && b.roofTopY) perches.push({ x: (b.box.minX + b.box.maxX) / 2, y: b.roofTopY + 0.08, z: (b.box.minZ + b.box.maxZ) / 2, r: Math.max(1.5, Math.min(b.box.maxX - b.box.minX, b.box.maxZ - b.box.minZ) * 0.3) });
+    const T = this.world.terrain;
+    const URBAN_IDS = new Set(['sehir', 'hastane', 'benzin', 'mahalle', 'liman', 'sanayi', 'tatil', 'havaalani']);
+    // asma dükkân tabelaları: tabela konumlarının yanında, duvara dik (sırayla sağ/sol)
+    const hang = [];
+    (this.world.signSpots || []).forEach((sp, i) => {
+      if (sp.kind !== 'sign' || i % 2) return;
+      const side = (i >> 1) % 2 ? 1 : -1, ax = Math.cos(sp.ry) * side, az = -Math.sin(sp.ry) * side;
+      hang.push({ x: sp.x + ax * 1.6, y: Math.min(sp.y - 0.2, T.heightAt(sp.x, sp.z) + 3.1), z: sp.z + az * 1.6, ry: sp.ry });
     });
     this.living = {
       birds: new Birds(this.game.scene, [
         { x: 100, z: -20, alt: 42, r: 34, n: 14, v: 7 }, { x: -235, z: -160, alt: 36, r: 40, n: 12, v: 6, dir: -1 },
         { x: -640, z: 120, alt: 30, r: 36, n: 10, v: 6 }, { x: -205, z: 185, alt: 34, r: 26, n: 8, v: 5.5, dir: -1 },
         { x: 330, z: 300, alt: 26, r: 30, n: 10, v: 6.5 }, { x: 120, z: -760, alt: 40, r: 50, n: 12, v: 7, dir: -1 },
-      ]),
+      ], perches),
       smoke: new SmokeColumns(this.game.scene, SMOKE_SITES.map(([x, z], i) => ({ x, z, y: this.world.terrain.heightAt(x, z) + 0.8, h: 34 + i * 3, life: 14 + i, size: 2.8 + (i % 3) * 0.6, dense: 0.95 })), 26),
+      papers: new Papers(this.game.scene, 40, (x, z) => T.heightAt(x, z), (x, z) => { const r = T.regionAt(x, z); return !!(r && URBAN_IDS.has(r.id)); }),
+      signs: new HangingSigns(this.game.scene, hang.slice(0, 96)),
     };
     this.loot = new Loot(this);
     this.ground = new GroundItems(this);
@@ -143,9 +157,14 @@ export class Session {
     this.ui.toast(cfg.mode === 'client' ? 'Odaya bağlanıldı. İyi şanslar!' : '30 günün kaldı. Arkadaşlarını topla. Hazırlan. Hayatta kal.', 'story', 6);
   }
 
+  /** Pencerelerin başlangıç durumu: bina durumuna göre (InteriorDress) bir kısmı kırık ya da tahtalı. Yeni oyunda ve
+   *  kayıt yüklenmeden önce uygulanır; kayıt yalnız bu tabandan sapan pencereleri taşır. */
+  applyInitialWindows() {
+    for (const w of this.world.windows) this.interact.applyWindowState(w, { broken: !!w.initBroken, barricade: w.initBarricade || 0, hp: w.maxHp }, true);
   }
 
   newGame(cdef) {
+    this.applyInitialWindows();
     const sp = this.world.spawn;
     const off = this.cfg.spawnOffset || 0;
     this.local.spawnAt(sp.x + off, sp.y, sp.z, sp.rot);
@@ -355,8 +374,11 @@ export class Session {
     this.env.update(dt, this.game.time, this.time.minuteOfDay, pl.pos, region);
     this.world.vegetation.update(cam.position, Settings.get('graphics.viewDistance'), Settings.get('graphics.grass'), dt, Settings.get('graphics.quality'));
     if (this.living) {
-      this.living.birds.update(dt, (x, z) => this.world.terrain.heightAt(x, z));
-      this.living.smoke.update(dt, this.env && this.env.weather ? 1 + this.env.weather.storm * 2 : 1);
+      const windMul = this.env && this.env.weather ? 1 + this.env.weather.storm * 2 + this.env.weather.rain * 0.5 : 1;
+      this.living.birds.update(dt, (x, z) => this.world.terrain.heightAt(x, z), pl.pos);
+      this.living.smoke.update(dt, windMul);
+      this.living.papers.update(dt, pl.pos, windMul);
+      this.living.signs.update(dt, windMul);
     }
     this.world.instancer.cull(cam.position, Settings.get('graphics.viewDistance'));
     this.world.cullInteriors(cam.position, dt);
@@ -806,7 +828,7 @@ export class Session {
     const out = {};
     for (const d of this.world.doors) if (d.open01 > 0 || d.broken || d.barricade || !d.locked !== !d.origLocked || d.hp < d.maxHp) out[d.id] = [d.target, d.broken ? 1 : 0, d.barricade, d.locked ? 1 : 0, Math.round(d.hp)];
     const wins = {};
-    for (const w of this.world.windows) if (w.broken || w.barricade || w.hp < w.maxHp) wins[w.id] = [w.broken ? 1 : 0, w.barricade, Math.round(w.hp)];
+    for (const w of this.world.windows) if (w.broken || w.barricade || w.hp < w.maxHp || w.initBroken || w.initBarricade) wins[w.id] = [w.broken ? 1 : 0, w.barricade, Math.round(w.hp)];
     return { doors: out, windows: wins };
   }
 
@@ -854,6 +876,7 @@ export class Session {
     const byId = new Map(this.world.doors.map((x) => [x.id, x]));
     for (const [id, a] of Object.entries(d.doors || {})) { const door = byId.get(id); if (door) this.interact.applyDoorState(door, { target: a[0], broken: !!a[1], barricade: a[2], locked: !!a[3], hp: a[4] }); }
     const wById = new Map(this.world.windows.map((x) => [x.id, x]));
+    this.applyInitialWindows();
     for (const [id, a] of Object.entries(d.windows || {})) { const w = wById.get(id); if (w) this.interact.applyWindowState(w, { broken: !!a[0], barricade: a[1], hp: a[2] }, true); }
   }
 
@@ -903,7 +926,7 @@ export class Session {
     this.game.gfx.grade.uDanger.value = 0; this.game.gfx.grade.uBlur.value = 0; this.game.gfx.grade.uDesat.value = 0;
     // dünyayı sıfırla (kapılar, pencereler)
     for (const d of this.world.doors) this.interact.applyDoorState(d, { target: 0, broken: false, barricade: 0, locked: d.origLocked ?? d.locked, hp: d.maxHp }, true);
-    for (const w of this.world.windows) this.interact.applyWindowState(w, { broken: false, barricade: 0, hp: w.maxHp }, true);
+    this.applyInitialWindows();
     this.world.setRoofHidden(null);
     this.env.weather = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
     this.env.doom = 0; this.env.redMist = 0; this.env.streetPower = true; this.env.bloodMoon = false;

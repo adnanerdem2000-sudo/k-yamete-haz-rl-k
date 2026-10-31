@@ -27,7 +27,7 @@ export default async ({ page, url, evalJS, log }) => {
   log('ısınma', await measure('ısınma'));
   log('temel', await measure('temel'));
   const toggles = [
-    ['bitki gizli', () => { const g = window.__game; for (const im of g.world.vegetation.groups ? g.world.vegetation.groups.flatMap((x) => x.ims || []) : []) im.visible = false; g.scene.traverse((o) => { if (o.isInstancedMesh && /veg|tree|imp|grass|nature/i.test(o.name)) o.visible = false; }); }],
+    ['bitki gizli', () => { const g = window.__game; g.world.vegetation.update = () => {}; g.scene.traverse((o) => { if (o.isInstancedMesh && /^veg:/.test(o.name)) o.visible = false; }); }],
     ['yaşayan dünya gizli', () => { const S = window.__game.session; for (const l of Object.values(S.living)) l.mesh.visible = false; }],
     ['kapı/çekmece/su fiziği kapalı', () => { const S = window.__game.session; S.doorPhys.update = () => {}; S.drawers.update = () => {}; if (S.buoyancyOff) { S.buoyancyOff(); S.buoyancyOff = null; } }],
     ['izler/cephe gizli', () => { const W = window.__game.world; W.dressing.decals.mesh.visible = false; W.dressing.facade.mesh.visible = false; W.dressing.bags.mesh.visible = false; }],

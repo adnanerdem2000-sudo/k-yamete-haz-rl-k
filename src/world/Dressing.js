@@ -371,12 +371,20 @@ export function buildDressing(W, spots = []) {
   }
   // ---- yardım işaretleri: otoparkta ve hastane yolunda boyanmış SOS
   for (const [x, z, rot] of [[35, -47, 0.05], [-60, -33, Math.PI / 2]]) push('sos', x, z, surfY(x, z) + 0.01, rot, 1, 0.5);
+  // iç mekân dağınıklığı (InteriorDress): yağmalanmış/barikatlı binaların zemininde kâğıt, çöp, cam kırığı, leke
+  let indoor = 0;
+  for (const b of W.buildings || []) for (const c of b.clutter || []) {
+    const [a, bb] = SIZE[c.kind] || [1, 1.6];
+    const sz = rng.range(a, bb) * 0.55;
+    list.push({ cell: DECAL[c.kind] ?? DECAL.litter, x: c.x, z: c.z, y: b.floorY + 0.012, rot: rng.range(0, 6.28), sx: sz, sz });
+    indoor++;
+  }
   const decals = new Decals(W.root, list);
   const bagMesh = new TrashBags(W.root, bags);
   const fac = [];
   for (const b of W.buildings || []) if (b.facade) fac.push(...b.facade);
   const facade = new FacadeDecals(W.root, fac);
-  return { decals, bags: bagMesh, facade, count: list.length, bagCount: bags.length, facadeCount: fac.length, weeds, litter, rubble };
+  return { decals, bags: bagMesh, facade, count: list.length, bagCount: bags.length, facadeCount: fac.length, weeds, litter, rubble, indoor };
 }
 
 // ======================================================================= cepheler

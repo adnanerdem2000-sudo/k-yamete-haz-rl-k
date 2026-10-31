@@ -29,11 +29,23 @@ export function materials() {
     plain: std({ roughness: 0.8 }),
     shiny: std({ roughness: 0.3, metalness: 0.4 }),
     asphalt: surf('asphalt_c', 'concrete_n', 'asphalt', { roughness: 0.93 }, 0.35),
-    emissive: new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0.0, roughness: 0.5 }),
+    decor: std({ roughness: 0.82 }), // iç mekân dokusu: perde, abajur, halı, çerçeve (iç yüzeylerle birlikte kırpılır)
+    emissive: emissiveMaterial(),
     glass: new THREE.MeshStandardMaterial({ color: 0x9fd4ef, roughness: 0.08, metalness: 0.2, transparent: true, opacity: 0.38, depthWrite: false }),
   };
   for (const [k, m] of Object.entries(MATS)) m.name = 'geo_' + k;
   return MATS;
+}
+
+/** Işıyan yüzeyler: köşe rengi ışıma rengi olur (lamba sıcak, ekran mavi, trafik ışığı yeşil…); şiddeti Environment
+ *  gece/elektrik durumuna göre sürer (materials().emissive.emissiveIntensity). */
+function emissiveMaterial() {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0xffffff, emissiveIntensity: 0.0, roughness: 0.5 });
+  m.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\ntotalEmissiveRadiance *= vColor.rgb;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'geo_emissive_vcol';
+  return m;
 }
 
 // Malzeme başına UV ölçeği (1 doku tekrarı kaç metre)

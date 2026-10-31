@@ -92,6 +92,32 @@ _(aşamalar ilerledikçe doldurulur)_
   denetimi bu ortamda başarısız kalıyor (kare süresi sondası `tools/dev/perf-probe.mjs` ile inceleniyor).
 - Araçla çite/duvara çarpınca yapı hasarı: **Aşama 5'e** (araç çarpışma modeli) bırakıldı.
 
+### Aşama 4 — Harita ve çevre
+- **Cepheler (`Facade`):** 69 binanın hepsine subasman bandı, saçak/korniş bandı; tuğla/beton/şehir sıvasında köşe
+  taşları, düz çatıda korniş + kat silmesi + çatı boruları/kapak/su deposu, eğimli çatıda oluk + iniş boruları,
+  ev stillerinde panjur (%75; açık/kapalı), tuğlada lento/kilit taşı, boş yan duvarlı yüksek şehir binasında yangın
+  merdiveni, uydu anteni. Çatı çeşitliliği: 23 beşik, **10 kırma (yeni)**, 7 tek eğimli, 29 düz. Tabelalı
+  dükkânların ön kapısı üstünde çizgili **tente** (%75; yırtık/sarkık çeşidi). Hepsi kabuk birleştirmesine girer →
+  çizim çağrısı artmaz. Ekran görüntüleri: `/tmp/s4b-hip-house.png` (kırma çatı, subasman, panjur, veranda),
+  `/tmp/s4b-brick-left.png` (korniş, köşe taşları), `/tmp/s4b-shop-awning.png` (tente).
+- **İç mekânlar (`InteriorDress`):** bina durumu 24 yaşanır / 32 yağmalanmış / 13 barikatlı; perdeler, tavan
+  lambaları (her odada; 'emissive' kovası), halılar, duvar resimleri, devrilmiş kutular; 795 zemin dağınıklık izi
+  (kâğıt/çöp/cam/leke) iz atlasında; 125 pencere baştan kırık, 88 pencere baştan tahtalı (kayıt uyumlu: taban
+  durumdan sapan pencereler kaydedilir, eski kayıtlar geçerli). Gece: 'emissive' malzemesi 1,0'a sürülür (test:
+  gece 23:00'te `emissiveIntensity` 1) ve oyuncunun içinde bulunduğu binanın lambaları ışık havuzuna eklenir
+  (5 lamba → 5 sıcak nokta ışığı; `/tmp/s4b-interior-night.png`).
+- **Biyom bitki örtüsü (`BiomeScatter`):** orman dışındaki bölgelere temaya göre 1.553 ek örnek (dağ: çam/kaya/kuru
+  ağaç; kıyı: çalı/kaya/kuru odun; çiftlik: çit çalıları; mahalle: bahçe çalısı/çiçek/kiraz; havaalanı/cezaevi:
+  kuru ot/çakıl). Dağ platosunda 50 m karede 208 örnek (`/tmp/s4b-mountain.png`), kıyıda kayalar ve ot
+  (`/tmp/s4-coast.png`).
+- **Yaşayan dünya:** kuş sürüleri çatılara iner/tüner/havalanır (oyuncu 13 m'ye yaklaşınca ürker), 40 uçuşan kâğıt
+  (esinti testinde 18'i havada), 19 asma dükkân tabelası (gölgelendiricide salınım). Yağmurda bina/yol
+  malzemelerinin pürüzlülüğü düşer (ıslak parlaklık).
+- **Doğrulama:** birim testler 35/35 (`facade.test.mjs` 4 test: subasman/panjur/oluk, korniş/köşe/yangın merdiveni,
+  tente/kırma çatı, iç dekor + pencere durumları); görsel senaryolar `tools/dev/stage4-shots*.mjs` 0 hata.
+- **Yapılmadı / kısmi:** PBR doku atlası ve ek PBR malzeme seti (mevcut nötr ayrıntı + normal haritası yolu
+  korundu; yeni doku indirilmedi), balkon ve klima üniteleri cephelerde (yalnız düz çatı üstünde klima var),
+  kuşların yere (çatı dışına) konması, yansımalı ıslak zemin (ekran uzayı yansıması yok; yalnız pürüzlülük).
 ## 6. Test edilemeyenler
 - Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
 - Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).

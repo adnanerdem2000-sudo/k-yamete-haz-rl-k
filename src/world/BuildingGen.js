@@ -8,6 +8,10 @@ import { furnishRoom } from './Furnish.js';
 import { NAV } from './NavGrid.js';
 import { RNG } from '../core/util.js';
 import { planFacade } from './Dressing.js';
+import { facadeDetails, awning, buildHipRoof } from './Facade.js';
+import { dressInterior } from './InteriorDress.js';
+
+const AWNING_REGIONS = new Set(['sehir', 'benzin', 'liman', 'tatil', 'mahalle', 'dagkoy']);
 
 export const FLOOR_LIFT = 0.3;
 const EXT_T = 0.25, INT_T = 0.15, DOOR_H = 2.15;
@@ -170,7 +174,18 @@ export function buildBuilding(spec, ctx) {
   }
 
   // ---------------------------------------------------------- çatı
-  buildRoof(roofGeo, tpl, st, H, F);
+  // cephe/çatı seçimleri ayrı tohumlu: mobilya ve kasa sıralaması (kayıt kimlikleri) değişmesin
+  const frng = new RNG('fac:' + spec.id);
+  let roofType = st.roof || 'gable';
+  if (roofType === 'gable' && !tpl.noHip && frng.chance(0.38)) { roofType = 'hip'; tpl.roofRise = buildHipRoof(roofGeo, tpl, st, H, F); }
+  else buildRoof(roofGeo, tpl, st, H, F);
+  tpl.roofType = roofType;
+  // ---------------------------------------------------------- cephe ayrıntıları (subasman, korniş, panjur, oluk, yangın merdiveni…)
+  try { facadeDetails(geo, roofGeo, { w, d, H, F, t: EXT_T, st, spec, openings, rng: frng, roofType }); } catch (e) { console.warn('Cephe ayrıntısı atlandı', spec.id, e); }
+  // dükkân tentesi: tabelalı, şehir/kasaba binalarının ön kapıları üstünde
+  if ((tpl.sign || spec.sign) && AWNING_REGIONS.has(spec.region) && frng.chance(0.75)) {
+    for (const op of openings.F) if (op.door && op.door.kind !== 'garage') { awning(geo, op.s - 0.4, op.e + 0.4, d + EXT_T / 2, F + op.y1 + 0.32, F + H - 0.25, frng); B.awning = true; }
+  }
 
   // ---------------------------------------------------------- ekstralar (veranda, garaj içi, tabela)
   if (tpl.porch) {
@@ -189,6 +204,8 @@ export function buildBuilding(spec, ctx) {
   const furnCtx = { geo, B, fr, ctx, rng, F, H, openings, baseY, doorOps, winOps, tpl };
   for (const r of tpl.rooms) furnishRoom(r, furnCtx);
   if (tpl.extra) tpl.extra(furnCtx);
+  // ---------------------------------------------------------- iç mekân dokusu (perde, lamba, halı, resim; bina durumu)
+  try { B.clutter = dressInterior(B, tpl, st, geo, new RNG('int:' + spec.id)).clutter; } catch (e) { console.warn('İç dekor atlandı', spec.id, e); B.clutter = []; }
 
   // ---------------------------------------------------------- ağlar
   for (const m of geo.toMeshes(fr.matrix)) B.shell.add(m);

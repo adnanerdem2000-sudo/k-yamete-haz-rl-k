@@ -40,4 +40,9 @@
   başınadır). 103 kafa×gövde kombinasyonunda geometrik boşluk ölçülmedi (`tools/dev/outfit-combos.mjs`).
 - Menteşeli kapı ve çekmece açıları her istemcide yerel simüle edilir; E ile aç/kapat ve iterek açma durumu
   eşitlenir, ara açılar istemciler arasında küçük farklar gösterebilir.
-- Bazı nadir karakter giysi kombinasyonlarında doku dikişleri görülebilir.
+- İç mekân duvar resimleri ve halılar mobilyadan bağımsız yerleştirilir; nadiren bir dolabın arkasına denk
+  gelebilir. Perdeler yalnız ev/otel/ofis tipi odalarda.
+- Şehir kitinden gelen büyük binaların (Downtown City MegaKit `Building_Large_*`) zemin katında modelin kendi
+  "sahte aydınlık iç mekân" dokulu vitrinleri uzaktan parlak kırmızı bir bant gibi okunur (kit tasarımı).
+- Yazılım GPU'lu test ortamında oyun içi kare süresi saniyelere çıkabilir (gölgelendirme CPU'da); fizik ve
+  oyun mantığı sabit adımlı olduğu için senaryolar fizik adımı sayarak bekler. Gerçek GPU'da bu görülmez.

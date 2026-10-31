@@ -17,6 +17,7 @@ import { addContainer } from './Furnish.js';
 import { signTexture, dropSignTextures } from './TextureFactory.js';
 import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE, SMOKE_SITES } from './WorldLayout.js';
 import { buildDressing } from './Dressing.js';
+import { scatterBiomes } from './BiomeScatter.js';
 import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
 
@@ -92,6 +93,8 @@ export class World {
       this.dressing = buildDressing(this, this._crashSpots || []);
       this.manualTrees();
       this.vegetation.scatter((x, z, r) => this.blocked(x, z, r));
+      // bölge temasına göre ek bitki örtüsü (dağ çamları/kayalar, kıyı çalıları, çiftlik çitleri, mahalle bahçeleri…)
+      this.biomePlants = scatterBiomes(this.vegetation, this, new RNG('biomes'));
       this.vegetation.build(this.root);
     });
     await step('Su ve gökyüzü…', () => {
@@ -918,6 +921,6 @@ export class World {
 
 /** Birleştirme hücresi anahtarı (off: hücre sınırlarını kaydırır; şehir 0,0 kesişiminde bölünmesin) */
 function cellKey(x, z, size, off) { return Math.floor((x + off) / size) + ',' + Math.floor((z + off) / size); }
-const INTERIOR_MAT = /geo_(interior|woodfloor|tiles|carpet)$/;
+const INTERIOR_MAT = /geo_(interior|woodfloor|tiles|carpet|decor)$/;
 
 export { WORLD };

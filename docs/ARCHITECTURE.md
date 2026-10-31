@@ -113,8 +113,36 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   yığınları (tek çağrı, örnek başına renk), devrilmiş kutu/şişe. Duman sütunlarının altındaki kaza araçları
   yanmış enkazdır (`SMOKE_SITES`), çevrelerinde yanık/cam/yağ/çakıl izi. Yerleşim tohumlu RNG ile her istemcide
   aynı.
-- **Yaşayan dünya (`LivingWorld`):** karga sürüleri (gürültüde ürker) ve duman sütunları; ikisi de tek
-  örnekli ağ, animasyon gölgelendiricide. Sokak lambalarının ~%10'u yanmaz, ~%14'ü kesik kesik titrer
+- **Cephe ayrıntıları (`Facade`):** binalar kutu görünmesin diye şablon uzayında mevcut Geo kovalarına eklenir
+  (kabuk birleştirmeye girer, ek çizim çağrısı yok): subasman bandı, köşe taşları (tuğla/beton/şehir sıvası),
+  korniş + kat silmesi (düz çatı) ya da saçak altı bandı, ev stillerinde panjur (açık/kapalı), tuğlada lento ve
+  kilit taşı, denizlik gölgesi, eğimli çatıda oluk + iniş boruları, düz çatıda havalandırma boruları/çatı
+  kapağı/su deposu, şehir binalarının boş yan duvarında yangın merdiveni, uydu anteni. Beşik çatılı
+  şablonların ~%38'i **kırma (hip) çatı** alır (`buildHipRoof`); tabelalı dükkânların ön kapısı üstünde çizgili
+  **tente** (bir kısmı yırtık/sarkık). Seçimler `fac:<id>` tohumuyla ayrı RNG'den gelir: mobilya ve konteyner
+  sıralaması (kayıt kimlikleri) değişmez.
+- **İç mekân dokusu (`InteriorDress`):** bina durumu `lived / looted / barricaded` (id'den deterministik; ev hep
+  yaşanır). Ev/otel/ofis pencerelerinin iç yüzünde perde (kapalı ya da yana toplanmış), her odada tavan
+  lambası (kablo + abajur + `emissive` disk), oturma/yatak/ofis/lobide halı, duvar resmi, yağmalanmışta devrilmiş
+  kutular. Geometri `decor` kovasına yazılır (iç yüzeylerle 64 m hücrelerde birleşir, 45 m ötede gizlenir).
+  Zemin dağınıklığı (kâğıt, çöp, cam, leke) `Dressing` iz atlasına eklenir (`b.clutter`), pencerelerin
+  başlangıç durumu (`initBroken` / `initBarricade`) `Session.applyInitialWindows` ile yeni oyunda ve kayıt
+  yüklenmeden önce uygulanır; kayıt bu tabandan sapan pencereleri taşır (eski kayıtlar geçerli kalır).
+  `Geo` `emissive` malzemesi köşe rengini ışıma rengi olarak kullanır (lamba sıcak, ekran mavi, trafik
+  ışığı yeşil); şiddetini `Environment.updateLamps` gece + elektrik varsa 1'e sürer (gündüz 0).
+- **Biyom bitki örtüsü (`BiomeScatter`):** orman dışındaki plato bölgeleri temasına göre ek dağılım alır: dağ/dağ
+  köyünde yükseklikle sıklaşan çam, kaya ve kuru ağaç (köy evlerinin çevresinde meyve ağacı), kıyı/tatil/limanda
+  kumsal çalıları, kaya ve sürüklenmiş kuru odun, çiftlikte tarla kenarı çit çalıları ve tek tük meşe, mahallede
+  ev çevresinde bahçe çalısı/çiçek/kiraz, havaalanı/cezaevi/askerîde seyrek kuru ot ve çakıl, baraj/sanayide su
+  kenarı kayaları. Yol ve su dışlanır, çarpıştırıcılar `Vegetation.add` ile normal yoldan kaydedilir.
+- **Islak yüzeyler:** yağmurda arazi ıslaklığına ek olarak bina/yol Geo malzemelerinin pürüzlülüğü %50'ye kadar
+  düşer (`Environment.applyWetness`; uniform, yeniden derleme yok) → cepheler ve asfalt gökyüzünü yansıtır.
+- **Yaşayan dünya (`LivingWorld`, `StreetLife`):** karga sürüleri (gürültüde ürker) ve duman sütunları; ikisi de
+  tek örnekli ağ, animasyon gölgelendiricide. Sürüler ara ara yakın bir çatıya **süzülerek iner**, 25–75 sn
+  tüner (kanatlar katlı, `aStill`), süre dolunca, gürültüde ya da oyuncu 13 m'ye yaklaşınca havalanır.
+  Şehir/mahallede oyuncunun çevresinde rüzgârla **uçuşan kâğıtlar** (40 örnek; esintide yerden kalkar, takla
+  atarak sürüklenir, yere iner) ve dükkân tabelalarının yanında duvara dik **asma tabelalar** (askı etrafında
+  gölgelendiricide salınım; fırtınada daha sert). Sokak lambalarının ~%10'u yanmaz, ~%14'ü kesik kesik titrer
   (konuma göre deterministik; sprite rengi + ışık havuzu).
 - **Taşınabilir nesneler:** hafif fizik nesneleri (≤ 20 kg) E ile alınır; gövde kinematiğe geçer ve oyuncu
   kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır. Basamak
@@ -126,32 +154,6 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   (`prop_rest`) yeniden eşitlenir. Taşıyan oyundan çıkarsa nesne düşer.
 
 ## Karakterler
-- **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
-  62 kemikli iskelette (`tools/pack-characters.mjs` → `assets/models/rigged/men.glb`, `women.glb`).
-  `CharacterFactory.ModularBase` parçaları bağlama pozunda doğrusal deri dönüşümüyle tek ağa birleştirir;
-  karakter başına seçilen 4 parça sıkı bir geometride paylaşılır (kombinasyon önbelleği). Renk yuvaları
-  (ten, saç, üst, alt, ayakkabı…) köşe renkleriyle boyanır; `null` yuva setin özgün rengini korur.
-  Aksesuarlar (çanta, şapka, gözlük, dürbün, stetoskop…) kemik bağlantı noktalarına takılır ve yaylı
-  sönümlü ikincil hareketle sallanır. Zombiler aynı hattan solmuş/kanlı kıyafetle üretilir.
-- **Hareket kütüphanesi:** Quaternius "Universal Animation Library" 1+2 (CC0) — UE tipi iskelet için 154 klip,
-  `tools/retarget-ual.mjs` + `tests/dev/retarget.html` ile oyunun iskeletine aktarılır: dünya uzayında dinlenme
-  pozuna göre göreli dönüş, kalça çevirisi boy oranıyla, IK ayak kemikleri incik ucuna. Araç ayrıca her
-  döngünün yürüyüş hızını (basan ayağın kayma hızı) ve faz başlangıcını (sol topuk basışı) ölçer. Klipler
-  erkek/kadın iskeletleri için ayrı aktarılır (dinlenme pozları farklı). Paket biçimi `AnimPack` (.kan):
-  16 bit nicemleme, iz içi fark kodlama, bayt ayrıştırma + gzip; 154 klip ≈ 590 KB (glTF ile 2,7 MB idi).
-- **Animasyon denetleyicisi (`Motion`):** durumlar (ayakta/eğik/sürünme/yaralı/yüzme/merdiven/havada/sürüş/
-  oturma) ağırlık sönümüyle karışır; döngüler ortak fazla örneklenir ve faz hızı gerçek hız / kliplerin
-  ölçülmüş adım mesafesi ile ilerler (ayak kayması en aza iner). 8 yön karışımı (komşu iki yön), hıza göre
-  yürüme ↔ koşu ↔ depar. Kişiliğe göre bekleme ve ara sıra kıpırdanma klipleri, yorgunken nefes nefese bekleme.
-  Durum geçişlerinde yatma/kalkma/eğilme klipleri. Eylemler (`Avatar.playMotion`): maskeli tek seferlik klipler
-  (tam/üst gövde/kollar), giriş/çıkış sönümü, döngü ve sonda bekleme (ölüm, uyku). Silah tutuş ve nişanları,
-  taşınma pozu ve baş eğimi prosedürel katman (`CharacterRig`, kemik başına ağırlık) olarak üstte kalır.
-  Kütüphane yüklenemezse eski klip + prosedürel düzen yedek olarak çalışır. Karakter başına güncelleme ~0,05 ms.
-- **Zombiler (`ZombieView`):** aynı denetleyici zombi kümesiyle (bekleme/yürüme/koşu, tırmalama/ısırma, kapı
-  yumruklama, isabet, ölüm, çığlık, yerden çıkış); türe göre oynatma hızı (şişko/iri ağır, koşucu seri) ve
-  bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
-- Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
-
 - **Yüz ve malzeme ayrıntısı:** göz merkezleri ve ağız yeri kafa setinin geometrisinden ölçülür (`combo.face`);
   göz akı + iris + göz bebeği + parıltı + kapak çizgisi + dudaklar tek ağda (karakter başına 1 çizim çağrısı,
   `buildFace`). Saç köklerden uçlara açılan ton ve tel tel fark; yüzde hafif ten varyasyonu. Deri malzemesi

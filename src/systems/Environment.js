@@ -4,6 +4,10 @@ import * as THREE from 'three';
 import { lerp, clamp, smoothstep } from '../core/util.js';
 import { softDot } from '../world/TextureFactory.js';
 import { windUniforms } from '../world/Vegetation.js';
+import { materials } from '../world/Geo.js';
+
+// yağmurda parlayan dış yüzeyler (pürüzlülük düşer → yansıma artar)
+const WET_KEYS = ['siding', 'brick', 'plaster', 'concrete', 'metal', 'asphalt', 'shingles', 'wood', 'trim', 'plain'];
 import { Settings } from '../core/Settings.js';
 
 // gün içi renk anahtarları [dakika, gökyüzü üst, ufuk, güneş rengi, güneş şiddeti, hemi gök, hemi yer, hemi şiddet, pozlama]
@@ -231,6 +235,7 @@ export class Environment {
     this.world.water.update(t, this.sunDir, sky.uSunColor.value, this.fog.color, this.fog.density, isNight ? 0.45 : 1 - overcast * 0.3, W.rain);
     // ıslaklık
     this.world.terrain.setWetness(Math.min(1, (this._wet = lerp(this._wet || 0, W.rain > 0.1 ? 1 : 0, dt * 0.05))));
+    this.applyWetness(this._wet);
     // rüzgâr
     windUniforms.uTime.value = t;
     windUniforms.uWind.value = 1 + W.storm * 2.5 + W.rain * 0.8;
@@ -286,10 +291,26 @@ export class Environment {
     }
   }
 
+  /** Bina/yol malzemelerinin ıslaklığı: pürüzlülük azalır, yüzeyler gökyüzünü yansıtır (uniform; derleme yok) */
+  applyWetness(w) {
+    if (Math.abs(w - (this._wetApplied ?? -1)) < 0.01) return;
+    this._wetApplied = w;
+    const M = materials();
+    for (const k of WET_KEYS) {
+      const m = M[k];
+      if (!m) continue;
+      if (m.userData.rough0 === undefined) m.userData.rough0 = m.roughness;
+      m.roughness = m.userData.rough0 * (1 - 0.5 * w);
+    }
+  }
+
   updateLamps(dt, minuteOfDay, cam) {
     if (!this.world) return;
     const night = minuteOfDay > 1170 || minuteOfDay < 370;
     const on = night && this.streetPower;
+    // iç mekân lambaları, ekranlar, trafik ışıkları (Geo 'emissive' kovası): gece ve elektrik varsa ışır
+    const em = materials().emissive;
+    em.emissiveIntensity = lerp(em.emissiveIntensity, on ? 1.0 : 0, Math.min(1, dt * 2));
     if (this.lampSprites) this.lampSprites.material.opacity = lerp(this.lampSprites.material.opacity, on ? 0.95 : 0, Math.min(1, dt * 2));
     // arızalı lambalar: çoğunlukla yanık, ara ara sönüp yanan kesik titreme (sprite rengi + ışık havuzu)
     if (on && this.lampSprites && this.flickerLamps.length) {
@@ -313,6 +334,11 @@ export class Environment {
         const d2 = (l.x - cx) ** 2 + (l.z - cz) ** 2;
         if (d2 < 90 * 90) cands.push({ x: l.x, y: l.y, z: l.z, d2, color: l.color, intensity: (l.kind === 'flood' ? 60 : 38) * (l.level ?? 1), range: l.kind === 'flood' ? 30 : 20 });
       }
+    }
+    // iç mekân: kameranın içinde olduğu binanın tavan lambaları (gece + elektrik) → sıcak, kısa menzilli ışık
+    if (on) {
+      const b = this.world.buildingAt(cx, cz, cam.position.y);
+      if (b && b.lamps) for (const l of b.lamps) cands.push({ x: l.x, y: l.y, z: l.z, d2: ((l.x - cx) ** 2 + (l.z - cz) ** 2) * 0.3, color: 0xffd9a0, intensity: 14, range: 9 });
     }
     for (const e of this.extraLights) {
       if (!e.on) continue;
