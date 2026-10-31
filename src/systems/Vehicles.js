@@ -17,6 +17,7 @@ export const VEHICLE_TYPES = {
   motorcycle: { name: 'Motosiklet', mass: 280, drive: 'rwd', susp: 0.3, model: 'vehicle-motorcycle', scale: 1.3, maxSpeed: 33, accel: 12, fuelCap: 15, trunk: 4, hp: 60, grip: 1.1, offroad: 0.7, seats: 2, len: 3.0, wid: 1.2, bike: true, sound: 'engine-motorcycle' },
   military: { name: 'Askerî Kamyon', mass: 6200, drive: 'awd', susp: 0.45, model: 'vehicle-truck-green', scale: 2.0, maxSpeed: 23, accel: 6.5, fuelCap: 90, trunk: 40, hp: 260, grip: 0.95, offroad: 1.0, seats: 6, len: 5.4, wid: 2.7, armor: 0.3 },
   armored: { name: 'Zırhlı Minibüs', mass: 5600, drive: 'awd', susp: 0.4, model: 'delivery-truck', scale: 1.85, maxSpeed: 20, accel: 5, fuelCap: 80, trunk: 30, hp: 320, grip: 0.9, offroad: 0.7, seats: 6, len: 5.8, wid: 2.7, armor: 0.5, needs: [['car_battery', 1], ['engine_part', 2]] },
+  tractor: { name: 'Traktör', mass: 3400, drive: 'rwd', susp: 0.4, model: 'tractor', scale: 1.7, maxSpeed: 11, accel: 4.2, fuelCap: 50, trunk: 12, hp: 200, grip: 1.25, offroad: 1.0, seats: 1, len: 3.8, wid: 2.3 },
   boat: { name: 'Martı Teknesi', mass: 1800, model: 'boat-large', scale: 3.4, maxSpeed: 15, accel: 4, fuelCap: 60, trunk: 20, hp: 100, grip: 0.6, offroad: 0, seats: 6, len: 6, wid: 3, water: true, needs: [['engine_part', 1], ['repair_kit', 1]] },
 };
 

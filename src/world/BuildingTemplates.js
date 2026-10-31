@@ -243,6 +243,73 @@ export const TEMPLATES = {
     rooms: [R('booth', 'booth', 0, 0, 3.6, 3.6, { docs: 'checkpoint' })],
     extDoors: [{ side: 'F', at: 1.8, w: 1.0, kind: 'metal' }],
   }),
+  // ---------------------------------------------------------------- GENİŞLETİLMİŞ ADA
+  barn: () => ({
+    label: 'Ambar', w: 16, d: 12, H: 5.5,
+    style: { ext: 'wood', extColor: '#9c3a2c', extColorRoof: '#9c3a2c', roofColor: '#5a3a2a', trimColor: '#f1ead8', intColor: '#b08a62', roof: 'gable', floor: 'concrete' },
+    rooms: [R('hall', 'warehouse_hall', 0, 3.5, 16, 12, { goods: 'farm', name: 'Ambar' }), R('tools', 'garage', 0, 0, 9, 3.5, { workshop: true, name: 'Alet Odası' }), R('feed', 'storage', 9, 0, 16, 3.5, { goods: 'farm', name: 'Yem Deposu' })],
+    links: [['hall', 'tools'], ['hall', 'feed']],
+    extDoors: [{ side: 'F', at: 8, w: 4.2, kind: 'garage', name: 'Ambar Kapısı' }, { side: 'R', at: 2, w: 1.0, kind: 'wood' }],
+  }),
+  bungalow: (spec) => ({
+    label: spec.name || 'Bungalov', w: 7, d: 6, H: 2.8,
+    style: { ext: 'wood', extColor: spec.paint || '#f2d4b0', extColorRoof: spec.paint || '#f2d4b0', roofColor: '#8a6a3a', trimColor: '#ffffff', intColor: '#f6efe2', roof: 'gable', floor: 'woodfloor' },
+    rooms: [R('bed', 'bedroom', 0, 0, 7, 3.6, { name: 'Yatak Odası' }), R('bath', 'bathroom', 0, 3.6, 3, 6), R('living', 'living', 3, 3.6, 7, 6, { name: 'Oturma' })],
+    links: [['bed', 'bath'], ['bed', 'living', 'arch']],
+    extDoors: [{ side: 'F', at: 5, w: 1.0, kind: 'wood' }],
+    porch: { x0: 0.5, z0: 6.1, x1: 6.5, z1: 7.8, roof: true },
+  }),
+  hotel: () => ({
+    label: 'Otel', w: 28, d: 16, H: 3.4, storefront: true,
+    style: { ext: 'plaster', extColor: '#f4efe4', trimColor: '#2e86c1', intColor: '#f6f3ec', roof: 'flat', floor: 'tiles' },
+    rooms: [
+      R('lobby', 'lobby', 10, 8, 18, 16, { name: 'Resepsiyon' }), R('rest', 'restaurant_hall', 18, 8, 28, 16, { name: 'Otel Restoranı' }), R('kitchen', 'kitchen', 0, 8, 10, 16, { name: 'Otel Mutfağı', pro: true }),
+      R('room1', 'bedroom', 0, 0, 7, 8, { name: 'Oda 101', beds: 2 }), R('room2', 'bedroom', 7, 0, 14, 8, { name: 'Oda 102', beds: 2 }), R('room3', 'bedroom', 14, 0, 21, 8, { name: 'Oda 103', beds: 1 }), R('office', 'office', 21, 0, 28, 8, { name: 'Müdür Odası' }),
+    ],
+    links: [['lobby', 'rest', 'arch'], ['lobby', 'kitchen'], ['lobby', 'room2'], ['lobby', 'room3'], ['kitchen', 'room1'], ['rest', 'office']],
+    extDoors: [{ side: 'F', at: 14, w: 2.0, kind: 'glass2' }, { side: 'B', at: 4, w: 1.0, kind: 'metal' }],
+    windowSpacing: 3.5,
+  }),
+  prison_block: () => ({
+    label: 'Koğuş', w: 26, d: 12, H: 3.4,
+    style: { ext: 'concrete', extColor: '#a9a39a', trimColor: '#5d6d7e', intColor: '#d8d6d0', roof: 'flat', floor: 'concrete' },
+    rooms: [
+      R('hall', 'corridor', 0, 7, 26, 12, { name: 'Koğuş Koridoru', noWindows: true }), R('guard', 'security', 0, 0, 5, 7, { name: 'Gardiyan Odası' }),
+      R('c1', 'cells', 5, 0, 10.25, 7, { name: 'Hücre' }), R('c2', 'cells', 10.25, 0, 15.5, 7, { name: 'Hücre' }), R('c3', 'cells', 15.5, 0, 20.75, 7, { name: 'Hücre' }), R('c4', 'cells', 20.75, 0, 26, 7, { name: 'Hücre' }),
+    ],
+    links: [['hall', 'guard', 'metal'], ['hall', 'c1', 'cell'], ['hall', 'c2', 'cell'], ['hall', 'c3', 'cell'], ['hall', 'c4', 'cell']],
+    extDoors: [{ side: 'F', at: 13, w: 1.6, kind: 'metal' }, { side: 'L', at: 9.5, w: 1.0, kind: 'metal', locked: true, lockLevel: 1 }],
+    windowSpacing: 6,
+  }),
+  hangar: () => ({
+    label: 'Hangar', w: 30, d: 24, H: 8,
+    style: { ext: 'metal', extColor: '#b8c2c8', trimColor: '#e67e22', intColor: '#c9cdcc', roof: 'shed', roofMat: 'metal', roofColor: '#8a9599', floor: 'concrete' },
+    rooms: [R('hall', 'warehouse_hall', 0, 5, 30, 24, { goods: 'car', name: 'Hangar' }), R('office', 'office', 0, 0, 8, 5, { name: 'Bakım Ofisi' }), R('parts', 'storage', 8, 0, 30, 5, { goods: 'car', name: 'Parça Deposu' })],
+    links: [['hall', 'office'], ['hall', 'parts', 'double']],
+    extDoors: [{ side: 'F', at: 15, w: 12, kind: 'garage', name: 'Hangar Kapısı' }, { side: 'F', at: 3, w: 1.0, kind: 'metal' }],
+  }),
+  terminal: () => ({
+    label: 'Terminal', w: 22, d: 12, H: 3.8, storefront: true,
+    style: { ext: 'plaster', extColor: '#e8eef2', trimColor: '#1f618d', intColor: '#f4f6f7', roof: 'flat', floor: 'tiles' },
+    rooms: [R('hall', 'lobby', 0, 5, 14, 12, { name: 'Bekleme Salonu' }), R('cafe', 'cafe_hall', 14, 5, 22, 12, { name: 'Kafeterya' }), R('office', 'office', 0, 0, 11, 5, { name: 'Uçuş Ofisi', docs: 'airfield' }), R('store', 'storage', 11, 0, 22, 5, { name: 'Bagaj Deposu' })],
+    links: [['hall', 'cafe', 'arch'], ['hall', 'office'], ['cafe', 'store']],
+    extDoors: [{ side: 'F', at: 7, w: 2.0, kind: 'glass2' }],
+  }),
+  control_tower: () => ({
+    label: 'Kontrol Kulesi', w: 9, d: 9, H: 3.4,
+    style: { ext: 'concrete', extColor: '#dfe3e6', trimColor: '#c0392b', intColor: '#eef1f2', roof: 'flat', floor: 'tiles' },
+    rooms: [R('room', 'radio_room', 0, 0, 9, 9, { docs: 'airfield', name: 'Kule Odası' })],
+    extDoors: [{ side: 'F', at: 4.5, w: 1.1, kind: 'metal' }],
+    extra: (c) => c.ctx.addAntenna && c.ctx.addAntenna(c),
+  }),
+  power_station: () => ({
+    label: 'Santral', w: 24, d: 14, H: 6,
+    style: { ext: 'concrete', extColor: '#b9c1b3', trimColor: '#f1c40f', intColor: '#cfd2cc', roof: 'flat', floor: 'concrete' },
+    rooms: [R('hall', 'factory_hall', 0, 5, 24, 14, { name: 'Türbin Salonu' }), R('control', 'server', 0, 0, 10, 5, { name: 'Kontrol Odası', docs: 'dam' }), R('office', 'office', 10, 0, 24, 5, { name: 'Mühendis Ofisi', docs: 'dam' })],
+    links: [['hall', 'control', 'metal'], ['hall', 'office']],
+    extDoors: [{ side: 'F', at: 12, w: 4, kind: 'garage' }, { side: 'F', at: 3, w: 1.0, kind: 'metal' }],
+    windowSpacing: 5,
+  }),
   // ---------------------------------------------------------------- LAB
   lab: () => ({
     label: 'Araştırma Tesisi', w: 28, d: 18, H: 4,

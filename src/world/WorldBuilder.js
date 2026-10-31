@@ -16,6 +16,7 @@ import * as P from './Props.js';
 import { addContainer } from './Furnish.js';
 import { signTexture } from './TextureFactory.js';
 import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE } from './WorldLayout.js';
+import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
 
 const CAR_MODELS = ['car_sedan', 'car_hatchback', 'car_stationwagon', 'car_taxi'];
@@ -48,7 +49,7 @@ export class World {
     await step('Yollar döşeniyor…', () => {
       this.roads = buildRoads(this.terrain, this.root, (p) => {
         const r = this.terrain.regionAt(p.x, p.z);
-        return r && ['sehir', 'hastane', 'mahalle', 'benzin'].includes(r.id);
+        return r && ['sehir', 'hastane', 'mahalle', 'benzin', 'tatil', 'havaalani', 'cezaevi', 'ciftlik'].includes(r.id);
       });
     });
     await step('Binalar inşa ediliyor…', () => {
@@ -77,6 +78,7 @@ export class World {
       this.port();
       this.lab();
       this.forest();
+      buildExtraRegions(this);
       this.signposts();
       this.addGeo(this.geo);
     });
@@ -535,7 +537,7 @@ export class World {
 
   /** Anakaraya köprü (araçla kaçış finali): askerî bölgenin kuzey kapısından kuzeydoğuya */
   bridge() {
-    const g = this.geo, y = REGION_BY_ID.askeri.h;
+    const g = this.geo, y = BRIDGE.deck;
     const S0 = BRIDGE.start, E0 = BRIDGE.end;
     const dx = E0.x - S0.x, dz = E0.z - S0.z, L = Math.hypot(dx, dz);
     const ux = dx / L, uz = dz / L; // ileri

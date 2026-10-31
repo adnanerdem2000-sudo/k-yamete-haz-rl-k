@@ -142,7 +142,7 @@ export class Endings {
     // helikopter
     if (this.heli) this.updateHeli(dt);
     // deniz kaçışı
-    if (this.seaMode && S.local.vehicle && S.local.vehicle.type === 'boat' && Math.hypot(S.local.pos.x, S.local.pos.z) > 600) { this.seaMode = false; S.act('escape', { how: 'sea' }); }
+    if (this.seaMode && S.local.vehicle && S.local.vehicle.type === 'boat' && Math.hypot(S.local.pos.x, S.local.pos.z) > 760 && S.world.terrain.heightAt(S.local.pos.x, S.local.pos.z) < -6) { this.seaMode = false; S.act('escape', { how: 'sea' }); }
     // köprü
     const v = S.local.vehicle;
     if (v && !v.def.water && S.time.minuteOfDay >= 21 * 60 && dist(S.local.pos.x, S.local.pos.z, BRIDGE.end.x, BRIDGE.end.z) < BRIDGE.exitR && this.readiness().convoy.ok) S.act('escape', { how: 'convoy' });

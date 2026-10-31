@@ -2,8 +2,8 @@
 // heightAt() görsel ağdaki üçgenlerle birebir aynı enterpolasyonu kullanır (karakterler
 // zemine gömülmez ya da havada kalmaz).
 import * as THREE from 'three';
-import { WORLD, REGIONS, ROADS, LAKE, MOUNTAIN } from './WorldLayout.js';
-import { fbm, smoothstep, clamp, lerp, valueNoise } from '../core/util.js';
+import { WORLD, REGIONS, ROADS, LAKE, LAKES, MOUNTAIN, ISLAND, MAINLAND } from './WorldLayout.js';
+import { fbm, smoothstep, clamp, lerp, valueNoise, wrapAngle } from '../core/util.js';
 import { getTexture } from './TextureFactory.js';
 
 const N = WORLD.size / WORLD.cell; // hücre sayısı
@@ -13,9 +13,21 @@ const HALF = WORLD.half;
 
 export const BIOME = { SEA: 0, SAND: 1, GRASS: 2, FOREST: 3, ROCK: 4, SNOW: 5, URBAN: 6, LAWN: 7, DIRT: 8, FIELD: 9 };
 
+/** Ada kıyı yarıçapı (açıya göre). Güneydoğu körfezi (liman) eski kıyıda kalır, diğer yönler genişler. */
 export function coastRadius(theta) {
-  return 522 + 36 * Math.sin(3 * theta + 0.5) + 22 * Math.sin(5 * theta + 2.1) + 12 * Math.sin(9 * theta + 1.3);
+  const bay = ISLAND.bayR + 36 * Math.sin(3 * theta + 0.5) + 22 * Math.sin(5 * theta + 2.1) + 12 * Math.sin(9 * theta + 1.3);
+  const wide = ISLAND.R + 40 * Math.sin(3 * theta + 0.5) + 26 * Math.sin(5 * theta + 2.1) + 14 * Math.sin(9 * theta + 1.3);
+  const d = Math.abs(wrapAngle(theta - ISLAND.bayAngle));
+  return lerp(bay, wide, smoothstep(ISLAND.bayInner, ISLAND.bayOuter, d));
 }
+
+// Doğal tepeler (dağ köyü sırtı, doğu yaylası)
+const HILLS = [
+  { x: -650, z: -560, r: 150, peak: 30 },
+  { x: -470, z: -420, r: 90, peak: 16 },
+  { x: 560, z: 200, r: 120, peak: 14 },
+  { x: -420, z: 420, r: 110, peak: 10 },
+];
 
 /** Orman yoğunluğu maskesi (0..1) — ağaç dağıtımı ve zemin rengi için */
 export function forestMask(x, z) {
@@ -24,9 +36,23 @@ export function forestMask(x, z) {
   const d3 = Math.hypot(x + 20, z + 380) / 90;   // laboratuvar ormanı
   const d4 = Math.hypot(x - 230, z - 160) / 55;  // güneydoğu koruluk
   const d5 = Math.hypot(x + 330, z - 30) / 70;   // batı kıyı ormanı
-  let m = Math.max(1 - d1, 0.9 * (1 - d2), 0.95 * (1 - d3), 0.8 * (1 - d4), 0.85 * (1 - d5));
+  // genişletilmiş adanın ormanları
+  const d6 = Math.hypot(x + 520, z + 40) / 110;  // baraj ormanı
+  const d7 = Math.hypot(x + 430, z - 400) / 120; // güneybatı korusu
+  const d8 = Math.hypot(x - 420, z + 640) / 95;  // kuzeydoğu çam ormanı
+  const d9 = Math.hypot(x + 700, z + 300) / 120; // kuzeybatı ormanı
+  const d10 = Math.hypot(x - 520, z - 260) / 80; // doğu koruluğu
+  let m = Math.max(1 - d1, 0.9 * (1 - d2), 0.95 * (1 - d3), 0.8 * (1 - d4), 0.85 * (1 - d5), 0.9 * (1 - d6), 0.85 * (1 - d7), 0.9 * (1 - d8), 0.95 * (1 - d9), 0.8 * (1 - d10));
   m += fbm(x / 70, z / 70, 3, 77) * 0.35;
   return clamp(m * 1.6, 0, 1);
+}
+
+/** Çiftlik köyü çevresindeki tarlalar (şeritli parseller) */
+export function inFarmFields(x, z) {
+  const d = Math.hypot(x + 640, z - 120);
+  if (d < 95 || d > 230) return false;
+  const parcel = Math.floor((x + 2000) / 46) * 13 + Math.floor((z + 2000) / 38) * 7;
+  return (parcel % 5) !== 0 && valueNoise(x / 90, z / 90, 21) > 0.3;
 }
 
 export class Terrain {
@@ -47,10 +73,17 @@ export class Terrain {
     const theta = Math.atan2(z, x);
     const R = coastRadius(theta) + fbm(x / 90, z / 90, 3, 5) * 26;
     const t = (R - r) / 90;
-    const land = smoothstep(-0.25, 1, t);
+    let land = smoothstep(-0.25, 1, t);
+    // anakara (kuzeydoğu köşesi), arada boğaz
+    const diag = (x - z) / Math.SQRT2;
+    const tm = (diag - MAINLAND.diag + fbm(x / 70, z / 70, 3, 19) * 18) / 70;
+    land = Math.max(land, smoothstep(-0.25, 1, tm));
     let h = -10 + land * 14;
     h += fbm(x / 200, z / 200, 4, 11) * 9 * land;
     h += fbm(x / 45, z / 45, 3, 23) * 1.2 * land;
+    // iç kesimler deniz seviyesinin altına düşmesin (kıyıdan uzak çukurlarda yapay su birikintisi olmasın)
+    const inland = smoothstep(1.4, 2.6, t);
+    if (inland > 0) h = Math.max(h, lerp(h, 2.4 + Math.abs(fbm(x / 120, z / 120, 2, 71)) * 2, inland));
     // dağ kütlesi
     const dm = Math.hypot(x - MOUNTAIN.x, z - MOUNTAIN.z);
     const sig = MOUNTAIN.r / 2.1;
@@ -60,6 +93,10 @@ export class Terrain {
     // doğu tepeleri
     const dh = Math.hypot(x - 230, z + 60);
     h += 14 * Math.exp(-(dh * dh) / (2 * 70 * 70));
+    for (const hl of HILLS) {
+      const d = Math.hypot(x - hl.x, z - hl.z), sg = hl.r / 2;
+      h += hl.peak * land * Math.exp(-(d * d) / (2 * sg * sg)) * (0.85 + fbm(x / 50, z / 50, 3, 61) * 0.3);
+    }
     return h;
   }
 
@@ -71,21 +108,23 @@ export class Terrain {
         h[this.idx(i, j)] = this.naturalHeight(x, z);
       }
     }
-    // göl çukuru
-    this.stamp((x, z, cur) => {
-      const d = Math.hypot(x - LAKE.x, z - LAKE.z);
-      if (d > LAKE.r + 30) return cur;
-      const bed = LAKE.level - 3.2 * (1 - clamp(d / LAKE.r, 0, 1) ** 2) - 0.4;
-      const shore = LAKE.level + 0.8;
-      if (d < LAKE.r) return bed;
-      const w = smoothstep(LAKE.r + 30, LAKE.r, d);
-      return lerp(cur, shore + (d - LAKE.r) * 0.02, w);
-    });
+    // göl çukurları (göl + baraj gölü)
+    for (const L of LAKES) {
+      this.stamp((x, z, cur) => {
+        const d = Math.hypot(x - L.x, z - L.z);
+        if (d > L.r + 30) return cur;
+        const bed = L.level - 3.2 * (1 - clamp(d / L.r, 0, 1) ** 2) - 0.4;
+        const shore = L.level + 0.8;
+        if (d < L.r) return bed;
+        const w = smoothstep(L.r + 30, L.r, d);
+        return lerp(cur, shore + (d - L.r) * 0.02, w);
+      }, [L.x - L.r - 32, L.z - L.r - 32, L.x + L.r + 32, L.z + L.r + 32]);
+    }
     // platolar
     for (const reg of REGIONS) {
       if (!reg.plateau) continue;
       const [x0, z0, x1, z1] = reg.plateau;
-      const margin = reg.id === 'liman' ? 8 : reg.id === 'dag' ? 22 : 34;
+      const margin = reg.id === 'liman' ? 8 : reg.id === 'dag' || reg.id === 'dagkoy' ? 22 : reg.id === 'fener' ? 14 : 34;
       this.stamp((x, z, cur) => {
         const dx = Math.max(x0 - x, 0, x - x1), dz = Math.max(z0 - z, 0, z - z1);
         const d = Math.hypot(dx, dz);
@@ -191,12 +230,12 @@ export class Terrain {
   isWater(x, z) {
     const h = this.heightAt(x, z);
     if (h < WORLD.sea - 0.2) return true;
-    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 2 && h < LAKE.level - 0.2) return true;
+    for (const L of LAKES) if (Math.hypot(x - L.x, z - L.z) < L.r + 2 && h < L.level - 0.2) return true;
     return false;
   }
 
   waterLevelAt(x, z) {
-    if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 4) return LAKE.level;
+    for (const L of LAKES) if (Math.hypot(x - L.x, z - L.z) < L.r + 4) return L.level;
     return WORLD.sea;
   }
 
@@ -210,13 +249,16 @@ export class Terrain {
       const slope = this.slopeAt(x, z);
       if (h < -0.4) b = BIOME.SEA;
       else if (h < 1.7 && !reg) b = BIOME.SAND;
-      else if (reg && reg.id === 'mahalle') b = BIOME.LAWN;
-      else if (reg && ['sehir', 'hastane', 'sanayi', 'askeri', 'liman', 'lab', 'benzin'].includes(reg.id)) b = BIOME.URBAN;
+      else if (reg && (reg.id === 'mahalle' || reg.id === 'tatil' || reg.id === 'ciftlik' || reg.id === 'dagkoy')) b = BIOME.LAWN;
+      else if (reg && ['sehir', 'hastane', 'sanayi', 'askeri', 'liman', 'lab', 'benzin', 'cezaevi', 'havaalani', 'baraj', 'kopru'].includes(reg.id)) b = BIOME.URBAN;
       else if (h > 70) b = BIOME.SNOW;
       else if (slope > 0.32 || h > 54) b = BIOME.ROCK;
       else if (forestMask(x, z) > 0.4) b = BIOME.FOREST;
       else if (valueNoise(x / 120, z / 120, 9) > 0.45 && Math.hypot(x - 260, z - 140) < 120) b = BIOME.FIELD;
-      if (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 3) b = BIOME.SAND;
+      else if (inFarmFields(x, z)) b = BIOME.FIELD;
+      for (const L of LAKES) if (Math.hypot(x - L.x, z - L.z) < L.r + 3) b = BIOME.SAND;
+      // tatil köyü plajı
+      if (!reg && h < 4.2 && h > -0.4 && x > -320 && x < -40 && z > 700) b = BIOME.SAND;
       if (this.roadMask[k] > 0 && this.roadMask[k] < 1) b = BIOME.DIRT;
       this.biome[k] = b;
     }

@@ -2,7 +2,11 @@
 // Koordinatlar metre; +X doğu, +Z güney (kuzey = -Z). Bina 'rot' değeri: ön cephenin baktığı yön
 // 0:+Z (güney) 1:+X (doğu) 2:-Z (kuzey) 3:-X (batı).
 
-export const WORLD = { size: 1280, half: 640, cell: 4, sea: 0 };
+export const WORLD = { size: 2048, half: 1024, cell: 4, sea: 0 };
+// Ada kıyısı: taban yarıçapı; güneydoğudaki liman körfezi eski kıyıda kalır (iskeleler ve deniz kaçışı)
+export const ISLAND = { R: 860, bayAngle: 47 * Math.PI / 180, bayR: 520, bayInner: 17 * Math.PI / 180, bayOuter: 45 * Math.PI / 180 };
+// Anakara: kuzeydoğu köşesi (köşegen uzaklığı bu değerin ötesi kara); arada boğaz
+export const MAINLAND = { diag: 985 };
 
 // Bölgeler: plato = düzleştirilmiş zemin dikdörtgeni [x0, z0, x1, z1] ve yüksekliği
 export const REGIONS = [
@@ -16,12 +20,24 @@ export const REGIONS = [
   { id: 'askeri', name: 'Askerî Bölge', x: 345, z: -248, h: 9, plateau: [266, -324, 424, -172], danger: 4, theme: 'military', desc: 'Silah depoları, telsiz merkezi, helikopter pisti.' },
   { id: 'liman', name: 'Liman', x: 330, z: 300, h: 2.4, plateau: [262, 254, 404, 346], danger: 3, theme: 'port', desc: 'Tekneler, konteynerler. Deniz yoluyla kaçış.' },
   { id: 'lab', name: 'Araştırma Laboratuvarı', x: -20, z: -446, h: 12, plateau: [-64, -484, 24, -408], danger: 5, theme: 'lab', desc: 'Salgının sırrı burada saklı.' },
+  // ---- genişletilmiş ada
+  { id: 'ciftlik', name: 'Çiftlik Köyü', x: -640, z: 120, h: 5, plateau: [-724, 52, -556, 196], danger: 2, theme: 'farm', desc: 'Ambar, tarlalar, traktör. Tohum, gıda ve yakıt.' },
+  { id: 'fener', name: 'Deniz Feneri', x: -585, z: 545, h: 10, plateau: [-622, 512, -552, 578], danger: 2, theme: 'coast', desc: 'Fener ışığı tekrar yanarsa uzaktaki gemiler görebilir.' },
+  { id: 'tatil', name: 'Sahil Tatil Köyü', x: -180, z: 690, h: 3.5, plateau: [-282, 640, -78, 742], danger: 3, theme: 'resort', desc: 'Otel, bungalovlar ve plaj. Turistler kaçamadı…' },
+  { id: 'cezaevi', name: 'Cezaevi', x: 700, z: -60, h: 7, plateau: [626, -134, 774, 14], danger: 4, theme: 'prison', desc: 'Yüksek duvarlar, gözetleme kuleleri. Çevik kuvvet zombileri.' },
+  { id: 'havaalani', name: 'Havaalanı', x: 120, z: -760, h: 8, plateau: [-148, -824, 388, -700], danger: 4, theme: 'airfield', desc: 'Pist, hangarlar, kontrol kulesi. Uçakla kaçış mümkün mü?' },
+  { id: 'dagkoy', name: 'Dağ Köyü', x: -640, z: -480, h: 24, plateau: [-704, -544, -576, -416], danger: 2, theme: 'village', desc: 'Camili küçük dağ köyü. Temiz kaynak suyu.' },
+  { id: 'baraj', name: 'Baraj ve Santral', x: -470, z: -205, h: 9, plateau: [-506, -240, -436, -172], danger: 3, theme: 'dam', desc: 'Hidroelektrik santrali: elektriği geri getirmenin anahtarı.' },
+  { id: 'kopru', name: 'Köprü Başı', x: 520, z: -520, h: 9, plateau: [492, -572, 560, -500], danger: 4, theme: 'military', desc: 'Anakara köprüsünün girişi.' },
 ];
 export const REGION_BY_ID = Object.fromEntries(REGIONS.map((r) => [r.id, r]));
 
 export const LAKE = { x: -196, z: -100, r: 34, level: 4.2 };
-// Anakaraya köprü (araç konvoyu finali): askerî bölgenin kuzey kapısından kuzeydoğuya
-export const BRIDGE = { start: { x: 406, z: -321 }, end: { x: 548, z: -540 }, exitR: 34 };
+// Baraj gölü (rezervuar): santralin batısında
+export const RESERVOIR = { x: -560, z: -170, r: 66, level: 12 };
+export const LAKES = [LAKE, RESERVOIR];
+// Anakaraya köprü (araç konvoyu finali): köprü başından kuzeydoğuya, boğazı geçer
+export const BRIDGE = { start: { x: 548, z: -548 }, end: { x: 712, z: -712 }, exitR: 34, deck: 9 };
 export const MOUNTAIN = { x: -372, z: -352, r: 190, peak: 78 };
 
 // Yollar: [genişlik, tür, noktalar] — tür: asfalt | toprak | patika (patika araçla geçilemez)
@@ -63,6 +79,28 @@ export const ROADS = [
   // Göl ve kamp patikaları
   { id: 'lake_path', w: 3, type: 'path', pts: [[-226, -150], [-206, -130]] },
   { id: 'camp_path', w: 3, type: 'path', pts: [[-268, -62], [-232, -28]] },
+  // ---- genişletilmiş ada yolları
+  // Batı: mahalle → çiftlik köyü → deniz feneri
+  { id: 'west_rd', w: 9, type: 'asphalt', pts: [[-318, 170], [-400, 164], [-490, 146], [-556, 130]] },
+  { id: 'farm_main', w: 8, type: 'asphalt', pts: [[-556, 130], [-724, 130]] },
+  { id: 'farm_n', w: 7, type: 'dirt', pts: [[-640, 52], [-640, 196]] },
+  { id: 'light_rd', w: 6, type: 'dirt', pts: [[-640, 196], [-652, 300], [-628, 420], [-596, 512]] },
+  // Çiftlik → baraj → dağ köyü
+  { id: 'dam_rd', w: 7, type: 'dirt', pts: [[-600, 52], [-590, -40], [-520, -120], [-476, -172]] },
+  { id: 'vil_rd', w: 6, type: 'dirt', pts: [[-476, -172], [-430, -260], [-520, -330], [-600, -400], [-640, -416]] },
+  { id: 'vil_main', w: 6, type: 'dirt', pts: [[-704, -480], [-576, -480]] },
+  // Sanayi → havaalanı
+  { id: 'air_rd', w: 9, type: 'asphalt', pts: [[192, -300], [236, -420], [210, -560], [140, -700]] },
+  { id: 'runway', w: 30, type: 'asphalt', pts: [[-120, -770], [360, -770]] },
+  { id: 'taxiway', w: 12, type: 'asphalt', pts: [[140, -700], [140, -755]] },
+  // Şehir → cezaevi (doğu)
+  { id: 'prison_rd', w: 9, type: 'asphalt', pts: [[214, -30], [330, -46], [470, -70], [626, -60]] },
+  { id: 'prison_in', w: 8, type: 'asphalt', pts: [[626, -60], [700, -60]] },
+  // Sahil yolu → tatil köyü (güney)
+  { id: 'resort_rd', w: 9, type: 'asphalt', pts: [[-6, 232], [-40, 360], [-110, 500], [-170, 640]] },
+  { id: 'resort_main', w: 8, type: 'asphalt', pts: [[-282, 650], [-78, 650]] },
+  // Askerî bölge → köprü başı
+  { id: 'bridge_rd', w: 9, type: 'asphalt', pts: [[406, -321], [450, -404], [500, -476], [548, -548]] },
 ];
 
 // Binalar. tpl: şablon adı (BuildingTemplates.js), sign: tabela metni
@@ -119,6 +157,39 @@ export const BUILDINGS = [
   { id: 'old_cabin', tpl: 'cabin', x: -262, z: 30, rot: 1, region: 'orman', name: 'Terk Edilmiş Kulübe' },
   { id: 'mtn_cabin1', tpl: 'cabin', x: -350, z: -330, rot: 1, region: 'dag', name: 'Dağ Kulübesi' },
   { id: 'mtn_cabin2', tpl: 'cabin', x: -330, z: -352, rot: 2, region: 'dag', name: 'Dağ Kulübesi' },
+  // ---------------------------------------------------------------- ÇİFTLİK KÖYÜ
+  { id: 'farm1', tpl: 'house_a', x: -600, z: 104, rot: 0, region: 'ciftlik', name: 'Çiftlik Evi', paint: '#f3e3c0', roofCol: '#8c3b2a' },
+  { id: 'farm2', tpl: 'house_b', x: -682, z: 104, rot: 0, region: 'ciftlik', paint: '#e6d5b8', roofCol: '#6b3a2a' },
+  { id: 'farm3', tpl: 'house_small', x: -704, z: 160, rot: 2, region: 'ciftlik', paint: '#dfe8d0', roofCol: '#5b4636' },
+  { id: 'barn', tpl: 'barn', x: -600, z: 166, rot: 2, region: 'ciftlik', sign: 'AMBAR' },
+  { id: 'village_shop', tpl: 'market_small', x: -664, z: 162, rot: 2, region: 'ciftlik', sign: 'KÖY BAKKALI' },
+  // ---------------------------------------------------------------- DENİZ FENERİ
+  { id: 'keeper', tpl: 'cabin', x: -568, z: 552, rot: 3, region: 'fener', name: 'Fener Bekçisi Kulübesi' },
+  // ---------------------------------------------------------------- TATİL KÖYÜ
+  { id: 'hotel', tpl: 'hotel', x: -180, z: 688, rot: 2, region: 'tatil', sign: 'OTEL MAVİ KOY' },
+  { id: 'bung1', tpl: 'bungalow', x: -262, z: 716, rot: 0, region: 'tatil', name: 'Bungalov', paint: '#f7c8a0' },
+  { id: 'bung2', tpl: 'bungalow', x: -242, z: 724, rot: 0, region: 'tatil', name: 'Bungalov', paint: '#a8d8e8' },
+  { id: 'bung3', tpl: 'bungalow', x: -112, z: 724, rot: 0, region: 'tatil', name: 'Bungalov', paint: '#c8e8b0' },
+  { id: 'beach_bar', tpl: 'cafe', x: -96, z: 676, rot: 2, region: 'tatil', sign: 'PLAJ BAR' },
+  // ---------------------------------------------------------------- CEZAEVİ
+  { id: 'cellblock_a', tpl: 'prison_block', x: 704, z: -102, rot: 0, region: 'cezaevi', sign: 'A KOĞUŞU' },
+  { id: 'cellblock_b', tpl: 'prison_block', x: 704, z: -18, rot: 2, region: 'cezaevi', sign: 'B KOĞUŞU' },
+  { id: 'prison_admin', tpl: 'police', x: 752, z: -60, rot: 3, region: 'cezaevi', sign: 'CEZAEVİ İDARESİ' },
+  // ---------------------------------------------------------------- HAVAALANI
+  { id: 'hangar1', tpl: 'hangar', x: 60, z: -722, rot: 2, region: 'havaalani', sign: 'HANGAR 1' },
+  { id: 'hangar2', tpl: 'hangar', x: 220, z: -722, rot: 2, region: 'havaalani', sign: 'HANGAR 2' },
+  { id: 'terminal', tpl: 'terminal', x: 316, z: -720, rot: 2, region: 'havaalani', sign: 'TERMİNAL' },
+  { id: 'tower', tpl: 'control_tower', x: -60, z: -722, rot: 2, region: 'havaalani', sign: 'KULE' },
+  // ---------------------------------------------------------------- DAĞ KÖYÜ
+  { id: 'vil1', tpl: 'house_small', x: -682, z: -506, rot: 2, region: 'dagkoy', paint: '#f0ead8', roofCol: '#7a3226' },
+  { id: 'vil2', tpl: 'house_b', x: -600, z: -507, rot: 2, region: 'dagkoy', paint: '#e8dcc0', roofCol: '#8c3b2a' },
+  { id: 'vil3', tpl: 'cabin', x: -690, z: -455, rot: 0, region: 'dagkoy', name: 'Çoban Kulübesi' },
+  { id: 'vil4', tpl: 'house_small', x: -604, z: -454, rot: 0, region: 'dagkoy', paint: '#e4eef0', roofCol: '#4c5a6a' },
+  { id: 'vil_cafe', tpl: 'cafe', x: -652, z: -452, rot: 0, region: 'dagkoy', sign: 'KÖY KAHVESİ' },
+  // ---------------------------------------------------------------- BARAJ
+  { id: 'powerplant', tpl: 'power_station', x: -466, z: -212, rot: 0, region: 'baraj', sign: 'HİDROELEKTRİK SANTRALİ' },
+  // ---------------------------------------------------------------- KÖPRÜ BAŞI
+  { id: 'bridge_post', tpl: 'booth', x: 520, z: -532, rot: 1, region: 'kopru' },
 ];
 
 // Dekoratif (girilemeyen) yapılar: kit modelleri, ölçek ve konumla
@@ -171,7 +242,14 @@ export const POIS = [
   { id: 'port', name: 'Liman', x: 330, z: 300, icon: 'anchor' },
   { id: 'dock', name: 'İskele', x: 336, z: 368, icon: 'boat' },
   { id: 'lab', name: 'Araştırma Tesisi', x: -20, z: -455, icon: 'lab' },
-  { id: 'bridge', name: 'Anakara Köprüsü', x: 470, z: -420, icon: 'bridge' },
+  { id: 'bridge', name: 'Anakara Köprüsü', x: 630, z: -630, icon: 'bridge' },
+  { id: 'farm', name: 'Çiftlik Köyü', x: -640, z: 130, icon: 'farm' },
+  { id: 'lighthouse', name: 'Deniz Feneri', x: -598, z: 544, icon: 'lighthouse' },
+  { id: 'resort', name: 'Sahil Tatil Köyü', x: -180, z: 690, icon: 'hotel' },
+  { id: 'prison', name: 'Cezaevi', x: 700, z: -60, icon: 'prison' },
+  { id: 'airfield', name: 'Havaalanı', x: 140, z: -760, icon: 'plane' },
+  { id: 'village', name: 'Dağ Köyü', x: -640, z: -480, icon: 'village' },
+  { id: 'dam', name: 'Baraj ve Santral', x: -470, z: -205, icon: 'dam' },
 ];
 
 // Yol tabelaları (konsept sanattaki ahşap yön levhaları)
@@ -181,4 +259,10 @@ export const SIGNPOSTS = [
   { x: 214, z: -108, rot: 2.2, lines: ['ASKERÎ BÖLGE →', 'LİMAN ↓'] },
   { x: 8, z: -292, rot: 1.0, lines: ['ARAŞTIRMA TESİSİ ↑', 'ORMAN ←'] },
   { x: -220, z: -142, rot: 0.2, lines: ['GÖL →', 'DAĞ KAMPI ↖', 'MAHALLE ↓'] },
+  { x: -548, z: 120, rot: 0.4, lines: ['ÇİFTLİK KÖYÜ ←', 'DENİZ FENERİ ↙', 'BARAJ ↑'] },
+  { x: -470, z: -160, rot: -0.6, lines: ['SANTRAL →', 'DAĞ KÖYÜ ↑', 'ÇİFTLİK ↓'] },
+  { x: 200, z: -310, rot: 1.6, lines: ['HAVAALANI ↑', 'SANAYİ ←'] },
+  { x: 222, z: -40, rot: 1.8, lines: ['CEZAEVİ →', 'ŞEHİR ←'] },
+  { x: -14, z: 246, rot: 0.9, lines: ['TATİL KÖYÜ ↙', 'BENZİNLİK →'] },
+  { x: 412, z: -330, rot: 2.4, lines: ['ANAKARA KÖPRÜSÜ ↗', 'ASKERÎ BÖLGE ↓'] },
 ];

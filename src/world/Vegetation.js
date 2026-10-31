@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RNG, smoothstep } from '../core/util.js';
 import { forestMask, BIOME } from './Terrain.js';
-import { WORLD, REGIONS, LAKE } from './WorldLayout.js';
+import { WORLD, REGIONS, LAKE, LAKES } from './WorldLayout.js';
 import { onRoad } from './Roads.js';
 
 const CHUNK = 160;
@@ -179,7 +179,7 @@ export class Vegetation {
         const px = x + (rng.next() - 0.5) * step * 0.9, pz = z + (rng.next() - 0.5) * step * 0.9;
         const h = terrain.heightAt(px, pz);
         if (h < 1.8) continue;
-        if (Math.hypot(px - LAKE.x, pz - LAKE.z) < LAKE.r + 4) continue;
+        if (LAKES.some((L) => Math.hypot(px - L.x, pz - L.z) < L.r + 4)) continue;
         const reg = terrain.regionAt(px, pz);
         if (reg && reg.id !== 'orman') continue;
         const fm = forestMask(px, pz);

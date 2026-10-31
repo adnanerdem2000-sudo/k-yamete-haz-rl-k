@@ -1,7 +1,7 @@
 // Stilize su: derinliğe göre renk (sığ turkuaz → derin mavi), kıyı köpüğü, dalga parıltısı.
 // Arazi yükseklik haritası bir doku olarak gölgelendiriciye verilir.
 import * as THREE from 'three';
-import { WORLD, LAKE } from './WorldLayout.js';
+import { WORLD, LAKES } from './WorldLayout.js';
 
 export class Water {
   constructor(terrain, scene) {
@@ -18,20 +18,26 @@ export class Water {
       uFogColor: { value: new THREE.Color('#cfe6f5') }, uFogDensity: { value: 0.0015 }, uDark: { value: 1 }, uRain: { value: 0 },
     };
     this.material = this.makeMaterial(WORLD.sea);
-    const sea = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000, 1, 1), this.material);
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(WORLD.size * 3, WORLD.size * 3, 1, 1), this.material);
     sea.rotation.x = -Math.PI / 2;
     sea.position.y = WORLD.sea;
     sea.name = 'sea';
     sea.renderOrder = 1;
     scene.add(sea);
-    this.lakeMat = this.makeMaterial(LAKE.level, true);
-    const lake = new THREE.Mesh(new THREE.CircleGeometry(LAKE.r + 10, 48), this.lakeMat);
-    lake.rotation.x = -Math.PI / 2;
-    lake.position.set(LAKE.x, LAKE.level, LAKE.z);
-    lake.name = 'lake';
-    lake.renderOrder = 1;
-    scene.add(lake);
-    this.meshes = [sea, lake];
+    this.meshes = [sea];
+    this.lakeMats = [];
+    for (const L of LAKES) {
+      const mat = this.makeMaterial(L.level, true);
+      const lake = new THREE.Mesh(new THREE.CircleGeometry(L.r + 10, 56), mat);
+      lake.rotation.x = -Math.PI / 2;
+      lake.position.set(L.x, L.level, L.z);
+      lake.name = 'lake';
+      lake.renderOrder = 1;
+      scene.add(lake);
+      this.meshes.push(lake);
+      this.lakeMats.push(mat);
+    }
+    this.lakeMat = this.lakeMats[0];
   }
 
   makeMaterial(level, lake = false) {
@@ -81,7 +87,7 @@ export class Water {
   }
 
   update(t, sunDir, sunColor, fogColor, fogDensity, dark = 1, rain = 0) {
-    for (const m of [this.material, this.lakeMat]) {
+    for (const m of [this.material, ...this.lakeMats]) {
       m.uniforms.uTime.value = t;
       m.uniforms.uSunDir.value.copy(sunDir);
       m.uniforms.uSunColor.value.copy(sunColor);

@@ -1,13 +1,13 @@
 // Harita sistemi: araziden üretilen resimli harita, keşif sisi (fog of war), işaretler,
 // takım pingleri ve güvenli noktalar arası hızlı seyahat. Çizim ui/MapView.js'te yapılır.
-import { WORLD, REGIONS, ROADS, POIS, LAKE, BRIDGE } from '../world/WorldLayout.js';
+import { WORLD, REGIONS, ROADS, POIS, LAKE, LAKES, BRIDGE } from '../world/WorldLayout.js';
 import { BIOME } from '../world/Terrain.js';
 import { roadCenterline } from '../world/Roads.js';
 import { clamp, dist, uid, valueNoise, hash2 } from '../core/util.js';
 
-export const FOG_N = 128; // 10 m'lik keşif hücreleri
+export const FOG_N = 205; // ~10 m'lik keşif hücreleri
 const FOG_CELL = WORLD.size / FOG_N;
-export const MAP_PX = 1536;
+export const MAP_PX = 2048;
 
 // Hızlı seyahat noktaları (keşfedilmiş ve güvenliyse)
 export const TRAVEL_POINTS = [
@@ -45,10 +45,10 @@ export function mapBase(world) {
       const x = -WORLD.half + i * WORLD.cell, z = -WORLD.half + j * WORLD.cell;
       let r, g, b;
       const hh = h[k];
-      const inLake = Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r + 1 && hh < LAKE.level - 0.1;
-      if (hh < -0.3 || inLake) {
+      const lk = LAKES.find((L) => Math.hypot(x - L.x, z - L.z) < L.r + 1 && hh < L.level - 0.1);
+      if (hh < -0.3 || lk) {
         // su: derinliğe göre
-        const depth = inLake ? clamp((LAKE.level - hh) / 4, 0, 1) : clamp(-hh / 14, 0, 1);
+        const depth = lk ? clamp((lk.level - hh) / 4, 0, 1) : clamp(-hh / 14, 0, 1);
         r = 64 - depth * 40; g = 150 - depth * 70; b = 200 - depth * 50;
         const wave = valueNoise(x / 18, z / 18, 5) * 6;
         r += wave; g += wave; b += wave;
@@ -261,14 +261,14 @@ export class MapSystem {
     let cur = this.fog[0], n = 0;
     for (const v of this.fog) { if (v === cur) n++; else { runs.push(n); cur = v; n = 1; } }
     runs.push(n);
-    return { f0: this.fog[0], runs, markers: this.markers.filter((m) => !m.until), regions: [...(this.seenRegions || [])] };
+    return { n: FOG_N, f0: this.fog[0], runs, markers: this.markers.filter((m) => !m.until), regions: [...(this.seenRegions || [])] };
   }
 
   load(o) {
     if (!o) return;
     if (o.runs) {
       let v = o.f0, k = 0;
-      for (const n of o.runs) { this.fog.fill(v, k, Math.min(this.fog.length, k + n)); k += n; v = v ? 0 : 1; }
+      if (o.n === FOG_N) for (const n of o.runs) { this.fog.fill(v, k, Math.min(this.fog.length, k + n)); k += n; v = v ? 0 : 1; }
     }
     this.markers = (o.markers || []).map((m) => ({ ...m }));
     this.seenRegions = new Set(o.regions || []);

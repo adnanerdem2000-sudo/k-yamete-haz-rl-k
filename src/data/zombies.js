@@ -73,6 +73,15 @@ export const SPAWN_ZONES = [
   { region: 'liman', cx: 330, cz: 300, r: 70, base: 14, perDay: 0.6, types: [['normal', 4], ['normal2', 4], ['runner', 1.5], ['heavy', 0.8], ['bloater', 0.9], ['screamer', 0.3]] },
   { region: 'lab', cx: -20, cz: -446, r: 45, base: 12, perDay: 0.4, types: [['special', 2], ['runner', 2], ['normal', 2], ['night', 1]] },
   { region: 'dag', cx: -338, cz: -338, r: 50, base: 3, perDay: 0.15, types: [['normal', 3], ['dog', 1]] },
+  // genişletilmiş ada
+  { region: 'ciftlik', cx: -640, cz: 120, r: 170, base: 10, perDay: 0.5, types: [['normal', 5], ['normal2', 4], ['crawler', 1.2], ['dog', 1], ['runner', 0.6]] },
+  { region: 'fener', cx: -585, cz: 545, r: 70, base: 4, perDay: 0.2, types: [['normal', 4], ['crawler', 1], ['screamer', 0.3]] },
+  { region: 'tatil', cx: -180, cz: 700, r: 130, base: 18, perDay: 0.8, types: [['normal', 4], ['normal2', 4], ['runner', 2], ['screamer', 0.7], ['bloater', 0.8], ['crawler', 1]] },
+  { region: 'cezaevi', cx: 700, cz: -60, r: 100, base: 22, perDay: 0.9, types: [['riot', 3], ['normal', 3], ['heavy', 1.2], ['runner', 1.5]] },
+  { region: 'havaalani', cx: 120, cz: -760, r: 240, base: 16, perDay: 0.7, types: [['normal', 4], ['normal2', 3], ['runner', 2], ['riot', 1], ['dog', 0.8]] },
+  { region: 'dagkoy', cx: -640, cz: -480, r: 90, base: 7, perDay: 0.3, types: [['normal', 4], ['normal2', 3], ['crawler', 1], ['dog', 1]] },
+  { region: 'baraj', cx: -480, cz: -200, r: 90, base: 9, perDay: 0.4, types: [['normal', 4], ['heavy', 1], ['crawler', 1], ['bloater', 0.4]] },
+  { region: 'kopru', cx: 520, cz: -530, r: 90, base: 12, perDay: 0.6, types: [['normal', 3], ['riot', 2], ['heavy', 1], ['runner', 1.5]] },
 ];
 
 export const ZOMBIE_IDS = Object.keys(ZOMBIE_TYPES);
