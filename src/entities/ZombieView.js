@@ -1,10 +1,13 @@
-// Zombi görseli. İnsan zombiler: Quaternius insan tabanı + hastalıklı ten, yıpranmış kanlı kıyafet,
-// türe özgü ekler (çevik kuvvet kaskı/yeleği, şişkonun karnı, parlayan gözler) ve prosedürel yürüyüş;
-// ölünce gerçek "Death" klibiyle yere yığılır. Zombi köpek: iskeletli husky modeli (çürümüş, kızıl gözlü).
+// Zombi görseli. İnsan zombiler: modüler insan tabanı + hastalıklı ten, yıpranmış kanlı kıyafet,
+// türe özgü ekler (çevik kuvvet kaskı/yeleği, şişkonun karnı, parlayan gözler). Hareket: aktarılmış klip
+// kütüphanesi (Motion: zombi bekleme/yürüme/koşu, tırmalama/ısırma, kapı yumruklama, isabet, ölüm, çığlık,
+// yerden çıkış); sürünenler sürünme klipleriyle. Kütüphane yoksa eski prosedürel düzen.
+// Zombi köpek: iskeletli husky/kurt modeli (çürümüş, kızıl gözlü).
 import * as THREE from 'three';
-import { Pose } from './CharacterRig.js';
+import { Pose, RIG_MASK, RIG_BONES } from './CharacterRig.js';
 import * as A from './Animations.js';
 import { ClipLayer } from './Avatar.js';
+import { Motion } from './Motion.js';
 import { AnimalView } from './AnimalView.js';
 import { damp, dampAngle } from '../core/util.js';
 
@@ -32,6 +35,11 @@ export class ZombieView {
     this.root = this.ch.root;
     this.rig = this.ch.rig;
     this.pose = new Pose();
+    // tür hızı: iri/şişko ağır, koşucu/gece türü seri; her zombiye ufak rastgele sapma
+    const kindRate = type.bloat ? 0.75 : type.hunch ? 0.85 : type.style === 2 ? 1.1 : 1;
+    this.motion = this.ch.anim ? new Motion(this.ch, { kind: type.human ? 'human' : 'zombie', rate: kindRate * (0.9 + Math.random() * 0.2) }) : null;
+    this.ms = { mode: 'ground', speed: 0, moveAngle: 0 };
+    this.weights = new Float32Array(RIG_BONES.length);
     if (type.human) game.charFactory.applyLook(this.ch, raiderLook());
     this.addExtras(type);
   }
@@ -79,6 +87,7 @@ export class ZombieView {
     if (this.animal) { this.updateDog(dt, s); return; }
     if (!this.corpse) this.root.rotation.y = this.visYaw;
     if (lodSkip) return;
+    if (this.motion) { this.updateMotion(dt, s); return; }
     const p = this.pose;
     const m = this.ch.model;
     if (s.dead) {
@@ -125,6 +134,55 @@ export class ZombieView {
     }
     this.rig.apply(p);
   }
+
+  /** Klip düzeni (Motion) */
+  updateMotion(dt, s) {
+    const M = this.motion, def = this.def, ms = this.ms;
+    if (s.dead) {
+      if (!this._dead) {
+        this._dead = true;
+        M.stop('attack'); M.stop('bash'); M.stop('hit');
+        if (!def.crawl) M.play(Math.random() < 0.5 ? 'Death01' : 'Death02', { hold: true, group: 'death', fadeIn: 0.1, rate: 1.15 });
+      }
+      if (this.corpse) return; // fizik gövdesi devirir
+      ms.speed = 0;
+      M.update(dt, ms);
+      return;
+    }
+    if (this._dead) { this._dead = false; M.stop('death'); }
+    if (this.attackT >= 0) {
+      this.attackT = -1;
+      if (def.human) this.recoil = 0.6; // yağmacı: ateş (geri tepme)
+      else {
+        const bite = Math.random() < 0.4;
+        M.play(bite ? 'Zombie_Bite' : 'Zombie_Scratch', { mask: s.speed > 0.6 || def.crawl ? 'upper' : 'full', from: 0.12, to: bite ? 0.62 : 0.7, dur: 0.7, group: 'attack', fadeIn: 0.06, fadeOut: 0.2 });
+      }
+    }
+    this.recoil = Math.max(0, (this.recoil || 0) - dt * 4);
+    if (this.hitT >= 0) { this.hitT = -1; M.play(['Hit_Chest', 'Hit_Head', 'Hit_Stomach'][Math.floor(Math.random() * 3)], { mask: 'upper', w: 0.9, fadeIn: 0.03, fadeOut: 0.15, group: 'hit' }); }
+    // kapı/barikat yumruklama: tırmalama döngüsü (üst gövde)
+    if (s.bashing && !M.playing('bash')) M.play('Zombie_Scratch', { mask: 'upper', loop: true, from: 0.12, to: 0.72, rate: 1.25, group: 'bash', fadeIn: 0.15 });
+    else if (!s.bashing && M.playing('bash')) M.stop('bash');
+    // çığlık: başını tutup kükreme
+    const scream = s.state === 'scream';
+    if (scream && !this._scream) M.play('MonsterTransformation', { from: 0.3, to: 0.92, dur: 1.6, group: 'scream', fadeIn: 0.15, loop: true });
+    else if (!scream && this._scream) M.stop('scream');
+    this._scream = scream;
+    ms.mode = def.crawl ? 'prone' : 'ground';
+    ms.speed = s.speed;
+    M.update(dt, ms);
+    // yağmacı nişanı (üst gövde prosedürel)
+    if (def.human && (s.state === 'attack' || s.state === 'aim')) {
+      const p = this.pose, w = this.weights;
+      A.aim(p, 'rifle', 0, this.recoil);
+      w.fill(0);
+      for (const i of [...RIG_MASK.arms, ...RIG_MASK.spine]) w[i] = 1;
+      this.rig.apply(p, w);
+    }
+  }
+
+  /** Yerden çıkış (olay/gece doğumu): yeni görünen zombi toprağı yarıp kalkar */
+  emerge() { if (this.motion) this.motion.play('Zombie_Spawn', { dur: 2.2, group: 'spawn', fadeIn: 0.01, fadeOut: 0.3 }); }
 
   /** Kök eğimi (sürünen: yüzüstü) */
   layDamp(rx, y, z, dt) {

@@ -1,0 +1,82 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Animasyon galerisi</title>
+<style>body{margin:0;background:#202630;overflow:hidden;font:13px sans-serif}canvas{display:block}
+.lbl{position:absolute;color:#fff;text-shadow:0 1px 2px #000;transform:translateX(-50%);white-space:nowrap}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// Aktarılmış (UAL) klipleri oyunun gerçek karakter hattıyla (CharacterFactory) ızgarada gösterir.
+// ?g=men|women&c=mert&clips=Idle_Loop,Jog_Fwd_Loop&t=0.25 (normalize zaman; 'all' → 0,0.25,0.5,0.75 sütunları)
+// window.__set(clips, t) yeniden kurar; window.__ready hazır olunca.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+import { CharacterFactory, CHARACTERS } from '../../src/entities/CharacterFactory.js';
+import { unpackBytes, packToClips } from '../../src/entities/AnimPack.js';
+
+const q = new URLSearchParams(location.search);
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+r.shadowMap.enabled = true;
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#6a7888');
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.5));
+const dl = new THREE.DirectionalLight(0xffffff, 2.4); dl.position.set(4, 8, 6); dl.castShadow = true; dl.shadow.camera.left = -12; dl.shadow.camera.right = 12; dl.shadow.camera.top = 12; dl.shadow.camera.bottom = -12; dl.shadow.mapSize.set(2048, 2048); scene.add(dl);
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.MeshStandardMaterial({ color: '#7d8a6a' })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// zemin ızgarası: ayak kaymasını/yere basmayı görmek için
+const grid = new THREE.GridHelper(60, 120, 0x333333, 0x556655); grid.position.y = 0.002; scene.add(grid);
+const cam = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 200);
+
+const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+const assets = { rigged: {}, anims: {} };
+for (const b of ['men', 'women']) {
+  assets.rigged[b] = await L.loadAsync(`../../assets/models/rigged/${b}.glb`);
+  const buf = await (await fetch(`../../assets/models/rigged/anims_${b}.kan`)).arrayBuffer();
+  assets.anims[b] = packToClips(await unpackBytes(buf), THREE);
+}
+const F = new CharacterFactory(assets);
+window.__clipNames = Object.keys(assets.anims.men);
+window.__clipInfo = Object.fromEntries(Object.entries(assets.anims.men).map(([k, c]) => [k, { d: c.duration, ...c.userData }]));
+
+let items = [];
+function clear() { for (const it of items) { scene.remove(it.ch.root); it.lbl.remove(); } items = []; }
+/** clips: ad listesi; times: normalize zaman listesi (sütunlar) */
+window.__set = (clips, times = [0.3], opts = {}) => {
+  clear();
+  const look = opts.look || CHARACTERS[opts.c || q.get('c') || 'mert'].look;
+  const cols = times.length;
+  const sx = opts.sx || 1.3, sz = opts.sz || 2.2;
+  clips.forEach((name, i) => {
+    times.forEach((t, j) => {
+      const ch = F.create(look);
+      const clip = ch.anim && ch.anim[name];
+      const x = (j - (cols - 1) / 2) * sx + (opts.layout === 'row' ? (i - (clips.length - 1) / 2) * sx * cols : 0);
+      const z = opts.layout === 'row' ? 0 : -i * sz;
+      ch.root.position.set(x, 0, z);
+      if (opts.yaw !== undefined) ch.root.rotation.y = opts.yaw;
+      ch.root.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      scene.add(ch.root);
+      if (clip) {
+        const m = new THREE.AnimationMixer(ch.model);
+        const a = m.clipAction(clip); a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; a.play();
+        m.setTime(Math.min(clip.duration - 1e-4, t * clip.duration));
+      }
+      const lbl = document.createElement('div'); lbl.className = 'lbl'; lbl.textContent = (j === 0 ? name + ' ' : '') + (cols > 1 ? Math.round(t * 100) + '%' : '');
+      if (!clip) lbl.textContent = name + ' (YOK)';
+      document.body.appendChild(lbl);
+      items.push({ ch, lbl, pos: new THREE.Vector3(x, 2.05, z) });
+    });
+  });
+  const span = Math.max(cols * sx, opts.layout === 'row' ? clips.length * sx * cols : 0);
+  const depth = opts.layout === 'row' ? 0 : (clips.length - 1) * sz;
+  const view = opts.view || 'front';
+  if (view === 'side') { cam.position.set(span * 0.5 + 6 + depth, 1.4, -depth / 2); cam.lookAt(0, 0.9, -depth / 2); }
+  else { cam.position.set(0, 1.6 + depth * 0.35, Math.max(4.8, span * 1.45) + depth * 0.2); cam.lookAt(0, 0.85, -depth / 2); }
+  cam.updateMatrixWorld();
+  r.render(scene, cam);
+  for (const it of items) { const p = it.pos.clone().project(cam); it.lbl.style.left = ((p.x + 1) / 2 * innerWidth) + 'px'; it.lbl.style.top = ((1 - p.y) / 2 * innerHeight) + 'px'; }
+  return items.length;
+};
+const clips = (q.get('clips') || 'Idle_Loop,Walk_Fwd_Loop,Jog_Fwd_Loop').split(',');
+const tq = q.get('t') || '0.3';
+window.__set(clips, tq === 'all' ? [0, 0.25, 0.5, 0.75] : tq.split(',').map(Number));
+window.__ready = true;
+</script></body></html>

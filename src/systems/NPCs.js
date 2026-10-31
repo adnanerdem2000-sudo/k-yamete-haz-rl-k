@@ -408,7 +408,9 @@ export class NPCs {
         n.speed = sp;
       } else n.speed = 0;
       n.avatar.root.position.copy(n.pos);
-      n.avatar.update(dt, { mode: 'ground', speed: n.speed, yaw: n.yaw, pitch: 0 });
+      const talking = S.ui.dialogNpc === n && S.ui.panel && S.ui.panel.name === 'dialog';
+      if (talking && !n.speed) n.yaw = dampAngle(n.yaw, Math.atan2(S.local.pos.x - n.pos.x, S.local.pos.z - n.pos.z), 6, dt); // konuşurken oyuncuya döner
+      n.avatar.update(dt, { mode: 'ground', speed: n.speed, yaw: n.yaw, pitch: 0, talk: talking });
       // Murat ve Defne üsse vardığında
       if (n.id === 'murat' && n.follow && !S.flags.family_home && S.isHost && S.isInBase(n.pos)) {
         const h = S.world.home.frame.pt(15, 18);

@@ -70,11 +70,31 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Varlıklar:** CC0 modeller `tools/pack-assets.mjs` ile 7 GLB kitinde birleştirilir (~11 MB).
 
 ## Karakterler
-İskeletli Quaternius insan tabanları (erkek/kadın, 62 kemikli CharacterArmature) bağlama pozunda tek bir
-deri ağına birleştirilir; görünüm (ten, saç, kıyafet, kir) köşe renk yuvalarıyla boyanır, aksesuarlar
-kemiklere bağlanır. Hareket: yürüme/koşma/yan/geri klipleri ortak fazlı karışımla, üstüne klip katmanları
-(vuruş, takla, ölüm, el sallama) ve prosedürel tam gövde modları (eğilme, sürünme, tırmanma, yüzme, araç,
-uyku) + ayak yerleştirme ve iki kemikli kol IK'sı. Ayak yere bastığında oturum zemine göre ayak sesi çalar.
+- **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
+  62 kemikli iskelette (`tools/pack-characters.mjs` → `assets/models/rigged/men.glb`, `women.glb`).
+  `CharacterFactory.ModularBase` parçaları bağlama pozunda doğrusal deri dönüşümüyle tek ağa birleştirir;
+  karakter başına seçilen 4 parça sıkı bir geometride paylaşılır (kombinasyon önbelleği). Renk yuvaları
+  (ten, saç, üst, alt, ayakkabı…) köşe renkleriyle boyanır; `null` yuva setin özgün rengini korur.
+  Aksesuarlar (çanta, şapka, gözlük, dürbün, stetoskop…) kemik bağlantı noktalarına takılır ve yaylı
+  sönümlü ikincil hareketle sallanır. Zombiler aynı hattan solmuş/kanlı kıyafetle üretilir.
+- **Hareket kütüphanesi:** Quaternius "Universal Animation Library" 1+2 (CC0) — UE tipi iskelet için 154 klip,
+  `tools/retarget-ual.mjs` + `tests/dev/retarget.html` ile oyunun iskeletine aktarılır: dünya uzayında dinlenme
+  pozuna göre göreli dönüş, kalça çevirisi boy oranıyla, IK ayak kemikleri incik ucuna. Araç ayrıca her
+  döngünün yürüyüş hızını (basan ayağın kayma hızı) ve faz başlangıcını (sol topuk basışı) ölçer. Klipler
+  erkek/kadın iskeletleri için ayrı aktarılır (dinlenme pozları farklı). Paket biçimi `AnimPack` (.kan):
+  16 bit nicemleme, iz içi fark kodlama, bayt ayrıştırma + gzip; 154 klip ≈ 590 KB (glTF ile 2,7 MB idi).
+- **Animasyon denetleyicisi (`Motion`):** durumlar (ayakta/eğik/sürünme/yaralı/yüzme/merdiven/havada/sürüş/
+  oturma) ağırlık sönümüyle karışır; döngüler ortak fazla örneklenir ve faz hızı gerçek hız / kliplerin
+  ölçülmüş adım mesafesi ile ilerler (ayak kayması en aza iner). 8 yön karışımı (komşu iki yön), hıza göre
+  yürüme ↔ koşu ↔ depar. Kişiliğe göre bekleme ve ara sıra kıpırdanma klipleri, yorgunken nefes nefese bekleme.
+  Durum geçişlerinde yatma/kalkma/eğilme klipleri. Eylemler (`Avatar.playMotion`): maskeli tek seferlik klipler
+  (tam/üst gövde/kollar), giriş/çıkış sönümü, döngü ve sonda bekleme (ölüm, uyku). Silah tutuş ve nişanları,
+  taşınma pozu ve baş eğimi prosedürel katman (`CharacterRig`, kemik başına ağırlık) olarak üstte kalır.
+  Kütüphane yüklenemezse eski klip + prosedürel düzen yedek olarak çalışır. Karakter başına güncelleme ~0,05 ms.
+- **Zombiler (`ZombieView`):** aynı denetleyici zombi kümesiyle (bekleme/yürüme/koşu, tırmalama/ısırma, kapı
+  yumruklama, isabet, ölüm, çığlık, yerden çıkış); türe göre oynatma hızı (şişko/iri ağır, koşucu seri) ve
+  bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
+- Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
 
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),

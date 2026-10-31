@@ -1,0 +1,42 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Kıyafet laboratuvarı</title>
+<style>body{margin:0;background:#202630;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// Modüler kıyafet setlerini yan yana gösterir: ?g=men&sets=Worker,Suit,...&clip=Idle
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+const q = new URLSearchParams(location.search);
+const gname = q.get('g') || 'men';
+const sets = (q.get('sets') || '').split(',').filter(Boolean);
+const clipName = q.get('clip') || 'Idle';
+const r = new THREE.WebGLRenderer({ antialias: true }); r.setSize(innerWidth, innerHeight); r.outputColorSpace = THREE.SRGBColorSpace; r.toneMapping = THREE.ACESFilmicToneMapping; document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color('#6a7888');
+scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 1.6)); const dl = new THREE.DirectionalLight(0xffffff, 2.6); dl.position.set(3, 6, 5); scene.add(dl);
+const cam = new THREE.PerspectiveCamera(28, innerWidth / innerHeight, 0.05, 100);
+const loader = new GLTFLoader(); loader.setMeshoptDecoder(MeshoptDecoder);
+const g = await loader.loadAsync(`_preview/${gname}.glb`);
+const parts = []; g.scene.traverse((c) => { if (c.isSkinnedMesh || (c.isGroup && c.children.some((k) => k.isSkinnedMesh))) parts.push(c.name); });
+window.__parts = [...new Set(parts)];
+const list = sets.length ? sets : ['Worker'];
+list.forEach((set, k) => {
+  const [head, body] = set.split('+');
+  const o = SkeletonUtils.clone(g.scene);
+  o.traverse((c) => {
+    if (!c.isMesh) return;
+    const nm = (c.name + '|' + (c.parent ? c.parent.name : ''));
+    const want = [head + '_Head', (body || head) + '_Body', (body || head) + '_Legs', (body || head) + '_Feet'];
+    c.visible = want.some((w) => nm.includes(w));
+  });
+  o.position.x = (k - (list.length - 1) / 2) * 0.95;
+  scene.add(o);
+  const m = new THREE.AnimationMixer(o); const clip = g.animations.find((a) => a.name.endsWith(clipName)); if (clip) { m.clipAction(clip).play(); m.update(0.5); }
+});
+const w = list.length * 0.95;
+cam.position.set(0, 1.25, Math.max(4.5, w * 1.7)); cam.lookAt(0, 0.95, 0);
+r.render(scene, cam);
+window.__ready = true;
+</script></body></html>

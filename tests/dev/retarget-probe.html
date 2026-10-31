@@ -1,0 +1,38 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Retarget teşhis</title>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// UAL ve hedef iskeletin dinlenme/T-poz teşhisi: kemik dünya konumları, yön, klip izleri
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+const out = {};
+const r3 = (v) => [v.x, v.y, v.z].map((x) => Math.round(x * 1000) / 1000);
+const bonesOf = (s) => { const b = {}; s.traverse((o) => { if (o.isBone) b[o.name] = o; }); return b; };
+const src = await L.loadAsync('_preview/UAL1.glb');
+const tgt = await L.loadAsync('../../assets/models/rigged/men.glb');
+for (const [k, g] of [['src', src], ['tgt', tgt]]) {
+  g.scene.updateMatrixWorld(true);
+  const b = bonesOf(g.scene);
+  const names = k === 'src' ? ['root', 'pelvis', 'spine_03', 'Head', 'clavicle_l', 'upperarm_l', 'lowerarm_l', 'hand_l', 'thigh_l', 'calf_l', 'foot_l', 'ball_l', 'thigh_r'] : ['Root', 'Body', 'Hips', 'Chest', 'Head', 'ShoulderL', 'UpperArmL', 'LowerArmL', 'WristL', 'UpperLegL', 'LowerLegL', 'FootL', 'UpperLegR'];
+  out[k] = { rest: Object.fromEntries(names.map((n) => [n, b[n] ? r3(new THREE.Vector3().setFromMatrixPosition(b[n].matrixWorld)) : null])), parents: Object.fromEntries(names.map((n) => [n, b[n] && b[n].parent ? b[n].parent.name : null])) };
+  out[k].clips = g.animations.length;
+}
+// A_TPose ilk karesi
+const mx = new THREE.AnimationMixer(src.scene);
+const tp = src.animations.find((a) => a.name === 'A_TPose');
+mx.clipAction(tp).play(); mx.update(0);
+src.scene.updateMatrixWorld(true);
+const sb = bonesOf(src.scene);
+out.srcTPose = Object.fromEntries(['upperarm_l', 'lowerarm_l', 'hand_l', 'middle_01_l', 'thigh_l', 'calf_l', 'foot_l', 'ball_l'].map((n) => [n, r3(new THREE.Vector3().setFromMatrixPosition(sb[n].matrixWorld))]));
+out.tpTracks = tp.tracks.length + ' ' + tp.duration;
+// hedef klip izleri (konum izi olan kemikler)
+const run = tgt.animations.find((a) => a.name.endsWith('Run'));
+out.tgtRunPos = run.tracks.filter((t) => t.name.endsWith('.position')).map((t) => t.name);
+out.tgtRunQuat = run.tracks.filter((t) => t.name.endsWith('.quaternion')).map((t) => t.name.split('.')[0]).join(' ');
+const srun = src.animations.find((a) => a.name === 'Jog_Fwd_Loop');
+out.srcJogPos = srun.tracks.filter((t) => t.name.endsWith('.position')).map((t) => t.name);
+window.__out = out;
+</script></body></html>

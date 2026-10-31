@@ -1,4 +1,4 @@
-// İskeletli modelleri (insan tabanları ve hayvanlar) oyun için paketler:
+// İskeletli hayvan modellerini oyun için paketler (insanlar: tools/pack-characters.mjs, modüler tabanlar):
 // meshopt sıkıştırmasını çözer, gereksiz düğümleri (kılıç vb.) ve yinelenen animasyonları atar,
 // animasyon adlarındaki "Armature|" öneklerini temizler, anahtar kareleri sadeleştirir ve
 // meshopt ile sıkıştırır (tarayıcıda vendor/meshopt çözücüsü açar). Kaynak: @netforge/asset-library-files (CC0, Quaternius).
@@ -19,8 +19,6 @@ fs.mkdirSync(out, { recursive: true });
 
 // oyundaki ad ← kaynak dosya; drop: silinecek düğüm adları
 const MODELS = {
-  male: { file: 'adventurer.glb', drop: [] },
-  female: { file: 'hooded_adventurer.glb', drop: ['Sword'] },
   wolf: { file: 'wolf.glb' },
   deer: { file: 'deer.glb' },
   stag: { file: 'stag.glb' },

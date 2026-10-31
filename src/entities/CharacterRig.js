@@ -4,7 +4,7 @@
 // Her kemik için verilen R dönüşü, kemiği T-pozdaki model eksenleri etrafında döndürür ve ebeveyn
 // kemiklerin dönüşleriyle zincirlenir (ileri kinematik):
 //   yerel_q = P⁻¹ · R · P · q_T      (P: ebeveynin T-poz dünyasal yönelimi, q_T: kemiğin T-poz yerel dönüşü)
-// Modelin bağlama pozu kollar aşağıdadır; T-poz yükleme sırasında bir kez hesaplanır (HumanBase).
+// Modelin bağlama pozu kollar aşağıdadır; T-poz yükleme sırasında bir kez hesaplanır (ModularBase).
 // Poz sözlüğü (Hips, Spine, LeftArm…) eski prosedürel kütüphaneyle aynıdır; burada yeni iskelete eşlenir.
 // Ayak kemikleri modelde bacak zincirine değil köke bağlıdır (IK hedefi): prosedürel pozda bilek
 // konumuna taşınırlar. apply() klip pozunun üzerine kemik başına ağırlıkla karışabilir.

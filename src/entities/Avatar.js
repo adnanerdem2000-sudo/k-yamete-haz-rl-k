@@ -1,5 +1,6 @@
 // Avatar: görsel karakter + animatör. Yerel oyuncu, ağ oyuncuları, NPC'ler ve yapay zekâ
-// takım arkadaşları aynı sınıfı kullanır. Üç katman:
+// takım arkadaşları aynı sınıfı kullanır. Aktarılmış hareket kütüphanesi (Motion, UAL klipleri) varsa temel
+// katman ve eylemler onunla oynar (updateMotion); yoksa aşağıdaki eski düzen (yedek):
 //  1) Klip hareketi (AnimationMixer): bekleme, yürüme, koşu, geri ve yana koşu; hıza ve hareket yönüne
 //     göre ağırlıklandırılır, tüm döngüler ortak fazla senkron ilerler (ayak kayması olmaz).
 //  2) Maskeli klip katmanları: yumruk, kılıç savurma, darbe tepkisi, etkileşim, el sallama, takla, ölüm.
@@ -9,6 +10,8 @@ import * as THREE from 'three';
 import { Pose, UPPER_MASK, RARM_MASK, LARM_MASK, ARMS_MASK, D, RIG_MASK, RIG_BONES, UPPER_BONE_RE, BONES } from './CharacterRig.js';
 import * as A from './Animations.js';
 import { baseOf } from './CharacterFactory.js';
+import { Motion } from './Motion.js';
+import { FootIK } from './FootIK.js';
 import { ITEMS } from '../data/items.js';
 import { damp, dampAngle, smoothstep, clamp, wrapAngle } from '../core/util.js';
 
@@ -38,6 +41,42 @@ const OVERLAYS = {
   death: { clip: 'Death', re: null, w: 1, clamp: true },
   kick: { clip: 'Kick_Right', re: null, w: 1 },
 };
+
+// Eylem → aktarılmış klip (Motion). dur: oyunun istediği süre; loop: eylem süresince tekrar; mask: katman
+// moving: hareket halindeyken kullanılacak (üst gövde) alternatif. Klibi olmayan eylemler prosedürel kalır.
+const UAL_ACTIONS = {
+  kick: { clip: 'Kick', mask: 'full', fadeIn: 0.08 },
+  roll: { clip: 'Roll', mask: 'full', to: 0.92, fadeIn: 0.06, fadeOut: 0.14 },
+  dodgeL: { clip: 'Dodge_Left', mask: 'full', fadeIn: 0.06 },
+  dodgeR: { clip: 'Dodge_Right', mask: 'full', fadeIn: 0.06 },
+  interact: { clip: 'Interact', mask: 'upper', from: 0.08, to: 0.8 },
+  pickup: { clip: 'PickUp_Kneeling', mask: 'full', from: 0.12, to: 0.82, minDur: 0.95, moving: { clip: 'PickUp_Table', mask: 'upper', from: 0.1, to: 0.9 } },
+  search: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, fadeIn: 0.25, moving: { clip: 'Interact', mask: 'upper', loop: true } },
+  searchHigh: { clip: 'Chest_Open', mask: 'upper', loop: true, fadeIn: 0.2 },
+  revive: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, fadeIn: 0.3 },
+  bandage: { clip: 'Bandage_Loop', mask: 'upper', loop: true, fadeIn: 0.2 },
+  consume: { clip: 'Consume', mask: 'upper', fadeIn: 0.15 },
+  drink: { clip: 'Drink', mask: 'upper', from: 0.1, to: 0.85, fadeIn: 0.15 },
+  hammer: { clip: 'Mining_Loop', mask: 'upper', loop: true, fadeIn: 0.2, rate: 0.85 },
+  chop: { clip: 'TreeChopping_Loop', mask: 'full', loop: true, fadeIn: 0.2 },
+  throw: { clip: 'OverhandThrow', mask: 'upper', from: 0.15, to: 0.85, fadeIn: 0.06 },
+  reloadPistol: { clip: 'Pistol_Reload', mask: 'arms', from: 0.05, to: 0.95, fadeIn: 0.1 },
+  cheer: { clip: 'Celebration', mask: 'full', loop: true, to: 0.62, fadeIn: 0.2, emote: true },
+  dance: { clip: 'Dance_Loop', mask: 'full', loop: true, fadeIn: 0.25, rate: 1, emote: true },
+  yes: { clip: 'Yes', mask: 'upper', fadeIn: 0.2 },
+  no: { clip: 'Idle_No_Loop', mask: 'upper', fadeIn: 0.2 },
+  surprise: { clip: 'Surprise', mask: 'upper', to: 0.7, fadeIn: 0.1 },
+  push: { clip: 'Push_Loop', mask: 'full', loop: true, fadeIn: 0.25 },
+  fish: { clip: 'Fish_Cast', mask: 'full', fadeIn: 0.2, then: { clip: 'Fish_Cast_Idle_Loop', mask: 'full', loop: true, fadeIn: 0.4 } },
+  jump: { clip: 'Jump_Start', mask: 'full', from: 0.08, to: 0.3, fadeIn: 0.04, fadeOut: 0.12, fixed: 0.24 },
+  land: { clip: 'Jump_Land', mask: 'full', from: 0.06, to: 0.5, fadeIn: 0.04, fadeOut: 0.18, fixed: 0.45, still: true },
+  vault: { clip: 'SafetyVault', mask: 'full', fadeIn: 0.05, fadeOut: 0.1 },
+  climbUp: { clip: 'ClimbUp_1m', mask: 'full', fadeIn: 0.05, fadeOut: 0.12 },
+  climbUp2: { clip: 'ClimbUp_2m', mask: 'full', fadeIn: 0.05, fadeOut: 0.15 },
+};
+const HIT_CLIPS = ['Hit_Chest', 'Hit_Head', 'Hit_Stomach', 'Hit_Shoulder_L', 'Hit_Shoulder_R'];
+// ağda uzak oyunculara yansıtılan eylemler (takla ve ifadeler anim durumunda ayrıca taşınır)
+const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'jump', 'land', 'interact', 'stop']);
 
 // Poz sözlüğü ↔ iskelet maskeleri
 const VSPINE = ['Spine', 'Chest', 'UpperChest', 'Neck', 'Head'].map((n) => BONES.indexOf(n));
@@ -132,9 +171,12 @@ export class Avatar {
     if (this.ch.root !== this.root) { for (const c of [...this.ch.root.children]) this.root.add(c); }
     this.ch.root = this.root;
     this.rig = this.ch.rig;
+    this.motion = this.ch.anim ? new Motion(this.ch, { persona: look && look.persona }) : null;
+    this.footIK = this.motion ? new FootIK(this.ch) : null;
+    this._dead = false; this._sleep = false; this._emote = null; this.later = [];
     this.mixer = new THREE.AnimationMixer(this.ch.model);
     this.actions = {};
-    for (const n of LOCO) {
+    for (const n of this.motion ? [] : LOCO) {
       const clip = this.ch.clips[n];
       if (!clip) continue;
       const a = this.mixer.clipAction(clip);
@@ -251,6 +293,11 @@ export class Avatar {
 
   /** Bir eylem animasyonu başlat */
   play(type, dur = 0.6, kind = null) {
+    // ağ eşitlemesi: yerel eylemler sıra numarasıyla anim durumuna yazılır, uzak avatar aynısını oynar
+    if (REPLICATED.has(type)) this.lastAct = [((this.lastAct && this.lastAct[0]) || 0) + 1, type, Math.round(dur * 100) / 100, kind];
+    if (this.motion && this.playMotion(type, dur, kind)) return;
+    if (type === 'bandage') type = 'search';
+    else if (type === 'drink') type = 'consume';
     switch (type) {
       case 'melee':
         if (!this.heldId) { this.punchSide = !this.punchSide; this.overlay(this.punchSide ? 'punchR' : 'punchL', dur * 1.25, { replace: ['punchR', 'punchL'] }); }
@@ -266,7 +313,41 @@ export class Avatar {
     this.action = { type, t: 0, dur, kind };
   }
 
-  flinch(dir = 1) { this.overlay(Math.random() < 0.5 ? 'hit' : 'hit2', 0.45, { w: dir < 0 ? 0.6 : 1, fadeIn: 0.04 }); }
+  flinch(dir = 1) {
+    if (this.motion && this.motion.play(HIT_CLIPS[Math.floor(Math.random() * HIT_CLIPS.length)], { mask: 'upper', w: dir < 0 ? 0.6 : 0.95, fadeIn: 0.03, fadeOut: 0.16, group: 'hit' })) return;
+    this.overlay(Math.random() < 0.5 ? 'hit' : 'hit2', 0.45, { w: dir < 0 ? 0.6 : 1, fadeIn: 0.04 });
+  }
+
+  /**
+   * Eylemi aktarılmış klip olarak oynat (Motion). false: bu eylemin klibi yok → prosedürel/eski yol.
+   * Etkileşim/onarım gibi süreli eylemler this.action'da izlenir (dış sistemler action'ı null yaparak bitirir).
+   */
+  playMotion(type, dur, kind) {
+    const M = this.motion;
+    if (type === 'melee') {
+      const o = { mask: 'upper', group: 'attack', fadeIn: 0.05, fadeOut: 0.16 };
+      if (!this.heldId) { this.punchSide = !this.punchSide; return !!M.play(this.punchSide ? 'Punch_Jab' : 'Punch_Cross', { ...o, dur: dur * 1.25 }); }
+      this.swingN = ((this.swingN || 0) + 1) % 2;
+      return !!M.play(this.swingN ? 'Sword_Regular_A' : 'Sword_Regular_B', { ...o, dur: dur * 1.15, from: 0.02 });
+    }
+    let key = type;
+    if (type === 'stop') { if (this.action && this.action.motion) { M.stopShot(this.action.shot); if (this.action.next) M.stopShot(this.action.next); } this.action = null; this._mAct = null; return true; }
+    if (type === 'reload') { if (this.holdKind !== 'pistol') return false; key = 'reloadPistol'; }
+    const d = UAL_ACTIONS[key];
+    if (!d) return false;
+    const moving = this.speedSm > 0.6;
+    if (d.still && moving) return true; // koşarken iniş: klip yok (adım devam eder)
+    const def = d.moving && moving ? d.moving : d;
+    const o = { mask: def.mask, from: def.from, to: def.to, fadeIn: def.fadeIn, fadeOut: def.fadeOut, loop: !!def.loop, group: d.emote ? 'emote' : 'act', rate: def.rate };
+    const total = d.fixed ?? Math.max(dur, d.minDur || 0);
+    if (!def.loop) { o.dur = total; delete o.rate; }
+    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!M.play(def.clip, o); }
+    const shot = M.play(def.clip, o);
+    if (!shot) return false;
+    this.action = { type, t: 0, dur: total, kind, shot, motion: true, then: def.then || d.then || null, loop: false, loopish: !!def.loop };
+    this._mAct = this.action;
+    return true;
+  }
 
   /**
    * a: anim durumu {mode, speed, moveAngle, vy, aim, pitch, sprint, steer, emote, carrying, yaw}
@@ -282,8 +363,14 @@ export class Avatar {
     this.angSm = a.moveAngle !== undefined ? this.angSm + wrapAngle(a.moveAngle - this.angSm) * Math.min(1, dt * 10) : damp(this.angSm, 0, 6, dt);
     const dead = mode === 'dead';
     // uzak oyuncu taklası (ağ durumundan yükselen kenar)
-    if (a.roll && !this._rolling && !this.overlays.some((o) => o.name === 'roll')) this.play('roll', 0.72);
+    if (a.roll && !this._rolling && !this.overlays.some((o) => o.name === 'roll') && !(this.motion && this.motion.playing('Roll'))) this.play('roll', 0.72);
     this._rolling = !!a.roll;
+    // uzak oyuncunun eylemi (sıra numarası değişince bir kez); ilk görüşte eski eylem oynatılmaz
+    if (a.act && a.act !== this.lastAct) {
+      if (this._ractN === undefined) this._ractN = a.act[0];
+      else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3]); }
+    }
+    if (this.motion) { this.updateMotion(dt, a, mode, s, dead); return; }
     // ---- prosedürel tam gövde modları
     const full = FULL_MODES.has(mode);
     this.blend.full = damp(this.blend.full, full ? 1 : 0, 9, dt);
@@ -465,6 +552,222 @@ export class Avatar {
     if (this.flashlight) {
       const pd = a.pitch || 0;
       this.flashlight.target.position.set(0, 1.4 - Math.sin(pd) * 8, Math.cos(pd) * 8);
+    }
+    this.secondary(dt, s, yawRate, mode);
+  }
+
+  /**
+   * Aktarılmış klip düzeni: Motion temel katmanı + eylem klipleri, üstüne prosedürel tutuşlar (silah/el feneri),
+   * taşıma, baş eğimi; kök yönü/eğimi ve koltuğa hizalama.
+   */
+  updateMotion(dt, a, mode, s, dead) {
+    const M = this.motion, p = this.pose, pu = this.pu, tmp = this.tmp;
+    // ---- ölüm / uyku / ifade (durum kenarları → klipler)
+    if (dead !== this._dead) {
+      if (dead) M.play(Math.random() < 0.5 ? 'Death01' : 'Death02', { hold: true, group: 'death', fadeIn: 0.12, fadeOut: 0.4 });
+      else M.stop('death');
+      this._dead = dead;
+    }
+    const sleep = mode === 'sleep';
+    if (sleep !== this._sleep) {
+      if (sleep) M.play('IdleToLay', { hold: true, group: 'sleep', from: 0.3, dur: 1.5, fadeIn: 0.2, fadeOut: 0.3 });
+      else { M.stop('sleep'); M.play('LayToIdle', { group: 'wake', dur: 1.15, fadeIn: 0.05, fadeOut: 0.25 }); }
+      this._sleep = sleep;
+    }
+    const em = a.emote && UAL_ACTIONS[a.emote] && UAL_ACTIONS[a.emote].emote ? a.emote : null;
+    if (em !== this._emote) {
+      if (em && !(this.action && this.action.type === em)) this.playMotion(em, 2.6);
+      this._emote = em;
+    } else if (a.emote === 'wave' && !this.overlays.some((o) => o.name === 'wave')) this.overlay('wave', 1.6);
+    // dış sistem eylemi bitirdiyse (action = null) döngüdeki klibi durdur
+    if (this._mAct && this.action !== this._mAct) {
+      M.stopShot(this._mAct.shot); if (this._mAct.next) M.stopShot(this._mAct.next);
+      if (this._mAct.loopish && this.lastAct) this.lastAct = [this.lastAct[0] + 1, 'stop', 0, null];
+      this._mAct = null;
+    }
+    const act = this.action;
+    if (act && act.motion) {
+      act.t += dt;
+      if (act.then && !act.next && act.shot && act.t >= (act.shot.to - act.shot.from) / Math.max(1e-3, act.shot.rate) - 0.25) {
+        const T = act.then;
+        act.next = M.play(T.clip, { mask: T.mask, loop: !!T.loop, fadeIn: T.fadeIn, group: 'act2' });
+      }
+      if (act.t >= act.dur && !act.loop) { M.stopShot(act.shot); if (act.next) M.stopShot(act.next); this.action = null; this._mAct = null; }
+    }
+    // ---- 1) temel katman + eylem klipleri
+    const ms = this._ms || (this._ms = {});
+    ms.mode = dead || sleep || mode === 'carried' ? 'ground' : mode;
+    ms.speed = mode === 'carried' || dead ? 0 : s; ms.moveAngle = this.angSm; ms.vy = a.vy || 0; ms.tired = !!a.tired; ms.talk = !!a.talk;
+    ms.turn = this.yawRate || 0;
+    const prevPh = this.cycle;
+    M.update(dt, ms);
+    const ph = M.phase[M.state] ?? 0;
+    this.cycle = ph;
+    if (s > 0.4 && (mode === 'ground' || mode === 'crouch') && this.game.session && this.game.session.onAvatarStep) {
+      const cross = (x, y, t) => (x <= y ? t > x && t <= y : t > x || t <= y);
+      if (cross(prevPh, ph, 0.02) || cross(prevPh, ph, 0.52)) this.game.session.onAvatarStep(this, s, mode);
+    }
+    // eski klip katmanları (el sallama: tabanın özgün klibi)
+    let overUpper = Math.max(M.upperW, M.fullW);
+    for (let i = this.overlays.length - 1; i >= 0; i--) {
+      const o = this.overlays[i];
+      o.t += dt * o.speed;
+      const D0 = o.L.clip.duration;
+      const tIn = o.t / Math.max(1e-3, o.fadeIn * o.speed), tOut = (D0 - o.t) / Math.max(1e-3, o.fadeOut * o.speed);
+      const w = o.clamp || o.hold ? Math.min(1, tIn) : Math.max(0, Math.min(1, tIn, tOut));
+      if (!o.clamp && !o.hold && o.t >= D0) { this.overlays.splice(i, 1); continue; }
+      o.L.apply(Math.min(o.t, D0 - 1e-3), w * o.w);
+      overUpper = Math.max(overUpper, w * o.w);
+    }
+    // ---- 2) prosedürel katman (taşınma, tutuşlar, klibi olmayan eylemler)
+    const wts = this.weights;
+    wts.fill(0);
+    let anyProc = false, lay = 0, layLift = 0, layZ = 0;
+    this.rig.autoGround = false;
+    this.rig.hipY = null;
+    p.reset();
+    const carried = mode === 'carried';
+    this.blend.full = damp(this.blend.full, carried ? 1 : 0, 9, dt);
+    this.blend.aim = damp(this.blend.aim, a.aim ? 1 : 0, 14, dt);
+    if (this.blend.full > 0.01) { A.carriedPose(p, this.t); for (let i = 0; i < wts.length; i++) wts[i] = this.blend.full; anyProc = true; }
+    if (carried) lay = -Math.PI / 2 + 0.3;
+    const setMask = (m, w, src) => {
+      if (w <= 0) return;
+      p.blendMasked(src, 1, MASKS[m].v);
+      for (const i of MASKS[m].r) wts[i] = Math.max(wts[i], w);
+      anyProc = true;
+    };
+    const hk = this.holdKind;
+    const canHold = this.heldId && !['climb', 'drive', 'seat', 'sleep', 'carried', 'swim', 'prone', 'downed'].includes(mode) && !dead;
+    const holdSup = 1 - Math.min(1, overUpper);
+    if (canHold && holdSup > 0.01) this.holdPose(a, s, hk, holdSup, setMask);
+    if (!canHold || hk !== 'rifle' || holdSup <= 0.01) this.rig.setArmIK('Left', null);
+    if (a.carrying && !carried) { pu.reset(); A.idle(pu, this.t); A.carryPose(pu); setMask('arms', 1, pu); }
+    // klibi olmayan eylemler (gülme, gösterme, tüfek doldurma…)
+    if (act && !act.motion) {
+      act.t += dt;
+      const k = Math.min(1, act.t / act.dur);
+      const env = Math.max(0, Math.min(1, act.t * 6, (act.dur - act.t) * 6));
+      pu.reset(); A.idle(pu, this.t);
+      switch (act.type) {
+        case 'reload': { const r = Math.sin(k * Math.PI); pu.set('LeftArm', (-55 * r) * D, 0, (-60 + 25 * r) * D); pu.set('LeftForeArm', 0, -95 * r * D, 0); pu.set('Head', 18 * r * D, 0, 0); setMask('larm', r, pu); break; }
+        case 'laugh': case 'point': A.emote(tmp, act.type, this.t); setMask('armsSpine', env, tmp); break;
+        case 'throw': { const kk = k < 0.4 ? k / 0.4 : 1 - (k - 0.4) / 0.6; pu.set('RightArm', (-150 * kk + 40 * (1 - kk)) * D, 0, 40 * D); pu.set('RightForeArm', 0, 40 * kk * D, 0); setMask('rarm', env, pu); break; }
+        default: break;
+      }
+      if (act.t >= act.dur && !act.loop) this.action = null;
+    }
+    if (M.fullW > 0) for (let i = 0; i < wts.length; i++) wts[i] *= 1 - M.fullW;
+    if (anyProc) this.rig.apply(p, wts);
+    if (!dead && !a.aim && a.pitch && !carried && mode !== 'sleep') this.lookPitch(-(a.pitch || 0) * 0.45 * (1 - M.fullW));
+    // ---- 3) koltuk: kalça koltuk noktasına (kök + 0.1 m), klibin oturma yüksekliğinden bağımsız
+    const m = this.ch.model;
+    if (mode === 'drive' || mode === 'seat') {
+      const b = M.bodyLocal(), sc = m.scale.y;
+      layLift = 0.1 - b.y * sc;
+      layZ = this.rig.restData.entries[0].wpos.z * sc - b.z * sc;
+    }
+    this.finishRoot(dt, a, mode, s, lay, layLift, layZ);
+    // ---- 4) ayak IK'sı (eğim/basamak): ayakta ve eğik kipte, yakındaki karakterlerde
+    if (this.footIK) {
+      const W = this.game.session ? this.game.session.world : this.game.world;
+      const cam = this.game.gfx && this.game.gfx.camera;
+      const near = cam ? this.root.position.distanceToSquared(cam.position) < 30 * 30 : true;
+      const want = W && W.physics && near && (mode === 'ground' || mode === 'crouch') && !dead && !a.carrying ? 1 - M.fullW : 0;
+      if (want > 0 || this.footIK.w > 0.01) {
+        const phys = W && W.physics;
+        this._groundFn = this._groundFn || ((x, z, y) => phys.groundHeight(x, z, y));
+        this.root.updateWorldMatrix(true, false);
+        this.footIK.solve(dt, this._groundFn, this.root.matrixWorld.elements[13], want);
+      }
+    }
+  }
+
+  /** Tutuş pozları (silah/yakın dövüş/el feneri), üst gövdeye maskeli */
+  holdPose(a, s, hk, holdSup, setMask) {
+    const pu = this.pu, tmp = this.tmp;
+    A.idle(pu, this.t);
+    if (hk === 'pistol' || hk === 'rifle' || hk === 'bow') {
+      const aimW = this.blend.aim;
+      if (hk === 'pistol') {
+        if (aimW > 0.02) { A.aim(pu, 'pistol', a.pitch || 0, a.recoil || 0); setMask('rarmSpine', aimW * holdSup, pu); }
+        if (aimW < 0.98) {
+          A.idle(tmp, this.t);
+          tmp.set('RightArm', (-18 - s * 3) * D, 0, 70 * D); tmp.set('RightForeArm', 0, 38 * D, 0); A.grip(tmp, 'Right', 1);
+          setMask('rarm', (1 - aimW) * holdSup, tmp);
+        }
+      } else if (hk === 'rifle') {
+        const pd = aimW > 0.5 ? (a.pitch || 0) : -0.55;
+        A.aim(pu, 'rifle', pd, a.recoil || 0);
+        const chestY = this.rig.restData.entries[4].wpos.y;
+        const tgt = _v.set(-0.07, chestY + 0.03 + Math.sin(pd) * 0.33, 0.42 * Math.cos(pd));
+        this.rig.setArmIK('Left', tgt, new THREE.Vector3(1, -1.2, -0.2));
+        setMask('armsSpine', Math.max(0.85, aimW) * holdSup, pu);
+      } else if (aimW > 0.02) { A.aim(pu, 'bow', a.pitch || 0, 0); setMask('armsSpine', aimW * holdSup, pu); }
+      else { A.idle(tmp, this.t); A.grip(tmp, 'Left', 1); setMask('larm', 0.6 * holdSup, tmp); }
+    } else if (hk === 'melee1' || hk === 'melee2') {
+      pu.set('RightArm', (-14 - s * 2) * D, 0, 64 * D); pu.set('RightForeArm', 0, 42 * D, 0); A.grip(pu, 'Right', 1);
+      setMask('rarm', 0.9 * holdSup, pu);
+    } else if (hk === 'flashlight') {
+      pu.set('RightArm', (-55 + (a.pitch || 0) / D * -0.5) * D, -10 * D, 85 * D); pu.set('RightForeArm', 0, 10 * D, 0); A.grip(pu, 'Right', 1);
+      setMask('rarm', holdSup, pu);
+    } else {
+      A.grip(pu, 'Right', 0.85);
+      setMask('rhand', 1, pu);
+    }
+  }
+
+  /** Kök: yön, dönüşte yatma, yatma/koltuk ofsetleri, el feneri, ikincil hareket */
+  finishRoot(dt, a, mode, s, lay, layLift, layZ) {
+    if (a.yaw !== undefined) this.visYaw = dampAngle(this.visYaw, a.yaw, a.instantYaw ? 40 : 14, dt);
+    const yawRate = dt > 0 ? wrapAngle(this.visYaw - this.lastYaw) / dt : 0;
+    this.yawRate = damp(this.yawRate || 0, yawRate, 10, dt);
+    this.lastYaw = this.visYaw;
+    this.root.rotation.y = this.visYaw;
+    const leanT = mode === 'ground' && s > 2 ? clamp(-yawRate * s * 0.012, -0.22, 0.22) : 0;
+    this.lean = damp(this.lean, leanT, 6, dt);
+    const m = this.ch.model;
+    m.rotation.z = this.lean;
+    m.rotation.x = damp(m.rotation.x, lay, 8, dt);
+    // ayrı sönümlü değerler: ayak IK'sı sonradan kalça ofseti ekler, okuma-yazma birbirini bozmasın
+    this.liftY = damp(this.liftY ?? 0, layLift, 10, dt);
+    this.liftZ = damp(this.liftZ ?? 0, layZ, 10, dt);
+    m.position.y = this.liftY;
+    m.position.z = this.liftZ;
+    if (this.flashlight) {
+      const pd = a.pitch || 0;
+      this.flashlight.target.position.set(0, 1.4 - Math.sin(pd) * 8, Math.cos(pd) * 8);
+    }
+    this.secondary(dt, s, yawRate, mode);
+  }
+
+  /**
+   * İkincil hareket: sırt çantası, alet kemeri ve göğüs aksesuarları yaylı sönümlü sallanır.
+   * Girdi: yerel ivme (hız değişimi), dönüş hızı ve adım fazının dikey yaylanması.
+   */
+  secondary(dt, s, yawRate, mode) {
+    if (dt <= 0) return;
+    const sp = this.spring || (this.spring = { v: s, x: 0, vx: 0, z: 0, vz: 0, y: 0, vy: 0 });
+    const acc = clamp((s - sp.v) / dt, -30, 30);
+    sp.v = s;
+    const step = mode === 'ground' || mode === 'crouch' ? Math.abs(Math.sin(this.cycle * Math.PI * 2)) * Math.min(1, s / 4) : 0;
+    // hedef: hızlanırken geriye, dönerken dışa doğru; adımda hafif zıplama
+    const tx = clamp(-acc * 0.012 - s * 0.012, -0.35, 0.25), tz = clamp(-yawRate * s * 0.02, -0.3, 0.3), ty = step * 0.02;
+    const k = 60, c = 7.5;
+    sp.vx += ((tx - sp.x) * k - sp.vx * c) * dt; sp.x += sp.vx * dt;
+    sp.vz += ((tz - sp.z) * k - sp.vz * c) * dt; sp.z += sp.vz * dt;
+    sp.vy += ((ty - sp.y) * k * 1.6 - sp.vy * c) * dt; sp.y += sp.vy * dt;
+    const A = this.ch.anchors;
+    for (const [anchor, gain] of [[A.back, 1], [A.hips, 0.45], [A.chest, 0.6]]) {
+      if (!anchor) continue;
+      for (const g of anchor.children) {
+        if (!g.userData.acc) continue;
+        if (!g.userData.base) g.userData.base = { y: g.position.y, rx: g.rotation.x, rz: g.rotation.z };
+        const b = g.userData.base;
+        g.rotation.x = b.rx + sp.x * gain;
+        g.rotation.z = b.rz + sp.z * gain;
+        g.position.y = b.y + sp.y * gain * 0.5;
+      }
     }
   }
 

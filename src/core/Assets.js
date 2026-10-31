@@ -4,10 +4,13 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+import { unpackBytes, packToClips } from '../entities/AnimPack.js';
 
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items'];
-// iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): insan tabanları ve hayvanlar
-const RIGGED = ['male', 'female', 'wolf', 'deer', 'stag', 'husky', 'fox', 'shiba'];
+// iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
+const RIGGED = ['men', 'women', 'wolf', 'deer', 'stag', 'husky', 'fox', 'shiba'];
+// insan tabanlarına aktarılmış animasyon kütüphanesi (Universal Animation Library 1+2, tools/retarget-ual.mjs)
+const ANIM_PACKS = ['men', 'women'];
 const SOUNDS = ['ambience', 'break', 'engine', 'engine-motorcycle', 'fall', 'impact', 'jump_a', 'land', 'pickup', 'placement-a', 'placement-b', 'removal-a', 'rotate', 'skid', 'toggle', 'walking', 'weapon_change', 'step_hard', 'hurt', 'whoosh', 'downed', 'revive'];
 
 export class Assets {
@@ -19,12 +22,13 @@ export class Assets {
     this.partsCache = new Map();
     this.bboxCache = new Map();
     this.rigged = {}; // ad → {scene, animations}
+    this.anims = {}; // taban adı → {klip adı → THREE.AnimationClip} (aktarılmış kütüphane)
     this.loader = new GLTFLoader();
     this.loader.setMeshoptDecoder(MeshoptDecoder);
   }
 
   async loadAll(onProgress = () => {}) {
-    const total = KITS.length + SOUNDS.length + RIGGED.length;
+    const total = KITS.length + SOUNDS.length + RIGGED.length + ANIM_PACKS.length;
     let done = 0;
     const tick = (label) => { done++; onProgress(done / total, label); };
     const kitJobs = KITS.map(async (k) => {
@@ -57,7 +61,15 @@ export class Assets {
       this.rigged[r] = gltf;
       tick(`Karakter: ${r}`);
     });
-    await Promise.all([...kitJobs, ...soundJobs, ...rigJobs]);
+    const animJobs = ANIM_PACKS.map(async (b) => {
+      try {
+        const r = await fetch(`${this.base}assets/models/rigged/anims_${b}.kan`);
+        if (!r.ok) throw new Error(r.status);
+        this.anims[b] = packToClips(await unpackBytes(await r.arrayBuffer()), THREE);
+      } catch (e) { console.warn('Animasyon paketi yüklenemedi', b, e); }
+      tick(`Animasyonlar: ${b}`);
+    });
+    await Promise.all([...kitJobs, ...soundJobs, ...rigJobs, ...animJobs]);
   }
 
   has(kit, name) { return !!this.index[`${kit}/${name}`]; }

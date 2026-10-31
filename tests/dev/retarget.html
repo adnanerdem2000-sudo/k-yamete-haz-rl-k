@@ -1,0 +1,150 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Animasyon aktarımı (UAL → CharacterArmature)</title>
+<script type="importmap">{"imports":{"three":"../../vendor/three/three.module.js","three/addons/":"../../vendor/three/addons/"}}</script>
+</head><body>
+<script type="module">
+// Quaternius Universal Animation Library (UE tipi iskelet) kliplerini Quaternius Ultimate Modular
+// karakter iskeletine (CharacterArmature) aktarır. Yöntem: dünya uzayında dinlenme pozuna göre göreli dönüş
+// (iki iskeletin dinlenme pozu da T-poz: sol +X, yüz +Z). Kalça çevirisi Body'ye (bacaklar Body'ye bağlı)
+// boy oranıyla ölçeklenir; IK ayak kemikleri (Root'a bağlı) incik ucundaki bilek noktasına iliştirilir.
+// tools/retarget-ual.mjs bu sayfayı Playwright ile çağırır: window.retarget(tgt, src, [klipler]) → izler.
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
+
+const L = new GLTFLoader(); L.setMeshoptDecoder(MeshoptDecoder);
+const cache = {};
+// ilk yüklemede bağlama pozunu sakla: sahneler gruplar arasında paylaşılır ve son klibin pozunda kalır,
+// her setup() öncesi bu poza dönülmeli (yoksa "dinlenme" önceki klibin son karesi olur)
+const load = async (url) => {
+  if (!cache[url]) {
+    const g = await L.loadAsync(url);
+    g.bind = [];
+    g.scene.traverse((o) => g.bind.push([o, o.quaternion.clone(), o.position.clone(), o.scale.clone()]));
+    cache[url] = g;
+  }
+  const g = cache[url];
+  for (const [o, q, p, s] of g.bind) { o.quaternion.copy(q); o.position.copy(p); o.scale.copy(s); }
+  g.scene.updateMatrixWorld(true);
+  return g;
+};
+const bonesOf = (s) => { const b = {}; s.traverse((o) => { if (o.isBone) b[o.name] = o; }); return b; };
+
+const MAP = { pelvis: 'Hips', spine_01: 'Abdomen', spine_02: 'Torso', spine_03: 'Chest', neck_01: 'Neck', Head: 'Head' };
+for (const [s, S] of [['l', 'L'], ['r', 'R']]) {
+  Object.assign(MAP, { ['clavicle_' + s]: 'Shoulder' + S, ['upperarm_' + s]: 'UpperArm' + S, ['lowerarm_' + s]: 'LowerArm' + S, ['hand_' + s]: 'Wrist' + S, ['thigh_' + s]: 'UpperLeg' + S, ['calf_' + s]: 'LowerLeg' + S });
+  for (const [f, F] of [['index', 'Index'], ['middle', 'Middle'], ['ring', 'Ring'], ['pinky', 'Pinky']]) for (const k of [1, 2, 3]) MAP[`${f}_0${k}_${s}`] = F + k + S;
+  for (const k of [1, 2, 3]) MAP[`thumb_0${k}_${s}`] = 'Thumb' + k + S;
+}
+const FOOT = { foot_l: 'FootL', foot_r: 'FootR' };
+const SHIN = { FootL: 'LowerLegL', FootR: 'LowerLegR' };
+
+const _q = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _v = new THREE.Vector3(), _m = new THREE.Matrix4(), _s = new THREE.Vector3();
+const worldQ = (o, out = new THREE.Quaternion()) => { o.matrixWorld.decompose(_v, out, _s); return out; };
+const worldP = (o, out = new THREE.Vector3()) => out.setFromMatrixPosition(o.matrixWorld);
+
+async function setup(tgtName, srcName) {
+  const tg = await load(`../../assets/models/rigged/${tgtName}.glb`);
+  const sg = await load(`_preview/${srcName}.glb`);
+  const T = { scene: tg.scene, b: bonesOf(tg.scene) }, S = { scene: sg.scene, b: bonesOf(sg.scene), clips: sg.animations };
+  for (const X of [T, S]) { X.scene.updateMatrixWorld(true); X.rest = {}; for (const [n, b] of Object.entries(X.b)) X.rest[n] = { q: b.quaternion.clone(), p: b.position.clone(), W: worldQ(b), P: worldP(b) }; }
+  // hedef kemikleri derinlik sırasında (ebeveyn önce)
+  const depth = (o) => { let d = 0; while (o.parent) { d++; o = o.parent; } return d; };
+  T.order = Object.values(T.b).sort((a, b) => depth(a) - depth(b));
+  T.mapped = new Map(); // hedef adı → kaynak adı
+  for (const [s, t] of Object.entries(MAP)) if (S.b[s] && T.b[t]) T.mapped.set(t, s);
+  // boy oranı ve ayak/bilek ilişkisi (T-poz)
+  T.scale = T.rest.Hips.P.y / S.rest.pelvis.P.y;
+  T.rootInvQ = T.rest.Root ? T.rest.Root.W.clone().invert() : new THREE.Quaternion();
+  T.rootInvM = new THREE.Matrix4().copy(T.b.Root.matrixWorld).invert();
+  T.feet = {};
+  for (const f of ['FootL', 'FootR']) {
+    const ll = T.b[SHIN[f]], ft = T.b[f];
+    const head = worldP(ft);
+    const ankle = head.clone().add(new THREE.Vector3(0, 0.085, 0.025));
+    // ayak ucu (taban önü, yere yakın): yürüyüş hızı ölçümü için ayak kemiği uzayında
+    const toe = head.clone().add(new THREE.Vector3(0, 0.02 - head.y, 0.13));
+    T.feet[f] = { aLocal: ankle.clone().applyMatrix4(new THREE.Matrix4().copy(ll.matrixWorld).invert()), headMinusAnkle: head.clone().sub(ankle), RT: worldQ(ft), RTinv: worldQ(ft).invert(), toeLocal: toe.applyMatrix4(new THREE.Matrix4().copy(ft.matrixWorld).invert()) };
+  }
+  S.mixer = new THREE.AnimationMixer(S.scene);
+  return { T, S };
+}
+
+/** Bir klibi aktar: { name, duration, fps, tracks: { 'Bone.quaternion': [...], 'Body.position': [...] } } */
+function retargetClip(T, S, clip, fps = 30) {
+  S.mixer.stopAllAction();
+  const act = S.mixer.clipAction(clip);
+  // tek seferlik: son karede başa sarmasın (LoopRepeat süre sonunda 0'a döner); döngülerde son kare = ilk kare zaten
+  act.setLoop(THREE.LoopOnce, 1); act.clampWhenFinished = true;
+  act.reset(); act.play();
+  const n = Math.max(2, Math.round(clip.duration * fps) + 1);
+  const outQ = {}, outP = {};
+  const outBones = [...T.mapped.keys(), 'FootL', 'FootR'];
+  for (const b of outBones) outQ[b] = new Float32Array(n * 4);
+  for (const b of ['Body', 'FootL', 'FootR']) outP[b] = new Float32Array(n * 3);
+  // çözümleme için model uzayı konumları (kalça, ayak tabanları): kök hareketi ve yürüyüş hızı ölçümü
+  const probe = { Body: new Float32Array(n * 3), FootL: new Float32Array(n * 3), FootR: new Float32Array(n * 3), ToeL: new Float32Array(n * 3), ToeR: new Float32Array(n * 3) };
+  const desired = new Map();
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(clip.duration, i / fps);
+    S.mixer.setTime(t);
+    S.scene.updateMatrixWorld(true);
+    // hedef: dinlenmeye dön
+    for (const [nme, b] of Object.entries(T.b)) { b.quaternion.copy(T.rest[nme].q); b.position.copy(T.rest[nme].p); }
+    // kalça çevirisi → Body (bacaklar ve kalça Body'ye bağlı)
+    const dp = worldP(S.b.pelvis, new THREE.Vector3()).sub(S.rest.pelvis.P).multiplyScalar(T.scale).applyQuaternion(T.rootInvQ);
+    T.b.Body.position.copy(T.rest.Body.p).add(dp);
+    // istenen dünya dönüşleri: Δ(kaynak) · T-poz(hedef)
+    desired.clear();
+    for (const [tn, sn] of T.mapped) desired.set(tn, worldQ(S.b[sn]).multiply(S.rest[sn].W.clone().invert()).multiply(T.rest[tn].W));
+    // ebeveyn önce: yerel = ebeveynDünya⁻¹ · istenen
+    T.scene.updateMatrixWorld(true);
+    for (const b of T.order) {
+      const want = desired.get(b.name);
+      if (!want) { b.updateMatrixWorld(true); continue; }
+      const pw = worldQ(b.parent, _q2);
+      b.quaternion.copy(pw.invert().multiply(want));
+      b.updateMatrixWorld(true);
+    }
+    // IK ayakları: bilek incik ucunda, dönüş kaynağın ayağından
+    for (const [sf, tf] of Object.entries(FOOT)) {
+      const F = T.feet[tf], ll = T.b[SHIN[tf]];
+      const ankle = F.aLocal.clone().applyMatrix4(ll.matrixWorld);
+      const Rf = worldQ(S.b[sf]).multiply(S.rest[sf].W.clone().invert()).multiply(F.RT);
+      const head = ankle.clone().add(F.headMinusAnkle.clone().applyQuaternion(Rf.clone().multiply(F.RTinv)));
+      const ft = T.b[tf];
+      ft.position.copy(head.applyMatrix4(T.rootInvM));
+      ft.quaternion.copy(T.rootInvQ.clone().multiply(Rf));
+    }
+    T.scene.updateMatrixWorld(true);
+    for (const b of ['Body', 'FootL', 'FootR']) { const p = worldP(T.b[b], _v); probe[b].set([p.x, p.y, p.z], i * 3); }
+    for (const f of ['L', 'R']) { const p = T.feet['Foot' + f].toeLocal.clone().applyMatrix4(T.b['Foot' + f].matrixWorld); probe['Toe' + f].set([p.x, p.y, p.z], i * 3); }
+    for (const b of outBones) { const q = T.b[b].quaternion; outQ[b].set([q.x, q.y, q.z, q.w], i * 4); }
+    for (const b of ['Body', 'FootL', 'FootR']) { const p = T.b[b].position; outP[b].set([p.x, p.y, p.z], i * 3); }
+  }
+  // dörtlü işaret sürekliliği (enterpolasyon kısa yoldan gitsin)
+  for (const arr of Object.values(outQ)) for (let i = 4; i < arr.length; i += 4) {
+    if (arr[i] * arr[i - 4] + arr[i + 1] * arr[i - 3] + arr[i + 2] * arr[i - 2] + arr[i + 3] * arr[i - 1] < 0) for (let k = 0; k < 4; k++) arr[i + k] = -arr[i + k];
+  }
+  const round = (a, d = 5) => Array.from(a, (x) => Math.round(x * 10 ** d) / 10 ** d);
+  const tracks = {};
+  for (const [b, a] of Object.entries(outQ)) tracks[b + '.quaternion'] = round(a);
+  for (const [b, a] of Object.entries(outP)) tracks[b + '.position'] = round(a);
+  const probeOut = {};
+  for (const [b, a] of Object.entries(probe)) probeOut[b] = round(a, 4);
+  return { name: clip.name, duration: clip.duration, fps, frames: n, tracks, probe: probeOut };
+}
+
+window.retarget = async (tgtName, srcName, names) => {
+  const { T, S } = await setup(tgtName, srcName);
+  const out = [];
+  for (const nm of names) {
+    const clip = S.clips.find((c) => c.name === nm);
+    if (!clip) { out.push({ name: nm, missing: true }); continue; }
+    out.push(retargetClip(T, S, clip));
+  }
+  return out;
+};
+window.listClips = async (srcName) => (await load(`_preview/${srcName}.glb`)).animations.map((a) => [a.name, Math.round(a.duration * 100) / 100]);
+window.__ready = true;
+</script></body></html>

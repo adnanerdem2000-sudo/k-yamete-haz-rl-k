@@ -3,7 +3,7 @@
 import { h, clear, portrait, bar, button, banner } from './dom.js';
 import { Settings, DEFAULT_BINDINGS, ACTION_LABELS } from '../core/Settings.js';
 import { keyLabel } from '../core/Input.js';
-import { CHARACTERS, CHARACTER_IDS, OPTIONS, PALETTES, COLLECTIONS, BASE_FACES } from '../entities/CharacterFactory.js';
+import { CHARACTERS, CHARACTER_IDS, OPTIONS, PALETTES, COLLECTIONS, BASE_FACES, OUTFIT_SETS, OUTFIT_NAMES } from '../entities/CharacterFactory.js';
 import { SaveSystem, SLOT_NAMES } from '../systems/SaveSystem.js';
 import { MAX_PLAYERS } from '../net/Net.js';
 import { DIFFICULTY } from '../Session.js';
@@ -272,7 +272,9 @@ export class Menus {
   lookFor(charId) {
     const c = CHARACTERS[charId] || CHARACTERS.mert;
     const ov = (Settings.get('player.appearance') || {})[charId] || {};
-    return { ...c.look, ...ov, top: { ...c.look.top, ...(ov.top || {}) }, pants: { ...c.look.pants, ...(ov.pants || {}) } };
+    const look = { ...c.look, ...ov, top: { ...c.look.top, ...(ov.top || {}) }, pants: { ...c.look.pants, ...(ov.pants || {}) } };
+    if (c.look.outfit || ov.outfit) look.outfit = { ...(c.look.outfit || {}), ...(ov.outfit || {}) };
+    return look;
   }
 
   saveLook(charId, look) {
@@ -283,6 +285,7 @@ export class Menus {
   }
 
   openCustomize() {
+    const gender = (look) => (/female/.test(look.base || '') ? 'women' : 'men');
     this.custChar = this.custChar || this.profile().charId;
     this.custTab = this.custTab || 'collections';
     const render = () => {
@@ -300,13 +303,30 @@ export class Menus {
           button('Varsayılana Dön', () => { const all = { ...(Settings.get('player.appearance') || {}) }; delete all[id]; Settings.set('player.appearance', all); if (this.game.menu) this.game.menu.showcase(this.lookFor(id)); render(); }, 'small'));
       } else if (this.custTab === 'face') {
         body = h('div.cust-body',
-          sel('Beden', BASE_FACES, /female/.test(look.base || '') ? 'female' : 'male', (v) => set({ base: v })),
+          sel('Beden', BASE_FACES, /female/.test(look.base || '') ? 'female' : 'male', (v) => {
+            // modüler kıyafet setleri cinsiyete göre farklıdır: yeni bedenin varsayılan setine geç
+            const g = /female/.test(v) ? 'women' : 'men';
+            set(look.outfit ? { base: v, outfit: { head: OUTFIT_SETS[g].head[0], body: OUTFIT_SETS[g].body[0], legs: OUTFIT_SETS[g].body[0], feet: OUTFIT_SETS[g].body[0] } } : { base: v });
+          }),
           h('div.opt-label', 'Ten rengi'), swatches(PALETTES.skin, look.skin, (v) => set({ skin: v })),
-          sel('Saç modeli', OPTIONS.hairStyle, look.hairStyle, (v) => set({ hairStyle: v })),
+          look.outfit
+            ? sel('Kafa / saç', Object.fromEntries(OUTFIT_SETS[gender(look)].head.map((k) => [k, OUTFIT_NAMES[k] || k])), look.outfit.head, (v) => set({ outfit: { ...look.outfit, head: v } }))
+            : sel('Saç modeli', OPTIONS.hairStyle, look.hairStyle, (v) => set({ hairStyle: v })),
           h('div.opt-label', 'Saç rengi'), swatches(PALETTES.hair, look.hairColor, (v) => set({ hairColor: v })),
           sel('Sakal', OPTIONS.beard, look.beard || 'none', (v) => set({ beard: v })),
           sel('Gözlük', OPTIONS.glasses, look.glasses || 'none', (v) => set({ glasses: v })),
           h('div.opt-row', h('span.opt-label', 'Kir / yıpranma'), h('input', { type: 'range', min: 0, max: 1, step: 0.05, value: look.dirt || 0, on: { change: (e) => { set({ dirt: parseFloat(e.target.value) }); render(); } } })));
+      } else if (this.custTab === 'clothes' && look.outfit) {
+        const G = OUTFIT_SETS[gender(look)];
+        const names = Object.fromEntries(G.body.map((k) => [k, OUTFIT_NAMES[k] || k]));
+        const orig = (label, fn) => button(label, () => { fn(); render(); }, 'small ghost');
+        body = h('div.cust-body',
+          sel('Üst', names, look.outfit.body, (v) => set({ outfit: { ...look.outfit, body: v } })),
+          h('div.opt-label', 'Üst rengi'), swatches(PALETTES.cloth, look.top.color, (v) => setNested('top', { color: v })), orig('Özgün renk', () => setNested('top', { color: null })),
+          sel('Alt', names, look.outfit.legs || look.outfit.body, (v) => set({ outfit: { ...look.outfit, legs: v } })),
+          h('div.opt-label', 'Alt rengi'), swatches(PALETTES.cloth, look.pants.color, (v) => setNested('pants', { color: v })), orig('Özgün renk', () => setNested('pants', { color: null })),
+          sel('Ayakkabı', names, look.outfit.feet || look.outfit.body, (v) => set({ outfit: { ...look.outfit, feet: v } })),
+          h('div.opt-label', 'Ayakkabı rengi'), swatches(PALETTES.cloth, look.shoes, (v) => set({ shoes: v })), orig('Özgün renk', () => set({ shoes: null })));
       } else if (this.custTab === 'clothes') {
         body = h('div.cust-body',
           sel('Üst', OPTIONS.topStyle, look.top.style, (v) => setNested('top', { style: v })),
@@ -435,9 +455,10 @@ export class Menus {
         h('ul',
           h('li', 'Kenney (kenney.nl) — karakterler, araçlar, evler, eşyalar, yiyecekler, ağaçlar ve ses efektleri (pmndrs market & Kenney Starter Kits) — CC0 1.0'),
           h('li', 'KayKit / Kay Lousberg — Furniture, Restaurant, Halloween, Prototype, City Builder, Dungeon Remastered, Character Pack Adventures — CC0 1.0'),
+          h('li', 'Quaternius (quaternius.com) — Ultimate Modular Men/Women karakterleri, Universal Animation Library 1+2 hareket kütüphanesi (154 klip), iskeletli hayvanlar — CC0 1.0'),
           h('li', 'Creative Trio — eski karavan, kütüphane, rüzgâr türbini · Sara Vieira — bank · Reuben Sotomayor & Alejandro León — köpek modeli — CC0 1.0 (pmndrs market)'),
           h('li', 'Yazı tipleri: Luckiest Guy (Astigmatic) — Apache 2.0 · Rubik, Rubik Dirt — SIL Open Font License 1.1'),
-          h('li', 'three.js — MIT Lisansı · PeerJS — MIT Lisansı'),
+          h('li', 'three.js — MIT Lisansı · PeerJS — MIT Lisansı · Rapier fizik motoru — Apache 2.0'),
           h('li', 'Müzik ve çoğu ses efekti Web Audio ile prosedürel olarak üretilir.')),
         h('p.muted', 'Tüm üçüncü taraf lisansları CREDITS.md dosyasında listelenmiştir.')));
     this.show(el, 'credits');

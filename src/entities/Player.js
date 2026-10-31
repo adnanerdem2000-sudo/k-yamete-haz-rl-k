@@ -3,7 +3,7 @@
 // basamak çıkma, eğimde kayma, zemine yapışma, tavana çarpma, düşme hasarı. Çizim enterpolasyonludur.
 import * as THREE from 'three';
 import { Avatar } from './Avatar.js';
-import { clamp, damp, dampAngle, wrapAngle } from '../core/util.js';
+import { clamp, damp, dampAngle, wrapAngle, smoothstep } from '../core/util.js';
 import { Settings } from '../core/Settings.js';
 
 const GRAV = 21;
@@ -124,10 +124,11 @@ export class Player {
     let target = 0;
     const base = 4.3 * (cs.speed || 1);
     if (moving) {
-      if (this.mode === 'downed') target = 0.55;
-      else if (this.mode === 'prone') target = 1.0;
-      else if (this.mode === 'crouch') target = 2.0 * (cs.speed || 1);
-      else if (walkSlow) target = 1.9;
+      // gerçekçi hızlar (klip yürüyüş hızlarıyla uyumlu): yaralı sürünme 0.45, sürünme 0.65, eğik 1.7, yürüme 1.5 m/s
+      if (this.mode === 'downed') target = 0.45;
+      else if (this.mode === 'prone') target = 0.65;
+      else if (this.mode === 'crouch') target = 1.7 * (cs.speed || 1);
+      else if (walkSlow) target = 1.5;
       else if (wantSprint && st.stamina > 1) target = 6.7 * (cs.speed || 1);
       else target = this.aiming ? 2.4 : base;
       target *= sm;
@@ -288,6 +289,10 @@ export class Player {
   }
 
   /** Alçak engel üzerinden atlama (barikat, çit, kırık pencere) */
+  /**
+   * Engel aşma: alçak engelin (0.45–1.45 m) üzerinden atlama; arkası doluysa ve üstü basılabilirse üstüne
+   * çıkma; 1.45–2.35 m basılabilir yüzeylere (kasa, konteyner, duvar üstü) tutunup tırmanma.
+   */
   tryVault() {
     const phys = this.session.world.physics;
     const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
@@ -295,23 +300,53 @@ export class Player {
     const c = phys.overlapsBox(px - 0.2, pz - 0.2, px + 0.2, pz + 0.2, this.pos.y + 0.3, this.pos.y + 1.2);
     if (!c) return false;
     const h = c.maxY - this.pos.y;
-    if (h < 0.45 || h > 1.45) return false;
+    if (h > 1.45) return h <= 2.35 && this.tryClimbOnto(c, fx, fz, h);
+    if (h < 0.45) return false;
     const tx = this.pos.x + fx * 1.9, tz = this.pos.z + fz * 1.9;
-    if (phys.overlapsBox(tx - 0.3, tz - 0.3, tx + 0.3, tz + 0.3, this.pos.y + 0.2, this.pos.y + 1.7)) return false;
-    this.vault = { t: 0, from: this.pos.clone(), to: new THREE.Vector3(tx, phys.groundHeight(tx, tz, this.pos.y + 0.6), tz), h: c.maxY + 0.35 };
-    this.lockMove = 0.45;
-    this.avatar.play('vault', 0.45);
+    if (phys.overlapsBox(tx - 0.3, tz - 0.3, tx + 0.3, tz + 0.3, this.pos.y + 0.2, this.pos.y + 1.7)) return h >= 0.8 && this.tryClimbOnto(c, fx, fz, h);
+    this.vault = { t: 0, dur: 0.58, from: this.pos.clone(), to: new THREE.Vector3(tx, phys.groundHeight(tx, tz, this.pos.y + 0.6), tz), h: c.maxY + 0.35 };
+    this.lockMove = 0.58;
+    this.avatar.play('vault', 0.58);
     this.session.audio && this.session.audio.play('swing', { at: this.pos, vol: 0.4 });
     return true;
+  }
+
+  /** Basılabilir üst yüzeye tırman: üstte duracak yer ve baş boşluğu olmalı */
+  tryClimbOnto(c, fx, fz, h) {
+    if (!c.walkable || this.carrying || (this.stats && this.stats.stamina < 10)) return false;
+    const phys = this.session.world.physics;
+    const top = c.maxY;
+    for (const d of [1.05, 1.35, 1.7]) {
+      const x = this.pos.x + fx * d, z = this.pos.z + fz * d;
+      if (Math.abs(phys.groundHeight(x, z, top + 0.1) - top) > 0.12) continue;
+      if (phys.overlapsBox(x - 0.28, z - 0.28, x + 0.28, z + 0.28, top + 0.05, top + 1.75)) continue;
+      const tall = h > 1.5;
+      const dur = tall ? 1.15 : 0.8;
+      this.vault = { t: 0, dur, climb: true, from: this.pos.clone(), to: new THREE.Vector3(x, top, z), h: top };
+      this.lockMove = dur;
+      if (this.stats) this.stats.stamina -= tall ? 9 : 5;
+      this.avatar.play(tall ? 'climbUp2' : 'climbUp', dur);
+      this.session.audio && this.session.audio.play('swing', { at: this.pos, vol: 0.35, rate: 0.8 });
+      return true;
+    }
+    return false;
   }
 
   stepVault(dt) {
     const v = this.vault;
     if (!v) return;
-    v.t += dt / 0.45;
+    v.t += dt / (v.dur || 0.45);
     const k = Math.min(1, v.t);
-    this.pos.lerpVectors(v.from, v.to, k);
-    this.pos.y = THREE.MathUtils.lerp(v.from.y, v.to.y, k) + Math.sin(k * Math.PI) * Math.max(0.3, v.h - v.from.y);
+    if (v.climb) {
+      // tırmanma: önce yüksel (tutunup çekin), sonra üstte öne geç
+      const ky = smoothstep(0.05, 0.62, k), kx = smoothstep(0.45, 1, k);
+      this.pos.x = THREE.MathUtils.lerp(v.from.x, v.to.x, kx);
+      this.pos.z = THREE.MathUtils.lerp(v.from.z, v.to.z, kx);
+      this.pos.y = THREE.MathUtils.lerp(v.from.y, v.to.y, ky);
+    } else {
+      this.pos.lerpVectors(v.from, v.to, k);
+      this.pos.y = THREE.MathUtils.lerp(v.from.y, v.to.y, k) + Math.sin(k * Math.PI) * Math.max(0.3, v.h - v.from.y);
+    }
     this.root.position.copy(this.pos);
     this.syncBody();
     if (k >= 1) { this.vault = null; this.vel.set(0, 0, 0); this.fallStartY = this.pos.y; }
@@ -329,8 +364,9 @@ export class Player {
   updateLadder(dt, input) {
     const l = this.ladder;
     const dir = input.isDown('forward') ? 1 : input.isDown('back') ? -1 : 0;
-    this.pos.y += dir * 2.2 * dt;
-    this.speed = Math.abs(dir) * 1.5;
+    this.climbV = dir * 1.6;
+    this.pos.y += this.climbV * dt;
+    this.speed = Math.abs(dir) * 1.2;
     this.yaw = l.yaw ?? this.yaw;
     if (this.pos.y >= l.top - 0.05) {
       this.pos.y = l.top;
@@ -347,28 +383,59 @@ export class Player {
   }
 
   /** Üçüncü şahıs kamera: omuz üstü, duvar çarpışması, iniş titremesi */
+  /**
+   * Üçüncü şahıs kamera: yumuşak takip (yatayda hızlı, dikeyde yavaş: basamak/merdiven sarsıntısı süzülür),
+   * duruşa göre yumuşak pivot yüksekliği ve omuz kayması, 5 ışınlı engel algılama (kenarlardan duvar içine
+   * girmez; yaklaşırken hızlı, açılırken yavaş), yürüyüş adımına bağlı hafif sallanma, sarsıntı ve geri tepme.
+   */
   updateCamera(dt) {
     const S = this.session;
     const cam = this.game.gfx.camera;
     const indoor = !!this.inside;
     const driving = this.mode === 'drive' || this.mode === 'seat';
-    let dist = driving ? 8.5 : this.aiming ? 2.3 : indoor ? 3.4 : 4.4;
-    if (this.mode === 'prone') dist = 3.2;
+    let dist = driving ? 8.5 : this.aiming ? 2.3 : indoor ? 3.2 : 4.4;
+    if (this.mode === 'prone' || this.mode === 'downed') dist = 3.2;
     if (S.combat && S.combat.scoped && this.aiming) dist = 1.4;
-    if (this.sprinting) dist += 0.35;
-    this.camDist = damp(this.camDist, dist, 8, dt);
-    const shoulder = this.aiming ? 0.62 : driving ? 0 : 0.42;
+    if (this.sprinting) dist += 0.45;
+    this.camDist = damp(this.camDist, dist, 6, dt);
+    this.camShoulder = damp(this.camShoulder ?? 0.42, this.aiming ? 0.62 : driving ? 0 : indoor ? 0.34 : 0.42, 9, dt);
     this.camDip = damp(this.camDip, 0, 7, dt);
-    const pivotY = (driving ? 2.2 : this.mode === 'prone' || this.mode === 'downed' ? 0.7 : this.mode === 'crouch' ? 1.3 : 1.62) - this.camDip;
+    const pivotT = driving ? 2.2 : this.mode === 'prone' || this.mode === 'downed' ? 0.7 : this.mode === 'crouch' ? 1.25 : this.mode === 'swim' ? 1.0 : 1.62;
+    this.camPivotY = damp(this.camPivotY ?? pivotT, pivotT, driving ? 12 : 7, dt);
     const base = driving && this.vehicle ? this.vehicle.vis || this.vehicle.pos : this.pos;
+    // takip: araçta sıkı (hızda kadraj kaymasın), yürürken yatay hızlı / dikey yumuşak
+    const cb = this.camBase || (this.camBase = base.clone());
+    if (cb.distanceToSquared(base) > 36) cb.copy(base); // ışınlanma/araç değişimi
+    cb.x = damp(cb.x, base.x, driving ? 40 : 22, dt);
+    cb.z = damp(cb.z, base.z, driving ? 40 : 22, dt);
+    cb.y = damp(cb.y, base.y, driving ? 25 : 11, dt);
+    // adım sallanması: avatarın yürüyüş fazına bağlı (ayak basışında hafif çökme), koşuda belirgin, nişanda yok
+    let bobY = 0, bobX = 0;
+    if (!driving && !this.aiming && this.onGround && (this.mode === 'ground' || this.mode === 'crouch')) {
+      const ph = (this.avatar.cycle || 0) * Math.PI * 2;
+      const amp = Math.min(1, Math.max(0, (this.speed - 0.5) / 5)) * (this.sprinting ? 0.045 : 0.03);
+      bobY = -Math.abs(Math.sin(ph)) * amp + amp * 0.5;
+      bobX = Math.sin(ph) * amp * 0.45;
+    }
+    const pivotY = this.camPivotY - this.camDip + bobY;
     const yaw = this.camYaw, pitch = this.camPitch;
-    const pivot = _v.set(base.x, base.y + pivotY, base.z);
-    const sx = Math.cos(yaw) * shoulder, sz = -Math.sin(yaw) * shoulder;
-    pivot.x += sx; pivot.z += sz;
+    const shoulder = this.camShoulder + bobX;
+    const pivot = _v.set(cb.x, cb.y + pivotY, cb.z);
+    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
+    pivot.x += rx * shoulder; pivot.z += rz * shoulder;
     const dirX = Math.sin(yaw) * Math.cos(pitch), dirY = -Math.sin(pitch), dirZ = Math.cos(yaw) * Math.cos(pitch);
-    let d = this.camDist;
-    const hit = S.world.physics.raycast(pivot.x, pivot.y, pivot.z, dirX, dirY, dirZ, d + 0.3, (c) => c.blocksSight && c.kind !== 'tree' && !(c.owner && c.owner === this.inside && indoor && c.kind === 'prop'));
-    if (hit) d = Math.max(0.6, hit.dist - 0.3);
+    // engel: merkez + 4 köşe ışını (yakın düzlem genişliği kadar) → en kısa mesafe
+    const filt = this._camFilt || (this._camFilt = (c) => c.blocksSight && c.kind !== 'tree' && !(c.owner && c.owner === this.inside && this.inside && c.kind === 'prop'));
+    let free = this.camDist;
+    const phys = S.world.physics;
+    for (const [ox, oy] of [[0, 0], [0.22, 0.14], [-0.22, 0.14], [0.22, -0.14], [-0.22, -0.14]]) {
+      const hit = phys.raycast(pivot.x + rx * ox, pivot.y + oy, pivot.z + rz * ox, dirX, dirY, dirZ, this.camDist + 0.3, filt);
+      if (hit) free = Math.min(free, hit.dist - 0.28);
+    }
+    free = Math.max(0.55, free);
+    // engel yaklaşınca hemen içeri, açılınca yavaşça geri
+    this.camFree = this.camFree === undefined ? free : free < this.camFree ? damp(this.camFree, free, 30, dt) : damp(this.camFree, free, 3.5, dt);
+    const d = Math.min(this.camDist, this.camFree);
     const tx = pivot.x + dirX * d, ty = pivot.y + dirY * d, tz = pivot.z + dirZ * d;
     const gy = S.world.terrain.heightAt(tx, tz) + 0.4;
     this.camPos.set(tx, Math.max(ty, gy), tz);
@@ -393,14 +460,14 @@ export class Player {
   /** Ağ/animasyon durumu */
   animState() {
     const st = this.stats;
-    const mode = this.vault ? 'air' : this.roll ? 'ground' : this.mode === 'swim' ? 'swim' : this.mode;
+    const mode = this.vault ? (this.vault.climb ? 'ground' : 'air') : this.roll ? 'ground' : this.mode === 'swim' ? 'swim' : this.mode;
     // hareket yönü (gövdeye göre): strafe/geri animasyonları için
     const sp = Math.hypot(this.vel.x, this.vel.z);
     const moveAngle = sp > 0.3 ? wrapAngle(Math.atan2(this.vel.x, this.vel.z) - this.yaw) : 0;
     return {
-      mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
+      mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.mode === 'climb' ? this.climbV || 0 : this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
       aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying,
-      mood: st && st.morale < 30 ? 1 : 0, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
+      mood: st && st.morale < 30 ? 1 : 0, tired: !!(st && st.stamina < 15), act: this.avatar.lastAct || null, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
     };
   }
 

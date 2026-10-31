@@ -1,0 +1,32 @@
+Ultimate Modular Men and Ultimate Modular Women
+by Quaternius — https://quaternius.com
+
+License: CC0 1.0 Universal (public domain)
+https://creativecommons.org/publicdomain/zero/1.0/
+
+Packs:
+https://quaternius.com/packs/ultimatemodularcharacters.html
+https://quaternius.com/packs/ultimatemodularwomen.html
+
+men.glb and women.glb each contain one shared skeleton, the pack's 24
+animation clips, and the modular pieces (head, torso, legs, feet). The
+office combines head, torso and legs per agent seed and reuses those
+clips for every character of that gender. Feet follow the leg outfit.
+
+Geometry is compressed with meshoptimizer (EXT_meshopt_compression,
+KHR_mesh_quantization). There is no Draco payload. Sizes: men.glb about
+2.2 MB for every male part and all 24 clips; women.glb about 1.8 MB.
+A single assembled character reuses that library, so the unique mesh
+payload stays under 1 MB.
+
+The 24 clips are Death, Gun_Shoot, HitRecieve, HitRecieve_2, Idle,
+Idle_Gun, Idle_Gun_Pointing, Idle_Gun_Shoot, Idle_Neutral, Idle_Sword,
+Interact, Kick_Left, Kick_Right, Punch_Left, Punch_Right, Roll, Run,
+Run_Back, Run_Left, Run_Right, Run_Shoot, Sword_Slash, Walk and Wave.
+There is no sitting clip. Mixamo's seated animation was not imported:
+downloading it requires an Adobe account. The desk pose is a rotation
+on the shared skeleton (UpperLeg, LowerLeg, Foot, Abdomen).
+
+Clothing materials are tinted with the earthy office palette
+(lib/office-aparencia.ts). Skin, eyes, eyebrows and hair keep the
+colors modeled by Quaternius.

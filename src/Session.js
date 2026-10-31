@@ -513,7 +513,7 @@ export class Session {
     if (spoiled) use = { ...use, hunger: Math.round((use.hunger || 0) * 0.5), morale: -3, poison: Math.max(use.poison || 0, 0.6) };
     const dur = (use.time || 1) / (use.heal && this.localProfile.stats.heal ? this.localProfile.stats.heal : 1);
     this._using = true;
-    const anim = def.cat === 'med' ? 'search' : 'consume';
+    const anim = def.cat === 'med' ? 'bandage' : def.cat === 'drink' ? 'drink' : 'consume';
     this.local.avatar.play(anim, dur);
     this.audio.play(def.cat === 'drink' ? 'splash' : def.cat === 'med' ? 'click' : 'eat', { vol: 0.5 });
     this.ui.progress(def.cat === 'food' ? 'Yiyor…' : def.cat === 'drink' ? 'İçiyor…' : 'Tedavi ediliyor…', dur, () => {

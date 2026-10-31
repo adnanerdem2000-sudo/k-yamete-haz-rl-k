@@ -52,8 +52,9 @@ export class Combat {
     this.scoped = pl.aiming && def && (def.id === 'binoculars' || (def.gun && def.gun.scope));
     const cam = S.game.gfx.camera;
     const fov = Settings.get('graphics.fov');
-    const targetFov = this.scoped ? (def.id === 'binoculars' ? 18 : 28) : pl.aiming ? fov - 14 : fov;
-    if (Math.abs(cam.fov - targetFov) > 0.1) { cam.fov += (targetFov - cam.fov) * Math.min(1, dt * 10); cam.updateProjectionMatrix(); }
+    // depar: hız hissi için hafif geniş açı; nişan/dürbün daraltır
+    const targetFov = this.scoped ? (def.id === 'binoculars' ? 18 : 28) : pl.aiming ? fov - 14 : pl.sprinting ? fov + 7 : fov;
+    if (Math.abs(cam.fov - targetFov) > 0.1) { cam.fov += (targetFov - cam.fov) * Math.min(1, dt * (pl.sprinting || cam.fov > fov ? 5 : 10)); cam.updateProjectionMatrix(); }
     S.ui.setCrosshair(pl.aiming || (def && def.gun) ? (this.scoped ? 'scope' : 'aim') : canAct ? 'dot' : null, this.currentSpread(def));
     this.attacking = this.swing !== null;
     if (!canAct || S.interact.hold || pl.carrying) return;

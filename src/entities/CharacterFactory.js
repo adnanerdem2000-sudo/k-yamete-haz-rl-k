@@ -11,8 +11,33 @@ import { RNG, hash2 } from '../core/util.js';
 export const CHAR_SCALE = 1; // modeller metre ölçeğinde (~1.8 m)
 
 export const BASE_FACES = { male: 'Erkek', female: 'Kadın' };
-/** Eski kayıtlardaki taban adlarını yeni gövdelere çevir */
-export function baseOf(look) { return look && /female/.test(look.base || '') ? 'female' : 'male'; }
+/**
+ * Görünümün kullanacağı gövde tabanı: modüler tabanlar (men/women: Quaternius Ultimate Modular, gerçek kıyafet
+ * siluetleri). Eski kayıtlardaki kıyafetsiz görünümler varsayılan sete düşer (renkleri korunur).
+ */
+export function baseOf(look) {
+  // tüm insanlar modüler tabanda; kıyafeti olmayan eski görünümler varsayılan setle giyinir
+  return look && /female/.test(look.base || '') ? 'women' : 'men';
+}
+export const isFemaleBase = (name) => name === 'female' || name === 'women';
+
+/** Modüler kıyafet setleri (parça adı: <Set>_<Head|Body|Legs|Feet>) */
+export const OUTFIT_SETS = {
+  men: {
+    head: ['Casual_2', 'Casual_Hoodie', 'Suit', 'Beach', 'Adventurer', 'Punk', 'Farmer', 'Worker', 'Swat'],
+    body: ['Casual_2', 'Casual_Hoodie', 'Worker', 'Farmer', 'Punk', 'Suit', 'Beach'],
+  },
+  women: {
+    head: ['Casual', 'Suit', 'Soldier', 'Adventurer', 'Formal', 'Punk', 'SciFi', 'Worker'],
+    body: ['Casual', 'Worker', 'Punk', 'Suit', 'Formal'],
+  },
+};
+export const OUTFIT_NAMES = {
+  Casual_2: 'Gündelik', Casual_Hoodie: 'Kapüşonlu', Suit: 'Takım', Beach: 'Plaj', Adventurer: 'Gezgin', Punk: 'Punk', Farmer: 'Çiftçi',
+  Worker: 'İşçi', Swat: 'Özel Tim', Casual: 'Gündelik', Soldier: 'Asker', Formal: 'Resmî', SciFi: 'Kulaklıklı',
+};
+/** Başlığı/kaskı olan kafalar (prosedürel şapka eklenmez) */
+const HEADWEAR = new Set(['Worker', 'Farmer', 'Swat']);
 
 export const OPTIONS = {
   hairStyle: { short: 'Kısa', messy: 'Dağınık', spiky: 'Diken Diken', mohawk: 'Mohikan', ponytail: 'At Kuyruğu', bun: 'Topuz', long: 'Uzun', pigtails: 'İki Örgü', curly: 'Kıvırcık', bald: 'Kel' },
@@ -51,7 +76,7 @@ export const CHARACTERS = {
     perks: ['Araç tamirinde %40 daha hızlı', 'Mekanik üretimde ek malzeme tasarrufu', 'Araç parçalarını daha verimli kullanır'],
     start: [['repair_kit', 1], ['screwdriver', 1], ['hammer', 1], ['wrench', 1]],
     stats: { health: 100, stamina: 100, speed: 1.0, melee: 1.05, aim: 1.0, build: 1.1, repair: 1.4, heal: 1.0, stealth: 1.0, lockpick: 1.0, hunt: 1.0 },
-    look: { base: 'male', skin: '#e0a07a', hairStyle: 'short', hairColor: '#3b2314', beard: 'full', hat: 'cap', hatColor: '#6f7880', top: { style: 'jacket', color: '#2c4a74', color2: '#e0b13a' }, pants: { style: 'cargo', color: '#4a4036' }, shoes: '#5a3a22', backpack: 'toolbag', backpackColor: '#8a5a2b', glasses: 'none', gloves: 'none', accessory: 'toolbelt', build: 1.04, dirt: 0.35 },
+    look: { base: 'male', outfit: { head: 'Casual_2', body: 'Farmer', legs: 'Farmer', feet: 'Worker' }, skin: '#e0a07a', hairStyle: 'short', hairColor: '#3b2314', beard: 'none', hat: 'cap', hatColor: '#6f7880', top: { style: 'jacket', color: '#2c4a74', color2: '#e0b13a' }, pants: { style: 'overalls', color: '#2c4a74' }, shoes: '#5a3a22', backpack: 'toolbag', backpackColor: '#8a5a2b', glasses: 'none', gloves: 'none', accessory: 'toolbelt', build: 1.04, dirt: 0.35, persona: 'relaxed' },
   },
   zulal: {
     id: 'zulal', name: 'ZÜLAL', role: 'Kaşif', color: '#ff4fa3',
@@ -59,7 +84,7 @@ export const CHARACTERS = {
     perks: ['%12 daha hızlı hareket', 'Sessiz hareket (zombiler daha geç fark eder)', 'Kilit açmada çok başarılı'],
     start: [['flashlight', 1], ['lockpick', 3], ['energy_drink', 1]],
     stats: { health: 90, stamina: 115, speed: 1.12, melee: 0.95, aim: 1.0, build: 1.0, repair: 1.0, heal: 1.0, stealth: 1.5, lockpick: 2.0, hunt: 1.0 },
-    look: { base: 'female', skin: '#efb994', hairStyle: 'messy', hairColor: '#ff4fa3', beard: 'none', hat: 'none', top: { style: 'tank', color: '#6a3d7a', color2: '#2c2c2c' }, pants: { style: 'cargo', color: '#3a3a40' }, shoes: '#2c2c2c', backpack: 'small', backpackColor: '#3a3a40', glasses: 'none', gloves: 'none', accessory: 'necklace', build: 0.94, dirt: 0.25 },
+    look: { base: 'female', outfit: { head: 'Punk', body: 'Punk', legs: 'Punk', feet: 'Punk' }, skin: '#efb994', hairStyle: 'messy', hairColor: '#ff4fa3', beard: 'none', hat: 'none', top: { style: 'tank' }, pants: { style: 'cargo' }, backpack: 'small', backpackColor: '#3a3a40', glasses: 'none', gloves: 'none', accessory: 'necklace', build: 0.94, dirt: 0.25, persona: 'agile' },
   },
   deniz: {
     id: 'deniz', name: 'DENİZ', role: 'Savaşçı', color: '#e8432e',
@@ -67,7 +92,7 @@ export const CHARACTERS = {
     perks: ['Silah kullanımında isabet ve hasar bonusu', 'Daha yüksek başlangıç dayanıklılığı', 'Savunmada daha az hasar alır'],
     start: [['vest', 1], ['bat', 1], ['bandage', 2]],
     stats: { health: 125, stamina: 110, speed: 1.0, melee: 1.25, aim: 1.2, build: 1.0, repair: 1.0, heal: 1.0, stealth: 0.9, lockpick: 1.0, hunt: 1.0, armor: 0.85 },
-    look: { base: 'male', skin: '#efb994', hairStyle: 'messy', hairColor: '#1d1410', beard: 'none', hat: 'goggleband', hatColor: '#3a3a3a', top: { style: 'hoodie', color: '#b8952e', color2: '#7f8c8d' }, pants: { style: 'jeans', color: '#3d4f6a' }, shoes: '#ecf0f1', backpack: 'tactical', backpackColor: '#4a4a3a', glasses: 'none', gloves: 'tactical', accessory: 'none', build: 1.0, dirt: 0.3 },
+    look: { base: 'male', outfit: { head: 'Casual_Hoodie', body: 'Casual_Hoodie', legs: 'Casual_2', feet: 'Casual_2' }, skin: '#efb994', hairStyle: 'messy', hairColor: '#1d1410', beard: 'none', hat: 'goggleband', hatColor: '#3a3a3a', top: { style: 'hoodie', color: '#b8952e', color2: '#7f8c8d' }, pants: { style: 'jeans', color: '#3d4f6a' }, shoes: '#ecf0f1', backpack: 'tactical', backpackColor: '#4a4a3a', glasses: 'none', gloves: 'tactical', accessory: 'none', build: 1.05, dirt: 0.3, persona: 'confident' },
   },
   elif: {
     id: 'elif', name: 'ELİF', role: 'Avcı', color: '#27ae60',
@@ -75,7 +100,7 @@ export const CHARACTERS = {
     perks: ['Avlanmada ve balıkçılıkta avantaj', 'Hayvan izlerini ve kaynakları haritada görür', 'Uzak mesafe atışlarda isabet bonusu'],
     start: [['binoculars', 1], ['bow', 1], ['arrow', 12], ['knife', 1]],
     stats: { health: 100, stamina: 110, speed: 1.05, melee: 1.0, aim: 1.3, build: 1.0, repair: 1.0, heal: 1.0, stealth: 1.25, lockpick: 1.0, hunt: 1.8 },
-    look: { base: 'female', skin: '#f6d0b1', hairStyle: 'ponytail', hairColor: '#7a2a1a', beard: 'none', hat: 'cap', hatColor: '#d35400', top: { style: 'tshirt', color: '#c9a83a', color2: '#5b4636' }, pants: { style: 'cargo', color: '#5b5036' }, shoes: '#6b4226', backpack: 'hiking', backpackColor: '#556b2f', glasses: 'none', gloves: 'none', accessory: 'binoculars', build: 0.95, dirt: 0.3 },
+    look: { base: 'female', outfit: { head: 'Soldier', body: 'Casual', legs: 'Worker', feet: 'Worker' }, skin: '#f6d0b1', hairStyle: 'ponytail', hairColor: '#7a2a1a', beard: 'none', hat: 'cap', hatColor: '#d35400', top: { style: 'tshirt', color: '#7a8a4a', color2: '#5b4636' }, pants: { style: 'cargo', color: '#5b5036' }, shoes: '#6b4226', backpack: 'hiking', backpackColor: '#556b2f', glasses: 'none', gloves: 'none', accessory: 'binoculars', build: 0.95, dirt: 0.3, persona: 'observer' },
   },
   bora: {
     id: 'bora', name: 'BORA', role: 'İnşaatçı', color: '#d35400',
@@ -83,7 +108,7 @@ export const CHARACTERS = {
     perks: ['Barikatları %50 daha hızlı kurar', 'Üs geliştirmede ek dayanıklılık', 'İnşaat malzemelerinden %25 tasarruf'],
     start: [['hammer', 1], ['nails', 20], ['plank', 6], ['work_gloves', 1]],
     stats: { health: 130, stamina: 95, speed: 0.95, melee: 1.2, aim: 0.95, build: 1.5, repair: 1.1, heal: 1.0, stealth: 0.8, lockpick: 1.0, hunt: 1.0, carry: 1.25 },
-    look: { base: 'male', skin: '#c98a5e', hairStyle: 'short', hairColor: '#1d1410', beard: 'full', hat: 'none', top: { style: 'tshirt', color: '#3a3f47', color2: '#6b4f2a' }, pants: { style: 'cargo', color: '#2f3640' }, shoes: '#3b2b1d', backpack: 'none', glasses: 'none', gloves: 'work', gloveColor: '#7a4a2a', accessory: 'bandolier', build: 1.16, dirt: 0.35 },
+    look: { base: 'male', outfit: { head: 'Worker', body: 'Worker', legs: 'Worker', feet: 'Worker' }, skin: '#c98a5e', hairStyle: 'short', hairColor: '#1d1410', beard: 'full', hat: 'none', top: { style: 'tshirt' }, pants: { style: 'cargo' }, backpack: 'none', glasses: 'none', gloves: 'work', gloveColor: '#7a4a2a', accessory: 'none', build: 1.16, dirt: 0.35, persona: 'heavy' },
   },
   ceren: {
     id: 'ceren', name: 'CEREN', role: 'Doktor', color: '#2ec4b6',
@@ -91,88 +116,97 @@ export const CHARACTERS = {
     perks: ['Yaraları %60 daha hızlı tedavi eder', 'İlaçlardan %50 daha fazla etki', 'Enfeksiyon ve hastalık tedavisinde uzman'],
     start: [['first_aid', 1], ['bandage', 3], ['antiseptic', 1], ['painkiller', 2]],
     stats: { health: 95, stamina: 100, speed: 1.0, melee: 0.9, aim: 1.0, build: 1.0, repair: 1.0, heal: 1.6, stealth: 1.0, lockpick: 1.0, hunt: 1.0 },
-    look: { base: 'female', skin: '#f6d0b1', hairStyle: 'bun', hairColor: '#5b3420', beard: 'none', hat: 'none', top: { style: 'coat', color: '#f4f6f6', color2: '#a33a3a' }, pants: { style: 'jeans', color: '#34495e' }, shoes: '#ecf0f1', backpack: 'doctor', backpackColor: '#c0392b', glasses: 'round', gloves: 'none', accessory: 'stethoscope', build: 0.95, dirt: 0.1 },
+    look: { base: 'female', outfit: { head: 'Suit', body: 'Suit', legs: 'Suit', feet: 'Casual' }, skin: '#f6d0b1', hairStyle: 'bun', hairColor: '#5b3420', beard: 'none', hat: 'none', top: { style: 'coat', color: '#eef3f3', color2: '#a33a3a' }, pants: { style: 'jeans', color: '#34495e' }, backpack: 'doctor', backpackColor: '#c0392b', glasses: 'round', gloves: 'none', accessory: 'stethoscope', build: 0.95, dirt: 0.1, persona: 'calm' },
   },
 };
 export const CHARACTER_IDS = Object.keys(CHARACTERS);
 
 // ------------------------------------------------------------------- renk yuvaları
-const SLOT = { skin: 0, arm: 1, hand: 2, hair: 3, beard: 4, brows: 5, eyes: 6, top: 7, top2: 8, sleeve: 9, collar: 10, pants: 11, pants2: 12, shoes: 13, soles: 14, pack: 15, pack2: 16, metal: 17, bracer: 18, mouth: 19 };
-const NSLOT = 20;
-// parça bayrakları (görünürlük)
-const PART = { base: 0, hair: 1, beard: 2, pack: 3 };
+const SLOT = { skin: 0, arm: 1, hand: 2, hair: 3, beard: 4, brows: 5, eyes: 6, top: 7, top2: 8, sleeve: 9, collar: 10, pants: 11, pants2: 12, shoes: 13, soles: 14, pack: 15, pack2: 16, metal: 17, bracer: 18, mouth: 19, hat: 20, detail: 21 };
+const NSLOT = 22;
+// kemik grupları (kol/el yuvaları)
 const ARM_RE = /^(UpperArm|LowerArm|Shoulder)/;
 const HAND_RE = /^(Wrist|Index|Middle|Ring|Pinky|Thumb)/;
 
-/** Malzeme + baskın kemik + konum → [yuva, parça] (null: gizli) */
-function classify(base, meshName, mat, bone, p) {
-  if (base === 'male') {
-    if (/Feet/.test(meshName)) return [mat === 'Grey' ? SLOT.soles : SLOT.shoes, PART.base];
-    if (/Legs/.test(meshName)) return [mat === 'Brown2' ? SLOT.pants2 : SLOT.pants, PART.base];
-    if (/Backpack/.test(meshName)) return [mat === 'Brown' ? SLOT.pack : mat === 'Gold' ? SLOT.metal : SLOT.pack2, PART.pack];
-    if (/Head/.test(meshName)) {
-      if (mat === 'Eyebrows') return [SLOT.brows, PART.base];
-      if (mat === 'Eye') return [SLOT.eyes, PART.base];
-      if (mat === 'Hair') return p.y < 1.64 && p.z > 0.115 ? [SLOT.beard, PART.beard] : [SLOT.hair, PART.hair];
-      return [SLOT.skin, PART.base];
-    }
-    // gövde
-    if (mat === 'Skin') return [HAND_RE.test(bone) ? SLOT.hand : ARM_RE.test(bone) ? SLOT.arm : SLOT.skin, PART.base];
-    if (mat === 'Green') return [ARM_RE.test(bone) ? SLOT.sleeve : SLOT.top, PART.base];
-    return [SLOT.top2, PART.base];
-  }
-  // kadın
-  if (/Feet/.test(meshName)) return [mat === 'DarkBrown' ? SLOT.soles : SLOT.shoes, PART.base];
-  if (/Legs/.test(meshName)) return [SLOT.pants, PART.base];
-  if (/Head/.test(meshName)) {
-    if (mat === 'DarkBrown') return null; // kapüşon
-    if (mat === 'White') return [SLOT.hair, PART.hair];
-    if (mat === 'Brown') return [SLOT.brows, PART.base];
-    if (mat === 'Black') return [SLOT.eyes, PART.base];
-    return [SLOT.skin, PART.base];
-  }
-  if (mat === 'Metal') return null; // omuz zırhı
-  if (mat === 'Skin') return [HAND_RE.test(bone) ? SLOT.hand : ARM_RE.test(bone) ? SLOT.arm : SLOT.skin, PART.base];
-  if (mat === 'Black') return [ARM_RE.test(bone) || HAND_RE.test(bone) ? SLOT.sleeve : SLOT.collar, PART.base];
-  if (mat === 'LightBrown') return [/^(LowerArm|Wrist)/.test(bone) ? SLOT.bracer : SLOT.top2, PART.base];
-  if (mat === 'DarkBrown') return [SLOT.top, PART.base];
-  if (mat === 'Gold') return [SLOT.metal, PART.base];
-  return [SLOT.top2, PART.base];
-}
-
 const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _p0 = new THREE.Vector3(), _n0 = new THREE.Vector3(), _t = new THREE.Vector3();
 
-/** Bir taban modelin işlenmiş hali: birleşik deri ağı, yuvalar, T-poz verisi, klipler */
-class HumanBase {
-  constructor(name, gltf) {
+/** Tüm insanların ortak deri malzemesi (köşe renkleri: ten, kıyafet, saç; karakter başına boyanır) */
+let SKIN_MAT = null;
+function skinMaterial() {
+  if (!SKIN_MAT) SKIN_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0 });
+  return SKIN_MAT;
+}
+
+// ------------------------------------------------------------------- modüler taban (kıyafet parçaları)
+// Kafa parçalarında saç/şapka malzemeleri (setlere göre); listede olmayan diğer renkler özgün kalır.
+const HEAD_MAP = {
+  men: {
+    Adventurer: { hair: ['Hair'] }, Beach: { hair: ['Hair'] }, Casual_2: { hair: ['Hair'] }, Casual_Hoodie: { hair: ['Hair'] },
+    Farmer: { hat: ['Beige'] }, Punk: { hair: ['Red_Dark', 'Red'] }, Suit: { hair: ['Hair'] }, Swat: { hat: ['Swat', 'Swat_Black'] }, Worker: { hat: ['Worker_Yellow'] },
+  },
+  women: {
+    Adventurer: { hair: ['Hair_Brown'] }, Casual: { hair: ['Hair_Brown', 'Hair_Blond'] }, Formal: { hair: ['Red'] }, Punk: { hair: ['Pink', 'Hair_Brown'] },
+    SciFi: { hair: ['Hair_Black'] }, Soldier: { hair: ['Hair_Brown'] }, Suit: { hair: ['Hair_Brown', 'Hair_Blond'] }, Worker: { hair: ['DarkBrown'], hat: ['Worker_Yellow'] },
+  },
+};
+const PART_RE = /^(.+)_(Head|Body|Legs|Feet)$/;
+
+/** Bir nesne zincirinde "<Set>_<Parça>" adlı düğümü bul */
+function partOf(o) {
+  for (let n = o; n; n = n.parent) { const m = PART_RE.exec(n.name); if (m) return { set: m[1], type: m[2] }; }
+  return null;
+}
+
+/**
+ * Quaternius Ultimate Modular Men/Women: tek iskelet + set başına kafa/gövde/bacak/ayak parçaları.
+ * Tüm parçalar düğüm pozunda (doğrusal karışımlı deri) model uzayına pişirilir; bir kıyafet kombinasyonu
+ * seçilince yalnızca o parçaların köşelerinden sıkıştırılmış, paylaşılan bir geometri üretilir (önbellekli).
+ * Köşe başına: renk yuvası (deri, saç, kaş, göz, üst, alt, ayakkabı, şapka, ayrıntı) + özgün malzeme rengi.
+ */
+class ModularBase {
+  constructor(name, gltf, anims = null) {
     this.name = name;
+    this.modular = true;
+    const fem = name === 'women';
     const scene = gltf.scene;
     scene.position.set(0, 0, 0); scene.rotation.set(0, 0, 0); scene.scale.set(1, 1, 1);
     scene.updateMatrixWorld(true);
     const bones = {};
     scene.traverse((o) => { if (o.isBone && !bones[o.name]) bones[o.name] = o; });
     const meshes = [];
-    scene.traverse((o) => { if (o.isSkinnedMesh) meshes.push(o); });
+    scene.traverse((o) => { if (o.isSkinnedMesh && partOf(o)) meshes.push(o); });
     const boneList = meshes[0].skeleton.bones.slice();
     for (const m of meshes) for (const b of m.skeleton.bones) if (!boneList.includes(b)) boneList.push(b);
     const bIndex = new Map(boneList.map((b, i) => [b, i]));
-    const P = [], N = [], SI = [], SW = [], SL = [], TRI = [[], [], [], []];
-    let vbase = 0;
+    // 1. geçiş: parça başına baskın kumaş malzemesi (deri/saç/göz/kaş hariç en çok köşeli malzeme)
+    const matName = (m) => ((Array.isArray(m.material) ? m.material[0] : m.material).name || '').replace(/\.\d+$/, '');
+    const counts = {};
     for (const m of meshes) {
-      const g = m.geometry;
+      const p = partOf(m), k = p.set + '_' + p.type, mn = matName(m);
+      if (/^Skin|^Hair|^Eye|^Moustache|^Earrings|^Gold$/.test(mn)) continue;
+      (counts[k] = counts[k] || {})[mn] = (counts[k][mn] || 0) + m.geometry.attributes.position.count;
+    }
+    const primary = {};
+    for (const [k, c] of Object.entries(counts)) primary[k] = Object.entries(c).sort((a, b) => b[1] - a[1])[0][0];
+    // 2. geçiş: köşeleri pişir
+    const P = [], N = [], SI = [], SW = [], SL = [], OC = [];
+    this.parts = {};
+    let vbase = 0;
+    const col = new THREE.Color();
+    for (const m of meshes) {
+      const g = m.geometry, part = partOf(m), key = part.set + '_' + part.type;
       const pos = g.attributes.position, nor = g.attributes.normal, si = g.attributes.skinIndex, sw = g.attributes.skinWeight;
-      const mat = (Array.isArray(m.material) ? m.material[0] : m.material).name;
-      const meshName = m.name + '|' + (m.parent ? m.parent.name : '');
+      const mat = Array.isArray(m.material) ? m.material[0] : m.material;
+      const mn = matName(m);
+      col.copy(mat.color || col.set(0.7, 0.7, 0.7));
       const sk = m.skeleton;
-      const map = new Int32Array(pos.count).fill(-1);
-      // kemik başına deri matrisi: düğüm pozu (kemikDünya) · ters bağlama · bağlama matrisi
       const skinM = sk.bones.map((bn, j) => new THREE.Matrix4().multiplyMatrices(bn.matrixWorld, sk.boneInverses[j]).multiply(m.bindMatrix));
-      const skinN = skinM.map((M) => new THREE.Matrix3().getNormalMatrix(M));
+      const skinN = skinM.map((M2) => new THREE.Matrix3().getNormalMatrix(M2));
+      const map = new Int32Array(pos.count).fill(-1);
+      const pr = (this.parts[key] = this.parts[key] || { set: part.set, type: part.type, tris: [], headwear: false });
       for (let i = 0; i < pos.count; i++) {
-        // baskın kemik (bölge sınıflandırması için)
         let best = 0, bw = -1;
         for (let k = 0; k < 4; k++) { const w = sw.getComponent(i, k); if (w > bw) { bw = w; best = si.getComponent(i, k); } }
-        // model uzayı konum/normal: doğrusal karışımlı deri (düğüm pozu yeni bağlama pozu olur)
         _p0.fromBufferAttribute(pos, i); _n0.fromBufferAttribute(nor, i);
         _v.set(0, 0, 0); _n.set(0, 0, 0);
         for (let k = 0; k < 4; k++) {
@@ -183,140 +217,143 @@ class HumanBase {
           _n.addScaledVector(_t.copy(_n0).applyMatrix3(skinN[j]), w);
         }
         _n.normalize();
-        const c = classify(name, meshName, mat, sk.bones[best].name, _v);
-        if (!c) continue;
+        const slot = classifyModular(fem ? 'women' : 'men', part, mn, sk.bones[best].name, primary[key]);
+        if (slot === SLOT.hat) pr.headwear = true;
         map[i] = vbase++;
         P.push(_v.x, _v.y, _v.z); N.push(_n.x, _n.y, _n.z);
         for (let k = 0; k < 4; k++) { SI.push(bIndex.get(sk.bones[si.getComponent(i, k)]) || 0); SW.push(sw.getComponent(i, k)); }
-        SL.push(c[0] * 4 + c[1]);
+        SL.push(slot);
+        OC.push(col.r, col.g, col.b);
       }
       const idx = g.index;
       const tc = idx ? idx.count : pos.count;
       for (let t = 0; t < tc; t += 3) {
         const a = map[idx ? idx.getX(t) : t], b = map[idx ? idx.getX(t + 1) : t + 1], c = map[idx ? idx.getX(t + 2) : t + 2];
         if (a < 0 || b < 0 || c < 0) continue;
-        TRI[SL[a] & 3].push(a, b, c);
+        pr.tris.push(a, b, c);
       }
     }
-    const nv = vbase;
-    this.slot = new Uint8Array(nv);
-    for (let i = 0; i < nv; i++) this.slot[i] = SL[i] >> 2;
-    this.y = new Float32Array(nv);
-    this.grime = new Float32Array(nv);
-    for (let i = 0; i < nv; i++) { this.y[i] = P[i * 3 + 1]; this.grime[i] = hash2(Math.round(P[i * 3] * 40), Math.round(P[i * 3 + 2] * 40 + P[i * 3 + 1] * 17), 9); }
-    this.tris = TRI.map((t) => new Uint32Array(t));
-    this.indexCache = new Map();
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
-    geo.setAttribute('normal', new THREE.Float32BufferAttribute(N, 3));
-    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
-    geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(SW, 4));
-    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(nv * 3).fill(0.8), 3));
-    geo.computeBoundingSphere();
-    this.geo = geo;
-    // eski parçaları kaldır, birleşik ağı bağla
+    this.P = new Float32Array(P); this.N = new Float32Array(N); this.SI = new Uint16Array(SI); this.SW = new Float32Array(SW);
+    this.SL = new Uint8Array(SL); this.OC = new Float32Array(OC);
+    this.combos = new Map();
     for (const m of meshes) m.parent.remove(m);
+    // birleşik tek deri ağı (geometrisi karakter başına kombinasyondan gelir)
     const inv = boneList.map((b) => new THREE.Matrix4().copy(b.matrixWorld).invert());
     const skel = new THREE.Skeleton(boneList, inv);
-    const mesh = new THREE.SkinnedMesh(geo, HumanBase.material());
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), skinMaterial());
     mesh.name = 'body';
     scene.add(mesh);
     mesh.bind(skel, new THREE.Matrix4());
     this.template = scene;
     this.rest = computeRest(bones, scene);
     this.clips = {};
-    for (const c of gltf.animations) this.clips[c.name] = c;
-    // klip yürüyüş ölçüleri (metre/döngü; araçla ölçüldü: yer hızı × süre)
-    this.gait = name === 'female' ? { walk: 1.78, run: 2.4 } : { walk: 1.84, run: 2.38 };
+    for (const c of gltf.animations) this.clips[c.name.split('|').pop()] = c;
+    // aktarılmış hareket kütüphanesi (UAL): ayrı ad alanı (bazı adlar özgün kliplerle çakışır: Roll, Interact)
+    this.anim = anims || null;
+    this.gait = fem ? { walk: 1.78, run: 2.4 } : { walk: 1.84, run: 2.38 };
   }
 
-  static material() {
-    if (!HumanBase._mat) HumanBase._mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0 });
-    return HumanBase._mat;
+  /** Mevcut setler (parça türüne göre) */
+  sets(type) { return Object.values(this.parts).filter((p) => p.type === type).map((p) => p.set); }
+  has(set, type) { return !!this.parts[set + '_' + type]; }
+
+  /** Kıyafet → geçerli parça seçimi (eksik parçada setin ilkine düşer) */
+  resolve(outfit) {
+    outfit = outfit || {};
+    const pick = (type, want, fallback) => (want && this.has(want, type) ? want : this.has(fallback, type) ? fallback : this.sets(type)[0]);
+    const body = pick('Body', outfit.body, this.name === 'women' ? 'Casual' : 'Casual_2');
+    return {
+      head: pick('Head', outfit.head, body),
+      body,
+      legs: pick('Legs', outfit.legs || body, body),
+      feet: pick('Feet', outfit.feet || outfit.legs || body, body),
+    };
   }
 
-  /** Görünürlük anahtarına göre dizin tamponu (paylaşılan) */
-  index(key) {
-    if (this.indexCache.has(key)) return this.indexCache.get(key);
-    const parts = [PART.base];
-    if (key.includes('H')) parts.push(PART.hair);
-    if (key.includes('B')) parts.push(PART.beard);
-    if (key.includes('P')) parts.push(PART.pack);
-    let n = 0;
-    for (const p of parts) n += this.tris[p].length;
-    const arr = new Uint32Array(n);
-    let o = 0;
-    for (const p of parts) { arr.set(this.tris[p], o); o += this.tris[p].length; }
-    const attr = new THREE.BufferAttribute(arr, 1);
-    this.indexCache.set(key, attr);
-    return attr;
+  /** Kombinasyon geometrisi (paylaşılan) */
+  combo(outfit) {
+    const o = this.resolve(outfit);
+    const key = `${o.head}|${o.body}|${o.legs}|${o.feet}`;
+    if (this.combos.has(key)) return this.combos.get(key);
+    const parts = [this.parts[o.head + '_Head'], this.parts[o.body + '_Body'], this.parts[o.legs + '_Legs'], this.parts[o.feet + '_Feet']].filter(Boolean);
+    const remap = new Map();
+    const tris = [];
+    for (const p of parts) for (const v of p.tris) { let r = remap.get(v); if (r === undefined) { r = remap.size; remap.set(v, r); } tris.push(r); }
+    const n = remap.size;
+    const P = new Float32Array(n * 3), N = new Float32Array(n * 3), SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
+    const slot = new Uint8Array(n), orig = new Float32Array(n * 3), y = new Float32Array(n), grime = new Float32Array(n);
+    for (const [src, dst] of remap) {
+      P.set(this.P.subarray(src * 3, src * 3 + 3), dst * 3); N.set(this.N.subarray(src * 3, src * 3 + 3), dst * 3);
+      SI.set(this.SI.subarray(src * 4, src * 4 + 4), dst * 4); SW.set(this.SW.subarray(src * 4, src * 4 + 4), dst * 4);
+      slot[dst] = this.SL[src]; orig.set(this.OC.subarray(src * 3, src * 3 + 3), dst * 3);
+      y[dst] = this.P[src * 3 + 1];
+      grime[dst] = hash2(Math.round(this.P[src * 3] * 40), Math.round(this.P[src * 3 + 2] * 40 + this.P[src * 3 + 1] * 17), 9);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    geo.setAttribute('normal', new THREE.BufferAttribute(N, 3));
+    geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
+    geo.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
+    geo.setIndex(new THREE.BufferAttribute(n > 65535 ? new Uint32Array(tris) : new Uint16Array(tris), 1));
+    geo.computeBoundingSphere();
+    const c = { key, outfit: o, geo, slot, orig, y, grime, headwear: !!(this.parts[o.head + '_Head'] || {}).headwear };
+    this.combos.set(key, c);
+    return c;
   }
 }
 
-// ------------------------------------------------------------------- doku yerine renk paleti
-const _c = new THREE.Color(), _c2 = new THREE.Color();
-function lin(hex) { return new THREE.Color(hex); }
-const LONG_SLEEVES = new Set(['longsleeve', 'jacket', 'hoodie', 'coat', 'flannel', 'uniform', 'sport']);
-
-/** Görünüm → yuva renkleri (doğrusal) ve görünürlük anahtarı */
-function lookColors(base, look) {
-  const col = new Array(NSLOT);
-  const skin = lin(look.skin || '#e0a07a');
-  const hairC = lin(look.hairColor || '#3b2314');
-  const top = look.top || { style: 'tshirt', color: '#2980b9' };
-  const topC = lin(top.color || '#2980b9');
-  const top2 = lin(top.color2 || shade(top.color || '#2980b9', -0.2));
-  const pants = lin((look.pants && look.pants.color) || '#34495e');
-  const shoes = lin(look.shoes || '#3b2b1d');
-  const glove = look.gloves && look.gloves !== 'none' ? lin(look.gloveColor || { work: '#c9a86a', tactical: '#2c2c2c', medical: '#7ec8e3' }[look.gloves] || '#555555') : null;
-  const style = top.style || 'tshirt';
-  const longS = LONG_SLEEVES.has(style);
-  col[SLOT.skin] = skin;
-  col[SLOT.hand] = glove || skin;
-  col[SLOT.hair] = hairC;
-  col[SLOT.beard] = look.beard === 'stubble' ? skin.clone().lerp(hairC, 0.55) : hairC.clone().multiplyScalar(0.92);
-  col[SLOT.brows] = hairC.clone().multiplyScalar(0.75);
-  col[SLOT.eyes] = lin('#151210');
-  col[SLOT.mouth] = lin('#7a3b33');
-  col[SLOT.top] = topC;
-  col[SLOT.top2] = top2;
-  col[SLOT.collar] = top2;
-  if (base === 'male') {
-    col[SLOT.sleeve] = style === 'tank' ? skin : style === 'vest' ? top2 : topC;
-    col[SLOT.arm] = longS ? (style === 'coat' || style === 'sport' ? topC : topC.clone().multiplyScalar(0.95)) : skin;
-  } else {
-    col[SLOT.sleeve] = longS ? topC.clone().multiplyScalar(0.95) : style === 'vest' ? top2 : skin;
-    col[SLOT.arm] = skin;
+/** Modüler parçada köşe → renk yuvası */
+function classifyModular(gender, part, mat, bone, primary) {
+  const fem = gender === 'women';
+  if (part.type === 'Head') {
+    const hm = (HEAD_MAP[gender] || {})[part.set] || {};
+    if ((hm.hair || []).includes(mat)) return SLOT.hair;
+    if ((hm.hat || []).includes(mat)) return SLOT.hat;
+    if (/^Skin/.test(mat)) return SLOT.skin;
+    if (mat === 'Eye' || (fem && mat === 'Black')) return SLOT.eyes;
+    if (mat === 'Eyebrows' || (fem && mat === 'Brown')) return SLOT.brows;
+    if (mat === 'Moustache') return SLOT.beard;
+    if (/^Hair/.test(mat)) return SLOT.hair;
+    if (mat === 'Earrings' || mat === 'Gold') return SLOT.metal;
+    return SLOT.detail;
   }
-  col[SLOT.bracer] = glove || top2;
-  col[SLOT.pants] = pants;
-  col[SLOT.pants2] = (look.pants && look.pants.style === 'overalls') ? pants : lin('#3b2a1e');
-  col[SLOT.shoes] = shoes;
-  col[SLOT.soles] = shoes.clone().multiplyScalar(0.45);
-  const bp = lin(look.backpackColor || '#556b2f');
-  col[SLOT.pack] = bp;
-  col[SLOT.pack2] = bp.clone().multiplyScalar(0.7);
-  col[SLOT.metal] = lin('#9a8256');
-  let key = '';
-  if (look.hairStyle !== 'bald') key += 'H';
-  if (base === 'male' && look.beard && look.beard !== 'none') key += 'B';
-  if (base === 'male' && look.backpack === 'hiking') key += 'P';
-  return { col, key };
+  if (/^Skin/.test(mat)) return HAND_RE.test(bone) ? SLOT.hand : ARM_RE.test(bone) ? SLOT.arm : SLOT.skin;
+  if (mat !== primary) return SLOT.detail;
+  if (part.type === 'Body') return ARM_RE.test(bone) || HAND_RE.test(bone) ? SLOT.sleeve : SLOT.top;
+  if (part.type === 'Legs') return SLOT.pants;
+  return SLOT.shoes;
 }
 
-const CLOTH_SLOTS = new Set([SLOT.top, SLOT.top2, SLOT.sleeve, SLOT.collar, SLOT.pants, SLOT.pants2, SLOT.shoes, SLOT.pack, SLOT.pack2, SLOT.bracer]);
+/** Modüler görünüm: yalnızca istenen yuvalar değişir, diğerleri özgün kalır (null = özgün renk) */
+function modularColors(look, z = null) {
+  const col = new Array(NSLOT).fill(null);
+  if (look.skin) { const s = lin(look.skin); col[SLOT.skin] = s; col[SLOT.arm] = s; col[SLOT.hand] = s; }
+  if (look.gloves && look.gloves !== 'none') col[SLOT.hand] = lin(look.gloveColor || { work: '#c9a86a', tactical: '#2c2c2c', medical: '#7ec8e3' }[look.gloves] || '#555555');
+  if (look.hairColor) { const h = lin(look.hairColor); col[SLOT.hair] = h; col[SLOT.beard] = h.clone().multiplyScalar(0.92); col[SLOT.brows] = h.clone().multiplyScalar(0.7); }
+  if (look.top && look.top.color) { const t = lin(look.top.color); col[SLOT.top] = t; col[SLOT.sleeve] = t.clone().multiplyScalar(0.96); }
+  if (look.pants && look.pants.color) col[SLOT.pants] = lin(look.pants.color);
+  if (look.shoes) col[SLOT.shoes] = lin(look.shoes);
+  if (look.headwearColor) col[SLOT.hat] = lin(look.headwearColor);
+  if (z) {
+    const tint = lin(z.tint || '#7d8f6a');
+    col[SLOT.skin] = tint; col[SLOT.arm] = tint; col[SLOT.hand] = tint.clone().multiplyScalar(0.9);
+    col[SLOT.eyes] = lin(z.eyes || '#d8d2a0'); col[SLOT.brows] = tint.clone().multiplyScalar(0.6);
+  }
+  return col;
+}
 
-/** Köşe renklerini doldur (kir/kan lekeleri dahil) */
-function paintVertices(B, colors, out, dirt = 0.2, blood = 0) {
-  const s = B.slot, gr = B.grime, Y = B.y;
+/** Modüler köşe boyası: yuva rengi ya da özgün renk + kir/kan (zombide soluk kumaş) */
+function paintModular(c, colors, out, dirt = 0.2, blood = 0, faded = false) {
+  const { slot: s, orig: O, grime: gr, y: Y } = c;
   const mud = lin('#4a3a28'), red = lin('#5a0f0c');
+  const skinLike = (k) => k === SLOT.skin || k === SLOT.arm || k === SLOT.hand || k === SLOT.eyes || k === SLOT.brows || k === SLOT.hair || k === SLOT.beard;
   for (let i = 0; i < s.length; i++) {
-    const c = colors[s[i]];
-    let r = c.r, g = c.g, b = c.b;
-    if (CLOTH_SLOTS.has(s[i])) {
-      // kir: alt kısımlarda daha yoğun, köşe başına gürültü
+    const cc = colors[s[i]];
+    let r = cc ? cc.r : O[i * 3], g = cc ? cc.g : O[i * 3 + 1], b = cc ? cc.b : O[i * 3 + 2];
+    if (!skinLike(s[i])) {
+      if (faded) { const l = r * 0.3 + g * 0.55 + b * 0.15; r = (r * 0.55 + l * 0.45) * 0.78; g = (g * 0.55 + l * 0.45) * 0.78; b = (b * 0.55 + l * 0.45) * 0.78; }
       const low = Math.max(0, 1 - Y[i] / 1.2);
-      const k = dirt * (0.18 + low * 0.5) * gr[i];
+      const k = dirt * (0.16 + low * 0.5) * gr[i];
       r += (mud.r - r) * k; g += (mud.g - g) * k; b += (mud.b - b) * k;
       if (blood > 0 && gr[i] > 1 - blood * 0.35) { r = red.r; g = red.g; b = red.b; }
       const v = 0.94 + gr[i] * 0.08;
@@ -326,7 +363,9 @@ function paintVertices(B, colors, out, dirt = 0.2, blood = 0) {
   }
 }
 
-
+// ------------------------------------------------------------------- doku yerine renk paleti
+const _c = new THREE.Color(), _c2 = new THREE.Color();
+function lin(hex) { return new THREE.Color(hex); }
 // ------------------------------------------------------------------- fabrika
 export class CharacterFactory {
   constructor(assets) {
@@ -338,7 +377,7 @@ export class CharacterFactory {
     if (!this.bases[name]) {
       const g = this.assets.rigged[name];
       if (!g) throw new Error('İnsan tabanı yüklenmedi: ' + name);
-      this.bases[name] = new HumanBase(name, g);
+      this.bases[name] = new ModularBase(name, g, this.assets.anims[name]);
     }
     return this.bases[name];
   }
@@ -355,15 +394,10 @@ export class CharacterFactory {
     const model = SkeletonUtils.clone(B.template);
     let mesh = null;
     model.traverse((o) => { if (o.isSkinnedMesh) mesh = o; });
-    const geo = new THREE.BufferGeometry();
-    for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) geo.setAttribute(k, B.geo.attributes[k]);
-    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(B.slot.length * 3), 3));
-    geo.boundingSphere = B.geo.boundingSphere;
-    mesh.geometry = geo;
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
-    if (z && z.emissive) { mesh.material = HumanBase.material().clone(); mesh.material.emissive = new THREE.Color(z.emissive); mesh.material.emissiveIntensity = 0.22; }
+    if (z && z.emissive) { mesh.material = skinMaterial().clone(); mesh.material.emissive = new THREE.Color(z.emissive); mesh.material.emissiveIntensity = 0.22; }
     const rig = new CharacterRig(model, B.rest);
     const root = new THREE.Group();
     root.add(model);
@@ -371,7 +405,7 @@ export class CharacterFactory {
       handR: rig.makeAnchor('WristR', 'handR'), handL: rig.makeAnchor('WristL', 'handL'),
       head: rig.makeAnchor('Head', 'head'), back: rig.makeAnchor('Chest', 'back'), hips: rig.makeAnchor('Hips', 'hips'), chest: rig.makeAnchor('Chest', 'chest'),
     };
-    const ch = { root, model, rig, mesh, anchors, base: B, clips: B.clips, gait: B.gait, look: null, zombie: z };
+    const ch = { root, model, rig, mesh, anchors, base: B, clips: B.clips, anim: B.anim, gait: B.gait, look: null, zombie: z };
     if (z) {
       this.paint(ch, L, z);
       const b = z.build || [1, 1, 1];
@@ -381,27 +415,36 @@ export class CharacterFactory {
     return ch;
   }
 
+  /** Modüler: kıyafet kombinasyonunu ağ geometrisine bağla (gerekirse yenisiyle değiştir) */
+  setCombo(ch, look) {
+    const c = ch.base.combo(look.outfit || {});
+    if (ch.combo === c) return c;
+    const geo = new THREE.BufferGeometry();
+    for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) geo.setAttribute(k, c.geo.attributes[k]);
+    geo.setIndex(c.geo.index);
+    geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(c.slot.length * 3), 3));
+    geo.boundingSphere = c.geo.boundingSphere;
+    const old = ch.mesh.geometry;
+    ch.mesh.geometry = geo;
+    if (old && old !== geo) old.dispose();
+    ch.combo = c;
+    return c;
+  }
+
   paint(ch, look, z = null) {
-    const { col, key } = lookColors(ch.base.name, look);
-    if (z) {
-      const tint = lin(z.tint || '#7d8f6a');
-      col[SLOT.skin] = tint; col[SLOT.arm] = col[SLOT.sleeve] === col[SLOT.skin] ? tint : col[SLOT.arm]; col[SLOT.hand] = tint.clone().multiplyScalar(0.9);
-      if (col[SLOT.sleeve] && look.top && look.top.style === 'tank') col[SLOT.sleeve] = tint;
-      if (!LONG_SLEEVES.has((look.top || {}).style)) col[SLOT.arm] = tint;
-      col[SLOT.eyes] = lin(z.eyes || '#d8d2a0');
-      col[SLOT.brows] = tint.clone().multiplyScalar(0.6);
-    }
+    const c = this.setCombo(ch, look);
     const out = ch.mesh.geometry.attributes.color;
-    paintVertices(ch.base, col, out.array, z ? 0.9 : (look.dirt ?? 0.2), z ? (z.blood ?? 0.5) : 0);
+    paintModular(c, modularColors(look, z && !z.human ? z : null), out.array, z ? 0.9 : (look.dirt ?? 0.2), z ? (z.blood ?? 0.5) : 0, !!z && !z.human);
     out.needsUpdate = true;
-    ch.mesh.geometry.setIndex(ch.base.index(key));
   }
 
   applyLook(ch, look) {
     look = look || {};
     if (baseOf(look) !== ch.base.name) {
-      // taban değişti (erkek ↔ kadın): yeni karakter gerekir — çağıran Avatar.setLook yeniden kurar
+      // taban değişti (erkek ↔ kadın ya da eski ↔ modüler): Avatar.setLook karakteri yeniden kurar
       ch.needsRebuild = true;
+      ch.look = look;
+      return;
     }
     ch.look = look;
     this.paint(ch, look);
@@ -413,16 +456,16 @@ export class CharacterFactory {
 }
 
 /** Zombi görünümü: rastgele (tohumlu) yıpranmış kıyafet ve saç */
-const Z_TOPS = ['#4a5560', '#5b4a3a', '#6a2f2f', '#3b4a3b', '#706a5a', '#2f3d55', '#7a6a4a', '#555555', '#8a8070', '#3a3a3a'];
-const Z_PANTS = ['#2f3640', '#4a4036', '#3d4f6a', '#3a3a3a', '#5b5036', '#29323c'];
 function zombieLook(z, seed) {
   const r = new RNG('z' + (seed ?? Math.floor(Math.random() * 1e9)));
   const female = z.female ?? r.chance(0.35);
-  const styles = ['tshirt', 'longsleeve', 'jacket', 'tank', 'hoodie', 'flannel'];
+  const sets = OUTFIT_SETS[female ? 'women' : 'men'];
+  const heads = sets.head.filter((h) => z.human || h !== 'Swat'), bodies = sets.body;
+  const body = z.outfit || r.pick(bodies);
   return {
-    base: female ? 'female' : 'male', skin: z.tint, hairStyle: r.chance(0.15) ? 'bald' : 'short', hairColor: r.pick(['#1d1410', '#3b2314', '#6b6b6b', '#2a2a2a', '#5a4630']),
-    beard: female ? 'none' : r.pick(['none', 'stubble', 'full']), top: { style: z.human ? 'vest' : r.pick(styles), color: z.cloth || r.pick(Z_TOPS), color2: r.pick(Z_TOPS) },
-    pants: { style: 'jeans', color: r.pick(Z_PANTS) }, shoes: r.pick(['#2c2c2c', '#3b2b1d', '#555555']), backpack: 'none', hat: 'none', dirt: 1,
+    base: female ? 'female' : 'male', outfit: { head: z.head || r.pick(heads), body, legs: r.chance(0.7) ? body : r.pick(bodies), feet: r.pick(bodies) },
+    skin: z.tint, hairColor: r.chance(0.5) ? r.pick(['#1d1410', '#3b2314', '#6b6b6b', '#2a2a2a', '#5a4630']) : null, backpack: 'none', hat: 'none', dirt: 1,
+    top: z.cloth ? { color: z.cloth } : {}, build: z.build ? 1 : 0.94 + r.next() * 0.14,
   };
 }
 
@@ -462,16 +505,18 @@ const BODY_FIT = {
 
 function buildAccessories(ch, look) {
   // Aksesuar ölçüleri eski (iri başlı) modelin birimlerinde yazılmıştır: gruplar yeni bedene ölçeklenir.
-  const fem = ch.base.name === 'female';
-  const head = accGroup(ch.anchors.head, HEAD_FIT[ch.base.name]);
-  const face = accGroup(ch.anchors.head, FACE_FIT[ch.base.name]);
+  const fem = isFemaleBase(ch.base.name);
+  const fit = fem ? 'female' : 'male';
+  const modular = !!ch.base.modular;
+  const head = accGroup(ch.anchors.head, HEAD_FIT[fit]);
+  const face = accGroup(ch.anchors.head, FACE_FIT[fit]);
   const back = accGroup(ch.anchors.back, fem ? BODY_FIT.backF : BODY_FIT.back);
   const hips = accGroup(ch.anchors.hips, fem ? BODY_FIT.hipsF : BODY_FIT.hips);
   const chest = accGroup(ch.anchors.chest, fem ? BODY_FIT.chestF : BODY_FIT.chest);
   const hairM = M(look.hairColor || '#3b2314', { roughness: 0.9 });
   const HY = 0.31; // baş merkezi
   // ---- saç modelleri
-  const hs = look.hairStyle || 'short';
+  const hs = modular ? 'short' : look.hairStyle || 'short'; // modüler kafaların saçı modellidir
   if (hs === 'bald' || hs === 'short' || hs === 'messy' || hs === 'curly' || hs === 'spiky') { /* tabanın kendi saçı */ } else if (hs === 'ponytail') {
     head.add(mesh(new THREE.SphereGeometry(0.12, 10, 8), hairM, 0, HY + 0.18, -0.36));
     head.add(mesh(new THREE.CapsuleGeometry(0.07, 0.32, 4, 8), hairM, 0, HY - 0.08, -0.42, 0.35));
@@ -489,7 +534,7 @@ function buildAccessories(ch, look) {
   // ---- şapkalar
   const hc = look.hatColor || '#555';
   const hatM = M(hc);
-  switch (look.hat) {
+  switch (modular && ch.combo && ch.combo.headwear ? 'none' : look.hat) {
     case 'cap': case 'capBack': {
       const flip = look.hat === 'capBack' ? Math.PI : 0;
       const cap = new THREE.Group(); cap.rotation.y = flip;
@@ -615,7 +660,7 @@ function buildAccessories(ch, look) {
 }
 
 function buildZombieExtras(ch, z) {
-  const head = accGroup(ch.anchors.head, HEAD_FIT[ch.base.name]);
+  const head = accGroup(ch.anchors.head, HEAD_FIT[isFemaleBase(ch.base.name) ? 'female' : 'male']);
   if (z.glow) {
     const gm = new THREE.MeshBasicMaterial({ color: z.glow });
     for (const s of [-1, 1]) head.add(mesh(new THREE.SphereGeometry(0.035, 6, 5), gm, s * 0.1, 0.33, 0.33));

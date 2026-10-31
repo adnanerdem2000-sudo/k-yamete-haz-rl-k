@@ -160,6 +160,8 @@ export class GamePanels {
 
   // ======================================================================= diyalog
   openDialog(d) {
+    // konuşan NPC (varsa) diyalog açıkken konuşma bekleme klibine geçer
+    this.ui.dialogNpc = d.npc || (this.ui.panel && this.ui.panel.name === 'dialog' ? this.ui.dialogNpc : null) || null;
     const el = h('div.panel.dialog');
     const choices = h('div.choices');
     (d.choices || [{ text: 'Tamam', onSelect: () => this.ui.closePanel() }]).forEach((c, i) => {
@@ -170,7 +172,7 @@ export class GamePanels {
     this.ui.openPanel('dialog', el, { keys: (e) => { const n = parseInt(e.key, 10); if (n >= 1 && n <= 9 && d.choices && d.choices[n - 1]) { d.choices[n - 1].onSelect(); return true; } return false; } });
   }
 
-  closeDialog() { if (this.ui.panel && this.ui.panel.name === 'dialog') this.ui.closePanel(); }
+  closeDialog() { this.ui.dialogNpc = null; if (this.ui.panel && this.ui.panel.name === 'dialog') this.ui.closePanel(); }
 
   // ======================================================================= olay kartı
   openEvent(e) {
