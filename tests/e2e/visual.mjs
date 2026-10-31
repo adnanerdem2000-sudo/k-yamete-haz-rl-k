@@ -28,7 +28,7 @@ export default async ({ page, url, evalJS, log, errors }) => {
   await evalJS(page, async () => {
     const g = window.__game; cancelAnimationFrame(g.raf); g.loop = () => {};
     document.getElementById('ui-root').style.display = 'none'; g.menu.group.visible = false;
-    g.gfx.dynScale = 1; g.gfx.pixelRatio = 1; g.gfx.resize();
+    g.gfx.autoScale = () => {}; g.gfx.dynScale = 1; g.gfx.basePixelRatio = 1; g.gfx.pixelRatio = 1; g.gfx.resize();
     const { windUniforms } = await import('/src/world/Vegetation.js');
     window.__wind = windUniforms;
   });

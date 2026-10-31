@@ -25,7 +25,7 @@ export default async ({ page, url, shot, wait, evalJS, log }) => {
       document.getElementById('ui-root').style.display = ui ? '' : 'none';
       c.position.set(pos[0], pos[1], pos[2]);
       c.lookAt(look[0], look[1], look[2]);
-      S.world.vegetation.update(c.position, 300, true);
+      S.world.vegetation.update(c.position, g.settings.get('graphics.viewDistance'), true, 1, g.settings.get('graphics.quality'));
       g.env.update(0.016, g.time, S.time.minuteOfDay, c.position, S.region);
       g.gfx.render(0.016, g.time);
     };

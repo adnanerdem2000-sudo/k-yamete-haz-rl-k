@@ -20,15 +20,23 @@ const MAT = {
 
 /** Kenney araç camları: koyu opak yerine yarı saydam mavi-gri (kabin görünür) — kit başına bir kez */
 export function prepareWindowMaterials(model) {
+  // Assets.model() klonları malzemeleri paylaşır: cam malzemesi araç başına klonlanır (çatlak cam yalnız o araçta)
   model.traverse((o) => {
     if (!o.isMesh) return;
-    for (const m of [].concat(o.material)) {
-      if (!m || !/window|glass/i.test(m.name) || m.userData.vehGlass) continue;
-      m.userData.vehGlass = true;
-      m.transparent = true; m.opacity = 0.42; m.depthWrite = false;
-      m.color.lerp(new THREE.Color(0x9fc6e0), 0.5);
-      m.roughness = 0.1; m.metalness = 0.15; m.side = THREE.DoubleSide;
-    }
+    const mats = [].concat(o.material);
+    let changed = false;
+    const out = mats.map((m) => {
+      if (!m || !/window|glass/i.test(m.name)) return m;
+      if (m.userData.vehGlass && m.userData.owner === model) return m;
+      const c = m.clone();
+      c.userData.vehGlass = true; c.userData.owner = model;
+      c.transparent = true; c.opacity = 0.42; c.depthWrite = false;
+      c.color.lerp(new THREE.Color(0x9fc6e0), 0.5);
+      c.roughness = 0.1; c.metalness = 0.15; c.side = THREE.DoubleSide;
+      changed = true;
+      return c;
+    });
+    if (changed) o.material = Array.isArray(o.material) ? out : out[0];
   });
   // saydam camlı ağlar en son çizilsin (kabin önce)
   model.traverse((o) => { if (o.isMesh && [].concat(o.material).some((m) => m && m.userData.vehGlass)) o.renderOrder = 3; });
@@ -227,9 +235,9 @@ export class VehicleVisuals {
     for (const d of this.doors) {
       if (d.t > 0) { d.t -= dt; if (d.t <= 0) d.target = 0; }
       d.ang = damp(d.ang, d.target, d.target > d.ang ? 9 : 5, dt);
-      d.pivot.rotation.y = d.side * d.ang; // dışa açılır
+      d.pivot.rotation.y = -d.side * d.ang; // dışa açılır (sağ kapı −Y, sol kapı +Y)
     }
-    if (this.trunk) { this.trunk.ang = damp(this.trunk.ang, this.trunk.target, 6, dt); this.trunk.pivot.rotation.x = -this.trunk.ang; }
+    if (this.trunk) { this.trunk.ang = damp(this.trunk.ang, this.trunk.target, 6, dt); this.trunk.pivot.rotation.x = this.trunk.ang; } // yukarı-geriye açılır
     if (this.steer && !v.def.bike) this.steer.rotation.z = -(v.steer || 0) * 2.6;
     else if (this.steer) this.steer.rotation.y = (v.steer || 0) * 0.8;
     const lit = v.lights && v.seats && v.seats[0];
@@ -238,6 +246,7 @@ export class VehicleVisuals {
 
   dispose() {
     this.group.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
+    if (this.v.model) this.v.model.traverse((o) => { if (o.isMesh && o.userData.dentGeo) { o.geometry.dispose(); o.userData.dentGeo = false; } if (o.isMesh) for (const m of [].concat(o.material)) if (m && m.userData.vehGlass && m.userData.owner === this.v.model) m.dispose(); });
     this.v.root.remove(this.group);
   }
 }

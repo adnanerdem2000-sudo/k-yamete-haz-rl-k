@@ -372,9 +372,11 @@ export class Vegetation {
     if (!this.imp && this.renderer && this.impKeys.size) this.buildImpostors(this.renderer);
     this.t += dt;
     if (this.last && this.t < 1.0 && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 8 && this.last.v === viewDist && this.last.g === grassOn && this.last.i === !!this.imp && this.last.q === quality) return;
-    // gerçek zamanla da sınırlı (en sık 0.2 sn): toplu adımlamada/ışınlanmada art arda yüklemeler olmasın
+    // gerçek zamanla da sınırlı (en sık 0.2 sn): toplu adımlamada/ışınlanmada art arda yüklemeler olmasın. Parametre
+    // değişiklikleri (görüş mesafesi/kalite/çim) de bu sınıra uyar: iki çağıranın farklı mesafe vermesi (ör. sabit
+    // kare çizimi 300 m, oyun 420 m) her karede tam yeniden kuruluma yol açıyordu (GPU belleği şişip sekme çöküyordu)
     const nowMs = performance.now();
-    if (this.last && this.last.q === quality && this.last.v === viewDist && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 50 && nowMs - (this._ms || 0) < 200) return;
+    if (this.last && Math.hypot(camPos.x - this.last.x, camPos.z - this.last.z) < 50 && nowMs - (this._ms || 0) < 200) return;
     this._ms = nowMs;
     this.t = 0;
     this.last = { x: camPos.x, z: camPos.z, v: viewDist, g: grassOn, i: !!this.imp, q: quality };

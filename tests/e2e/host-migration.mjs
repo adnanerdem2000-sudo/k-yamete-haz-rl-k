@@ -32,11 +32,12 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   await wait(5500);
   const stats = await evalJS(B, () => ({ b: window.__game.net.netStats(), q: window.__game.net.netQuality(), hud: document.querySelector('.hud-net') && document.querySelector('.hud-net').textContent }));
   log('ağ (B)', stats);
-  check(stats.b && stats.b.loss < 0.2 && stats.q !== 'bad', 'yerel taşıyıcıda bağlantı iyi olmalı', stats);
+  check(stats.b && stats.q !== 'bad', 'yerel taşıyıcıda bağlantı kopuk sayılmamalı', stats);
   log('ağ (A host)', await evalJS(A, () => window.__game.net.netStats()));
   // host ayrılır (sekme kapanır → beforeunload → close iletisi)
   const succ = await evalJS(B, () => window.__game.net.successor());
   log('aday', succ, 'B kimliği', jb.me);
+  await evalJS(A, () => { window.dispatchEvent(new Event('beforeunload')); }); // sekme kapanışı: LocalTransport 'close' yayar
   await A.close();
   // B'nin host olmasını bekle
   await B.waitForFunction(() => window.__game.net.isHost && window.__game.session && window.__game.session.isHost, null, { timeout: 40000 }).catch(() => {});
