@@ -77,6 +77,12 @@ const UAL_ACTIONS = {
   ladderOut: { clip: 'Climb_Exit', mask: 'full', from: 0.05, to: 0.9, fadeIn: 0.06, fadeOut: 0.25 },
 };
 const HIT_CLIPS = ['Hit_Chest', 'Hit_Head', 'Hit_Stomach', 'Hit_Shoulder_L', 'Hit_Shoulder_R'];
+// kişilik → kıpırdanma türleri (Animations.fidget) ve elde beliren alet (eşya modeli)
+const FIDGETS = {
+  relaxed: ['tinker', 'tinker', 'stretch'], observer: ['binoculars', 'binoculars', 'peek'], heavy: ['stretch'], confident: ['boxing', 'stretch'],
+  calm: ['watch'], formal: ['watch'], agile: ['peek'], default: ['stretch'],
+};
+const FIDGET_PROPS = { tinker: 'wrench', binoculars: 'binoculars' };
 // ağda uzak oyunculara yansıtılan eylemler (takla ve ifadeler anim durumunda ayrıca taşınır)
 const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'jump', 'land', 'interact', 'push', 'stop']);
 
@@ -665,6 +671,8 @@ export class Avatar {
       }
       if (act.t >= act.dur && !act.loop) this.action = null;
     }
+    // kişilik kıpırdanmaları (ayakta boş beklerken: Mert alet kurcalar, Elif dürbünle bakar, Bora gerinir…)
+    this.updateFidget(dt, a, mode, s, dead, act, setMask, pu, M);
     if (M.fullW > 0) for (let i = 0; i < wts.length; i++) wts[i] *= 1 - M.fullW;
     if (anyProc) this.rig.apply(p, wts);
     if (!dead && !a.aim && a.pitch && !carried && mode !== 'sleep') this.lookPitch(-(a.pitch || 0) * 0.45 * (1 - M.fullW));
@@ -689,6 +697,61 @@ export class Avatar {
         this.footIK.solve(dt, this._groundFn, this.root.matrixWorld.elements[13], want);
       }
     }
+  }
+
+  /**
+   * Kişilik kıpırdanması zamanlayıcısı: 12–26 sn'de bir, 2,6–4,2 sn süren üst gövde pozu (oyun içinde de
+   * görünür; uzak oyuncularda her istemci kendi rastgele zamanlamasıyla oynar — kozmetik, ağ verisi yok).
+   */
+  updateFidget(dt, a, mode, s, dead, act, setMask, pu, M) {
+    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 10 + Math.random() * 14, prop: null });
+    const calm = !dead && mode === 'ground' && s < 0.15 && !act && !a.aim && !a.talk && !a.carrying && !a.carryBox && !a.emote && M.fullW < 0.05 && M.upperW < 0.05 && !this.overlays.length;
+    if (F.kind) {
+      F.t += dt;
+      if (!calm || F.t >= F.dur) { this.endFidget(); return; }
+      const env = Math.max(0, Math.min(1, F.t * 3, (F.dur - F.t) * 3));
+      pu.reset(); A.fidget(pu, F.kind, F.t / F.dur, this.t);
+      setMask('upper', env, pu);
+      if (F.prop) F.prop.visible = env > 0.3;
+      return;
+    }
+    if (!calm) { F.next = Math.max(F.next, 2.5); return; }
+    F.next -= dt;
+    if (F.next > 0) return;
+    const persona = (this.ch && this.ch.look && this.ch.look.persona) || 'default';
+    const kinds = FIDGETS[persona] || FIDGETS.default;
+    this.startFidget(kinds[Math.floor(Math.random() * kinds.length)]);
+  }
+  /** Kıpırdanmayı hemen başlat (test ve kişilik önizlemesi için de) */
+  startFidget(kind) {
+    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 0, prop: null });
+    if (F.kind) this.endFidget();
+    if (FIDGET_PROPS[kind] && this.heldId) kind = 'stretch'; // elde eşya varken aletli kıpırdanma yok
+    F.kind = kind; F.t = 0; F.dur = 2.6 + Math.random() * 1.6; F.next = 12 + Math.random() * 14;
+    const item = FIDGET_PROPS[kind];
+    if (item && this.game.itemModels && ITEMS[item]) {
+      try {
+        const obj = this.game.itemModels.make(item);
+        const h = HOLDS[kind === 'binoculars' ? 'binoculars' : 'melee1'];
+        const holder = new THREE.Group();
+        holder.position.set(...h.pos); holder.rotation.set(...h.rot);
+        obj.position.x = h.fwd * 0.6;
+        holder.add(obj);
+        holder.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+        const ms = this.ch.model.scale;
+        holder.scale.set(1 / ms.x, 1 / ms.y, 1 / ms.z);
+        holder.visible = false;
+        this.ch.anchors.handR.add(holder);
+        F.prop = holder;
+      } catch { F.prop = null; }
+    }
+  }
+  endFidget() {
+    const F = this.fidget;
+    if (!F) return;
+    if (F.prop) { F.prop.parent && F.prop.parent.remove(F.prop); F.prop = null; }
+    F.kind = null; F.t = 0;
+    F.next = Math.max(F.next, 12 + Math.random() * 14);
   }
 
   /** Tutuş pozları (silah/yakın dövüş/el feneri), üst gövdeye maskeli */

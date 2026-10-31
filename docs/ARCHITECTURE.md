@@ -140,6 +140,45 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
 - Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
 
+- **Yüz ve malzeme ayrıntısı:** göz merkezleri ve ağız yeri kafa setinin geometrisinden ölçülür (`combo.face`);
+  göz akı + iris + göz bebeği + parıltı + kapak çizgisi + dudaklar tek ağda (karakter başına 1 çizim çağrısı,
+  `buildFace`). Saç köklerden uçlara açılan ton ve tel tel fark; yüzde hafif ten varyasyonu. Deri malzemesi
+  köşe başına pürüzlülük taşır (`aRough`: ten yarı mat, göz ıslak, kumaş mat, metal parlak) — tek malzeme.
+- **Koleksiyonlar:** cinsiyete göre gerçek modüler set + renk/aksesuar (`COLLECTIONS.outfit.{men,women}`); yüz/saç
+  korunur. Kafa × gövde setlerinin tümü boyun/bel boşluğu için ölçülür (`tools/dev/outfit-combos.mjs`).
+- **Kişilik kıpırdanmaları (`Avatar.updateFidget`):** ayakta boş beklerken 12–26 sn'de bir 2,6–4,2 sn: Mert
+  elindeki anahtarı kurcalar, Elif dürbünle tarar, Bora gerinir, Deniz gard alıp yumruk atar, Ceren saate
+  bakar, Zülal ayak ucunda etrafı kolaçan eder (`Animations.fidget`, üst gövde maskesi, aletler eşya
+  modelinden). Her istemci kendi zamanlamasıyla oynatır (kozmetik, ağ verisi yok).
+- **Etkileşim hizası ve zaman çizelgesi:** etkileşimde oyuncu önce hedefe döner (`Player.faceTo`, hareket
+  yoksa 0,5 sn); yerden alma eşyayı klibin eğilme anında (0,42 sn; yürürken 0,28) envantere ekler, kapı el kola
+  değince (0,22 sn) hareket eder (`Interact.later`). Basılı tutmalı işler zaten bitişte uygulanır.
+- **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
+  62 kemikli iskelette (`tools/pack-characters.mjs` → `assets/models/rigged/men.glb`, `women.glb`).
+  `CharacterFactory.ModularBase` parçaları bağlama pozunda doğrusal deri dönüşümüyle tek ağa birleştirir;
+  karakter başına seçilen 4 parça sıkı bir geometride paylaşılır (kombinasyon önbelleği). Renk yuvaları
+  (ten, saç, üst, alt, ayakkabı…) köşe renkleriyle boyanır; `null` yuva setin özgün rengini korur.
+  Aksesuarlar (çanta, şapka, gözlük, dürbün, stetoskop…) kemik bağlantı noktalarına takılır ve yaylı
+  sönümlü ikincil hareketle sallanır. Zombiler aynı hattan solmuş/kanlı kıyafetle üretilir.
+- **Hareket kütüphanesi:** Quaternius "Universal Animation Library" 1+2 (CC0) — UE tipi iskelet için 154 klip,
+  `tools/retarget-ual.mjs` + `tests/dev/retarget.html` ile oyunun iskeletine aktarılır: dünya uzayında dinlenme
+  pozuna göre göreli dönüş, kalça çevirisi boy oranıyla, IK ayak kemikleri incik ucuna. Araç ayrıca her
+  döngünün yürüyüş hızını (basan ayağın kayma hızı) ve faz başlangıcını (sol topuk basışı) ölçer. Klipler
+  erkek/kadın iskeletleri için ayrı aktarılır (dinlenme pozları farklı). Paket biçimi `AnimPack` (.kan):
+  16 bit nicemleme, iz içi fark kodlama, bayt ayrıştırma + gzip; 154 klip ≈ 590 KB (glTF ile 2,7 MB idi).
+- **Animasyon denetleyicisi (`Motion`):** durumlar (ayakta/eğik/sürünme/yaralı/yüzme/merdiven/havada/sürüş/
+  oturma) ağırlık sönümüyle karışır; döngüler ortak fazla örneklenir ve faz hızı gerçek hız / kliplerin
+  ölçülmüş adım mesafesi ile ilerler (ayak kayması en aza iner). 8 yön karışımı (komşu iki yön), hıza göre
+  yürüme ↔ koşu ↔ depar. Kişiliğe göre bekleme ve ara sıra kıpırdanma klipleri, yorgunken nefes nefese bekleme.
+  Durum geçişlerinde yatma/kalkma/eğilme klipleri. Eylemler (`Avatar.playMotion`): maskeli tek seferlik klipler
+  (tam/üst gövde/kollar), giriş/çıkış sönümü, döngü ve sonda bekleme (ölüm, uyku). Silah tutuş ve nişanları,
+  taşınma pozu ve baş eğimi prosedürel katman (`CharacterRig`, kemik başına ağırlık) olarak üstte kalır.
+  Kütüphane yüklenemezse eski klip + prosedürel düzen yedek olarak çalışır. Karakter başına güncelleme ~0,05 ms.
+- **Zombiler (`ZombieView`):** aynı denetleyici zombi kümesiyle (bekleme/yürüme/koşu, tırmalama/ısırma, kapı
+  yumruklama, isabet, ölüm, çığlık, yerden çıkış); türe göre oynatma hızı (şişko/iri ağır, koşucu seri) ve
+  bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
+- Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
+
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),
   14 NPC (selam, sohbet konuları `lore`, ticaret bayrağı), 29 görev, 38 belge, 7 final.

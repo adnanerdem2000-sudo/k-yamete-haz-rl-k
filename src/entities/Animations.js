@@ -439,6 +439,50 @@ export function emote(p, kind, t) {
   return p;
 }
 
+/**
+ * Kişilik kıpırdanmaları (ayakta boş beklerken, üst gövde maskesiyle karışır). kind: tinker (alet kurcalama),
+ * binoculars (dürbünle tarama), stretch (omuz/boyun germe), watch (saate bakma), boxing (gard + iki kısa yumruk),
+ * peek (ayak ucunda etrafı kolaçan). k: 0..1 ilerleme, t: saat.
+ */
+export function fidget(p, kind, k, t) {
+  idle(p, t);
+  const f = sin(k * Math.PI);
+  if (kind === 'tinker') {
+    const tw = sin(t * 5.5);
+    p.set('RightArm', -38 * D, 10 * D, 44 * D); p.set('RightForeArm', 0, (104 + tw * 5) * D, 0);
+    p.set('LeftArm', -24 * D, 0, -56 * D); p.set('LeftForeArm', 0, (-82 + sin(t * 4) * 6) * D, 0);
+    p.set('Head', 20 * D, -9 * D, 4 * D); p.set('Neck', 6 * D, 0, 0);
+    grip(p, 'Right', 0.9); grip(p, 'Left', 0.45);
+  } else if (kind === 'binoculars') {
+    const scan = sin(t * 0.7) * 24;
+    p.set('RightArm', -96 * D, -6 * D, 36 * D); p.set('RightForeArm', 0, 130 * D, 0);
+    p.set('LeftArm', -96 * D, 6 * D, -36 * D); p.set('LeftForeArm', 0, -130 * D, 0);
+    p.set('Spine', 2 * D, scan * 0.35 * D, 0); p.set('Head', -3 * D, scan * 0.5 * D, 0);
+    grip(p, 'Right', 0.8); grip(p, 'Left', 0.8);
+  } else if (kind === 'stretch') {
+    const r = sin(t * 1.6);
+    p.set('Head', (8 + r * 6) * D, 0, sin(t * 0.9) * 22 * D); p.set('Neck', 4 * D, 0, 0);
+    p.set('LeftShoulder', 0, 0, (-12 + r * 10) * D); p.set('RightShoulder', 0, 0, (12 - r * 10) * D);
+    p.set('LeftArm', -15 * D, 0, (-60 + r * 8) * D); p.set('RightArm', -15 * D, 0, (60 - r * 8) * D);
+    p.set('Spine', (-4 + r * 2) * D, 0, r * 3 * D);
+  } else if (kind === 'watch') {
+    p.set('LeftArm', -50 * D, 6 * D, -34 * D); p.set('LeftForeArm', 0, -120 * D, 0);
+    p.set('Head', 24 * D, 14 * D, -6 * D); p.set('Neck', 6 * D, 0, 0);
+  } else if (kind === 'boxing') {
+    const j = max(0, sin(t * 7)), j2 = max(0, sin(t * 7 + 3.2));
+    p.set('Spine', 6 * D, (j - j2) * 10 * D, 0);
+    p.set('RightArm', (-70 - j * 25) * D, 0, (35 - j * 25) * D); p.set('RightForeArm', 0, (120 - j * 90) * D, 0);
+    p.set('LeftArm', (-70 - j2 * 25) * D, 0, (-35 + j2 * 25) * D); p.set('LeftForeArm', 0, (-120 + j2 * 90) * D, 0);
+    p.set('Head', 8 * D, 0, 0); grip(p, 'Right', 1); grip(p, 'Left', 1);
+  } else if (kind === 'peek') {
+    const r = sin(t * 0.9);
+    p.set('Head', -6 * D, r * 30 * D, 0); p.set('Spine', -3 * D, r * 8 * D, 0);
+    p.hip.y = 0.015 * f;
+    p.set('LeftFoot', -12 * f * D, 0, 0); p.set('RightFoot', -12 * f * D, 0, 0);
+  }
+  return p;
+}
+
 // ---------------------------------------------------------------- ZOMBİLER
 
 /** Zombi yürüyüşü: topallayan, kollar önde, baş yana yatık */

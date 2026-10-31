@@ -36,4 +36,6 @@
 - Kalite (gölge haritası çözünürlüğü, kenar yumuşatma) değişikliği tam etki için sayfanın yenilenmesini ister.
 - Tarayıcı Esc tuşunu işaretçi kilidinden çıkmak için yutar; Esc'ye basınca duraklatma menüsü açılır
   (oyuna dönmek için ekrana tıkla).
+- Karakter kıyafetlerinde kumaş dokusu/normal haritası yoktur (modüler taban UV'siz; renk ve pürüzlülük köşe
+  başınadır). 103 kafa×gövde kombinasyonunda geometrik boşluk ölçülmedi (`tools/dev/outfit-combos.mjs`).
 - Bazı nadir karakter giysi kombinasyonlarında doku dikişleri görülebilir.

@@ -165,7 +165,7 @@ export class Interact {
       const camFacing = d > 0.01 ? (dx * cfx + dz * cfz) / d : 1;
       if (facing < -0.2 && camFacing < 0.2 && d > 0.8) return;
       const score = d - Math.max(facing, camFacing) * 0.8 + extra;
-      cands.push({ ...o, score, d });
+      cands.push({ ...o, score, dist: d, at: { x, z } }); // dist: uzaklık (o.d kapı nesnesini ezmesin)
     };
     // takım arkadaşları (yere düşmüş)
     for (const p of S.players.values()) {
@@ -251,8 +251,17 @@ export class Interact {
   update(dt, input, blocking) {
     const S = this.s;
     const pl = S.local;
+    // animasyonla aynı zaman çizelgesine bağlı gecikmeli eylemler (uzanma/eğilme anında gerçekleşir)
+    if (this.pending && this.pending.length) {
+      for (let i = this.pending.length - 1; i >= 0; i--) {
+        const q = this.pending[i];
+        q.t -= dt;
+        if (q.t <= 0) { this.pending.splice(i, 1); try { q.fn(); } catch (e) { console.error('Gecikmeli etkileşim hatası', e); } }
+      }
+    }
     // kapı animasyonları
     for (const d of S.world.doors) {
+      if (d.phys) continue; // menteşeli fiziksel kapı: açıklık ve görsel DoorPhysics'ten
       const tgt = d.broken ? 1 : d.target;
       if (d.open01 !== tgt && !d.broken) {
         d.open01 += Math.sign(tgt - d.open01) * Math.min(Math.abs(tgt - d.open01), dt * 2.6);
@@ -282,8 +291,8 @@ export class Interact {
     this.target = t;
     // önündeki hafif nesneyi (kutu, kasa, çöp kovası…) eline al: başka hedef yoksa ya da nesne ondan yakınsa
     let cp = !pl.carrying && (pl.mode === 'ground' || pl.mode === 'crouch') && S.props ? S.props.nearestCarryable(pl.pos.x, pl.pos.y, pl.pos.z, pl.yaw) : null;
-    if (cp && t && t.d !== undefined && t.d < cp.dist) cp = null;
-    if (cp && t && t.d === undefined) cp = null; // mesafesiz özel hedefler (araçtan in, sırttaki arkadaş) öncelikli
+    if (cp && t && t.dist !== undefined && t.dist < cp.dist) cp = null;
+    if (cp && t && t.dist === undefined) cp = null; // mesafesiz özel hedefler (araçtan in, sırttaki arkadaş) öncelikli
     if (cp) {
       this.target = null;
       S.ui.setPrompt({ label: 'Taşı', key: input.label('interact') });
@@ -319,12 +328,23 @@ export class Interact {
     return { real, extra: S.net.active ? 0 : Math.max(0, gameMinutes - real * S.time.rate) };
   }
 
+  /** Eylemi animasyonun ilgili anına ertele (sn) */
+  later(delay, fn) { (this.pending || (this.pending = [])).push({ t: delay, fn }); }
+
   activate(t) {
     const S = this.s;
     const pl = S.local;
     const inv = S.inventory;
+    // önce hedefe dön (kapı kolu, dolap, yerdeki eşya): el ve nesne aynı doğrultuda
+    if (t.at && t.kind !== 'vehicle') pl.faceTo(t.at.x, t.at.z);
     switch (t.kind) {
-      case 'ground': pl.avatar.play('pickup', 0.5); S.act('ground_pickup', { id: t.id }); S.audio.play('pickup', { vol: 0.5 }); break;
+      case 'ground': {
+        // eşya, eğilip uzanma anında (klibin ~%45'i) envantere girer; yürürken masadan alma klibi daha erken
+        const moving = pl.speed > 0.6;
+        pl.avatar.play('pickup', 0.5);
+        this.later(moving ? 0.28 : 0.42, () => { S.act('ground_pickup', { id: t.id }); S.audio.play('pickup', { vol: 0.5 }); });
+        break;
+      }
       case 'revive': {
         const mul = S.localProfile.stats.heal || 1;
         this.startHold(t.label, t.holdTime / mul, () => { S.act('revive', { target: t.id, hp: 25 + 15 * (mul - 1) }); S.results.rescued += 0; }, 'revive');
@@ -387,6 +407,7 @@ export class Interact {
       if (tm.extra) S.time.advance(tm.extra);
       S.act('noise', { x: c.x, z: c.z, r: 8, src: 'search' });
     }, 'search');
+    if (this.hold) this.hold.container = c; // çekmece fiziği: aranan dolabın çekmecesi açılır
   }
 
   useDoor(d) {
@@ -413,8 +434,9 @@ export class Interact {
       S.ui.toast('Kilitli. Maymuncuk, levye ya da anahtar gerekli.', 'warn');
       return;
     }
-    S.act('door', { id: d.id, open: d.target < 0.5 });
+    const open = d.target < 0.5;
     S.local.avatar.play('interact', 0.55); // kapı koluna uzanma (yerden alma değil)
+    this.later(0.22, () => S.act('door', { id: d.id, open })); // kapı, el kola değince hareket eder
   }
 
   useSpecial(it, t) {

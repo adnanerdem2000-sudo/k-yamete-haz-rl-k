@@ -111,6 +111,57 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
   const ikState = await evalJS(page, () => window.__m.avs.map((a) => a.footIK ? [+a.footIK.pelvis.toFixed(3), +a.footIK.legs[0].dy.toFixed(3), +a.footIK.legs[1].dy.toFixed(3)] : null));
   log('IK (kalça, sol dy, sağ dy)', ikState);
   await evalJS(page, () => { const M = window.__m; for (const [c, mesh] of M.steps) { M.g.world.physics.remove(c); M.g.scene.remove(mesh); } });
+  // ---- kişilik kıpırdanmaları (elde alet: Mert anahtar, Elif dürbün) + zamanlayıcının kendi kendine tetiklenmesi
+  await run('settle', "() => ({ mode: 'ground', speed: 0 })", idleZ, 60, front, () => { window.__m.avs.forEach((a) => { a.root.visible = true; a.hold(null); a.action = null; }); });
+  await run('fidget', "() => ({ mode: 'ground', speed: 0 })", idleZ, 36, front, () => {
+    const kinds = ['tinker', 'peek', 'boxing', 'binoculars', 'stretch', 'watch'];
+    window.__m.avs.forEach((a, i) => a.startFidget(kinds[i]));
+  });
+  const fid = await evalJS(page, () => window.__m.avs.map((a) => ({ kind: a.fidget && a.fidget.kind, prop: !!(a.fidget && a.fidget.prop), vis: !!(a.fidget && a.fidget.prop && a.fidget.prop.visible) })));
+  log('kıpırdanma', fid);
+  const auto = await evalJS(page, () => {
+    const a = window.__m.avs[0];
+    a.endFidget(); a.fidget.next = 0.2;
+    for (let f = 0; f < 15; f++) a.update(1 / 30, { mode: 'ground', speed: 0, yaw: Math.PI });
+    const started = a.fidget.kind;
+    for (let f = 0; f < 30; f++) a.update(1 / 30, { mode: 'ground', speed: 2.5, yaw: Math.PI }); // yürüyünce kesilir
+    return { started, afterWalk: a.fidget.kind, persona: a.ch.look.persona };
+  });
+  log('kıpırdanma zamanlayıcı', auto);
+  // ---- ayak IK'sı eğimde: yakındaki bir yamaç (15–28°) bulunur, karakterler eş yükselti boyunca dizilir;
+  // her iki bileğin zemine göre yüksekliği aynı olmalı (düz zeminde olduğu gibi)
+  const slope = await evalJS(page, async () => {
+    const M = window.__m, T = M.T, g = M.g, THREE = await import('three');
+    let best = null;
+    const centers = [[M.base.x, M.base.z], [-350, -380], [-640, 120], [330, 300]];
+    for (const [cx0, cz0] of centers) for (let r = 4; r < 300 && !best; r += 4) for (let a = 0; a < 6.28 && !best; a += 0.25) {
+      const x = cx0 + Math.cos(a) * r, z = cz0 + Math.sin(a) * r;
+      const h = T.heightAt(x, z), gx = (T.heightAt(x + 1, z) - T.heightAt(x - 1, z)) / 2, gz = (T.heightAt(x, z + 1) - T.heightAt(x, z - 1)) / 2;
+      const gr = Math.hypot(gx, gz);
+      if (gr < 0.22 || gr > 0.6 || T.waterLevelAt(x, z) > h - 0.5 || g.world.buildingAt(x, z)) continue;
+      let ok = true;
+      for (let d = -4; d <= 4 && ok; d += 1) { const px = x - gz / gr * d, pz = z + gx / gr * d; const g2 = Math.hypot((T.heightAt(px + 1, pz) - T.heightAt(px - 1, pz)) / 2, (T.heightAt(px, pz + 1) - T.heightAt(px, pz - 1)) / 2); if (g2 < 0.2 || g.world.buildingAt(px, pz)) ok = false; }
+      if (ok) best = { x, z, gx, gz, gr };
+    }
+    if (!best) return null;
+    const tx = -best.gz / best.gr, tz = best.gx / best.gr; // eş yükselti yönü
+    M.avs.forEach((a, i) => { const d = (i - 2.5) * 1.2; const x = best.x + tx * d, z = best.z + tz * d; a.root.position.set(x, T.heightAt(x, z), z); a.root.rotation.y = Math.atan2(-best.gx, -best.gz); });
+    for (let f = 0; f < 45; f++) M.avs.forEach((a) => a.update(1 / 30, { mode: 'ground', speed: 0, yaw: Math.atan2(-best.gx, -best.gz) }));
+    const out = M.avs.map((a) => {
+      if (!a.footIK || !a.footIK.ok) return null;
+      const res = a.footIK.legs.map((L) => { const p = new THREE.Vector3().copy(L.ankle).applyMatrix4(L.ll.matrixWorld); return +(p.y - T.heightAt(p.x, p.z)).toFixed(3); });
+      return { L: res[0], R: res[1], fark: +Math.abs(res[0] - res[1]).toFixed(3), kalca: +a.footIK.pelvis.toFixed(3) };
+    });
+    const c = g.gfx.camera, by = T.heightAt(best.x, best.z);
+    c.position.set(best.x - best.gx / best.gr * 5.5, by + 1.6, best.z - best.gz / best.gr * 5.5); // yokuş aşağıdan (karakterlerin önünden)
+    c.lookAt(best.x, by + 0.8, best.z);
+    g.env.update(0.016, g.time, 13 * 60, c.position, null);
+    g.gfx.render(0.016, g.time);
+    return { egim: +(Math.atan(best.gr) * 180 / Math.PI).toFixed(1), ayaklar: out };
+  });
+  log('eğimde ayak IK', slope);
+  await shot(page, '/tmp/motion-slope.png');
+  await evalJS(page, () => { const M = window.__m; M.avs.forEach((a, i) => { const x = M.base.x + (i - 2.5) * 1.25, z = M.base.z; a.root.position.set(x, M.T.heightAt(x, z), z); a.root.rotation.y = 0; }); });
   // ---- zombiler (insanlar gizlenir: kamera zombilerin önünde)
   await evalJS(page, () => { for (const a of window.__m.avs) a.root.visible = false; });
   await run('z-idle', "() => ({ mode: 'ground', speed: 0 })", idleZ, 40, zcam);

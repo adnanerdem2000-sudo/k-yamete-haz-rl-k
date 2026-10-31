@@ -299,7 +299,14 @@ export class Menus {
       let body;
       if (this.custTab === 'collections') {
         body = h('div.cust-body', h('p.muted', 'Hazır kıyafet koleksiyonları (karakterin yüzü ve saçı korunur):'),
-          h('div.collections', Object.entries(COLLECTIONS).map(([name, c]) => button(name, () => { set({ ...c, top: { ...c.top }, pants: { ...c.pants } }); render(); }, 'coll'))),
+          h('div.collections', Object.entries(COLLECTIONS).map(([name, c]) => button(name, () => {
+            // koleksiyon: cinsiyete göre modüler set + renk/aksesuar; yüz, saç ve ten korunur
+            const o = c.outfit && c.outfit[gender(look)];
+            const { outfit: _o, ...rest } = c;
+            set({ ...rest, outfit: o ? { head: o.head, body: o.body, legs: o.legs || o.body, feet: o.feet || o.body } : look.outfit, top: { ...look.top, ...c.top }, pants: { ...look.pants, ...c.pants } });
+            if (this.game.menu) this.game.menu.showcase(this.lookFor(id));
+            render();
+          }, 'coll'))),
           button('Varsayılana Dön', () => { const all = { ...(Settings.get('player.appearance') || {}) }; delete all[id]; Settings.set('player.appearance', all); if (this.game.menu) this.game.menu.showcase(this.lookFor(id)); render(); }, 'small'));
       } else if (this.custTab === 'face') {
         body = h('div.cust-body',

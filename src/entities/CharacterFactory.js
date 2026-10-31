@@ -4,6 +4,7 @@
 // Görünüm köşe renkleriyle boyanır; saç/sakal/çanta gibi parçalar dizin tamponuyla gösterilir ya da gizlenir.
 // Şapka, gözlük, çanta ve aksesuarlar kemiklere bağlı küçük 3D parçalardır.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import { CharacterRig, computeRest } from './CharacterRig.js';
 import { RNG, hash2 } from '../core/util.js';
@@ -57,15 +58,20 @@ export const PALETTES = {
   cloth: ['#2f3e4e', '#3a5a40', '#6b4f2a', '#8a5a2b', '#c0392b', '#d35400', '#f39c12', '#f1c40f', '#27ae60', '#16a085', '#2980b9', '#8e44ad', '#ecf0f1', '#95a5a6', '#2c2c2c', '#b5a27a', '#c7b8a1', '#e88fb4', '#556b2f', '#4a6fa5'],
 };
 
-/** Hazır kıyafet koleksiyonları (Komik, Sportif, Klasik, İşçi, Askerî, Kampçı, Kıyamet sonrası) */
+/**
+ * Hazır kıyafet koleksiyonları: gerçek model farkı (modüler set, cinsiyete göre) + renk ve aksesuar. Yüz ve saç
+ * korunur. outfit.{men,women}: head/body (legs/feet verilmezse body'yi izler); top/pants.color null = setin
+ * özgün rengi.
+ */
 export const COLLECTIONS = {
-  Komik: { top: { style: 'tshirt', color: '#f39c12', color2: '#8e44ad' }, pants: { style: 'shorts', color: '#e88fb4' }, hat: 'beanie', hatColor: '#2ec4b6', glasses: 'sunglasses', accessory: 'necklace' },
-  Sportif: { top: { style: 'sport', color: '#2980b9', color2: '#ecf0f1' }, pants: { style: 'sweat', color: '#2c2c2c' }, hat: 'capBack', hatColor: '#c0392b', backpack: 'small' },
-  Klasik: { top: { style: 'longsleeve', color: '#ecf0f1', color2: '#2f3e4e' }, pants: { style: 'jeans', color: '#4a6fa5' }, hat: 'none', glasses: 'square' },
-  İşçi: { top: { style: 'jacket', color: '#d35400', color2: '#2f3e4e' }, pants: { style: 'overalls', color: '#2f4f6f' }, hat: 'hardhat', hatColor: '#f1c40f', gloves: 'work', accessory: 'toolbelt', backpack: 'toolbag' },
-  Askerî: { top: { style: 'uniform', color: '#556b2f', color2: '#3a4a2a' }, pants: { style: 'camo', color: '#556b2f' }, hat: 'helmet', hatColor: '#4b5320', gloves: 'tactical', backpack: 'tactical', accessory: 'bandolier' },
-  Kampçı: { top: { style: 'flannel', color: '#c0392b', color2: '#2c2c2c' }, pants: { style: 'cargo', color: '#6b4f2a' }, hat: 'boonie', hatColor: '#8a7a50', backpack: 'hiking', accessory: 'binoculars' },
-  'Kıyamet Sonrası': { top: { style: 'vest', color: '#3a3a3a', color2: '#8a5a2b' }, pants: { style: 'cargo', color: '#4a4a3a' }, hat: 'bandana', hatColor: '#7a2020', glasses: 'goggles', gloves: 'tactical', backpack: 'tactical', accessory: 'scarf', dirt: 0.8 },
+  Günlük: { outfit: { men: { head: 'Casual_2', body: 'Casual_2' }, women: { head: 'Casual', body: 'Casual' } }, top: { color: '#4a6fa5' }, pants: { color: '#34495e' }, shoes: null, hat: 'none', glasses: 'none', gloves: 'none', backpack: 'small', backpackColor: '#3a3a40', accessory: 'watch', dirt: 0.15 },
+  Sportif: { outfit: { men: { head: 'Casual_Hoodie', body: 'Casual_Hoodie' }, women: { head: 'Casual', body: 'Casual' } }, top: { color: '#2980b9' }, pants: { color: '#2c2c2c' }, shoes: '#ecf0f1', hat: 'capBack', hatColor: '#c0392b', glasses: 'none', gloves: 'none', backpack: 'small', backpackColor: '#2c2c2c', accessory: 'none', dirt: 0.1 },
+  İşçi: { outfit: { men: { head: 'Worker', body: 'Worker' }, women: { head: 'Worker', body: 'Worker' } }, top: { color: null }, pants: { color: null }, shoes: null, hat: 'none', glasses: 'none', gloves: 'work', gloveColor: '#c9a86a', backpack: 'toolbag', backpackColor: '#8a5a2b', accessory: 'toolbelt', dirt: 0.4 },
+  Askerî: { outfit: { men: { head: 'Swat', body: 'Worker' }, women: { head: 'Soldier', body: 'Worker' } }, top: { color: '#556b2f' }, pants: { color: '#4b5320' }, shoes: '#2c2c2c', hat: 'none', glasses: 'none', gloves: 'tactical', backpack: 'tactical', backpackColor: '#4a4a3a', accessory: 'bandolier', dirt: 0.3 },
+  Kampçı: { outfit: { men: { head: 'Adventurer', body: 'Farmer', legs: 'Farmer', feet: 'Worker' }, women: { head: 'Adventurer', body: 'Casual', legs: 'Worker', feet: 'Worker' } }, top: { color: '#c0392b' }, pants: { color: '#6b4f2a' }, shoes: '#6b4226', hat: 'boonie', hatColor: '#8a7a50', glasses: 'none', gloves: 'none', backpack: 'hiking', backpackColor: '#556b2f', accessory: 'binoculars', dirt: 0.35 },
+  Doktor: { outfit: { men: { head: 'Suit', body: 'Suit', legs: 'Suit', feet: 'Casual_2' }, women: { head: 'Suit', body: 'Suit', legs: 'Suit', feet: 'Casual' } }, top: { color: '#eef3f3' }, pants: { color: '#34495e' }, shoes: null, hat: 'none', glasses: 'round', gloves: 'medical', backpack: 'doctor', backpackColor: '#c0392b', accessory: 'stethoscope', dirt: 0.05 },
+  'Kıyamet Sonrası': { outfit: { men: { head: 'Punk', body: 'Punk' }, women: { head: 'Punk', body: 'Punk' } }, top: { color: '#3a3a3a' }, pants: { color: '#4a4a3a' }, shoes: '#2c2c2c', hat: 'bandana', hatColor: '#7a2020', glasses: 'goggles', gloves: 'tactical', backpack: 'tactical', backpackColor: '#3a3a30', accessory: 'scarf', dirt: 0.8 },
+  Komik: { outfit: { men: { head: 'Beach', body: 'Beach' }, women: { head: 'Formal', body: 'Formal' } }, top: { color: '#f39c12' }, pants: { color: '#e88fb4' }, shoes: '#2ec4b6', hat: 'beanie', hatColor: '#2ec4b6', glasses: 'sunglasses', gloves: 'none', backpack: 'none', accessory: 'necklace', dirt: 0 },
 };
 
 // ------------------------------------------------------------------- 6 ana karakter
@@ -130,12 +136,29 @@ const HAND_RE = /^(Wrist|Index|Middle|Ring|Pinky|Thumb)/;
 
 const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _p0 = new THREE.Vector3(), _n0 = new THREE.Vector3(), _t = new THREE.Vector3();
 
-/** Tüm insanların ortak deri malzemesi (köşe renkleri: ten, kıyafet, saç; karakter başına boyanır) */
-let SKIN_MAT = null;
-function skinMaterial() {
-  if (!SKIN_MAT) SKIN_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0 });
-  return SKIN_MAT;
+/**
+ * İnsan deri/kıyafet malzemesi: köşe renkleri (ten, kıyafet, saç; karakter başına boyanır) + köşe başına
+ * pürüzlülük (aRough: ten yarı mat, göz ıslak, kumaş mat, metal parlak). Tek malzeme, tek çizim çağrısı.
+ */
+function skinMaterial(opts = {}) {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.0, ...opts });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aRough; varying float vRough;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRough = aRough;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vRough;')
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vRough;');
+  };
+  m.customProgramCacheKey = () => 'char_skin';
+  m.name = 'char_skin';
+  return m;
 }
+let SKIN_MAT = null;
+function sharedSkin() { return SKIN_MAT || (SKIN_MAT = skinMaterial()); }
+// yuva → pürüzlülük
+const SLOT_ROUGH = new Float32Array(NSLOT).fill(0.9);
+for (const [k, v] of Object.entries({ skin: 0.62, arm: 0.62, hand: 0.66, hair: 0.58, beard: 0.6, brows: 0.6, eyes: 0.18, shoes: 0.72, soles: 0.8, metal: 0.35, mouth: 0.45, detail: 0.8 })) SLOT_ROUGH[SLOT[k]] = v;
 
 // ------------------------------------------------------------------- modüler taban (kıyafet parçaları)
 // Kafa parçalarında saç/şapka malzemeleri (setlere göre); listede olmayan diğer renkler özgün kalır.
@@ -240,7 +263,7 @@ class ModularBase {
     // birleşik tek deri ağı (geometrisi karakter başına kombinasyondan gelir)
     const inv = boneList.map((b) => new THREE.Matrix4().copy(b.matrixWorld).invert());
     const skel = new THREE.Skeleton(boneList, inv);
-    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), skinMaterial());
+    const mesh = new THREE.SkinnedMesh(new THREE.BufferGeometry(), sharedSkin());
     mesh.name = 'body';
     scene.add(mesh);
     mesh.bind(skel, new THREE.Matrix4());
@@ -278,7 +301,8 @@ class ModularBase {
     const parts = [this.parts[o.head + '_Head'], this.parts[o.body + '_Body'], this.parts[o.legs + '_Legs'], this.parts[o.feet + '_Feet']].filter(Boolean);
     const remap = new Map();
     const tris = [];
-    for (const p of parts) for (const v of p.tris) { let r = remap.get(v); if (r === undefined) { r = remap.size; remap.set(v, r); } tris.push(r); }
+    const PT = { Head: 0, Body: 1, Legs: 2, Feet: 3 }, partIdx = [];
+    for (const p of parts) for (const v of p.tris) { let r = remap.get(v); if (r === undefined) { r = remap.size; remap.set(v, r); partIdx[r] = PT[p.type]; } tris.push(r); }
     const n = remap.size;
     const P = new Float32Array(n * 3), N = new Float32Array(n * 3), SI = new Uint16Array(n * 4), SW = new Float32Array(n * 4);
     const slot = new Uint8Array(n), orig = new Float32Array(n * 3), y = new Float32Array(n), grime = new Float32Array(n);
@@ -295,8 +319,43 @@ class ModularBase {
     geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(SI, 4));
     geo.setAttribute('skinWeight', new THREE.BufferAttribute(SW, 4));
     geo.setIndex(new THREE.BufferAttribute(n > 65535 ? new Uint32Array(tris) : new Uint16Array(tris), 1));
+    // köşe başına pürüzlülük (yuvadan)
+    const rough = new Float32Array(n);
+    for (let i = 0; i < n; i++) rough[i] = SLOT_ROUGH[slot[i]];
+    geo.setAttribute('aRough', new THREE.BufferAttribute(rough, 1));
     geo.computeBoundingSphere();
-    const c = { key, outfit: o, geo, slot, orig, y, grime, headwear: !!(this.parts[o.head + '_Head'] || {}).headwear };
+    const part = Uint8Array.from(partIdx);
+    // saç yükseklik aralığı (kökler koyu, uçlar açık) ve yüz verisi (göz merkezleri, ağız yeri) — veriye dayalı:
+    // kafa setleri farklı olsa da göz/ağız geometriden ölçülür
+    let h0 = Infinity, h1 = -Infinity;
+    const eyeL = [], eyeR = [];
+    for (let i = 0; i < n; i++) {
+      if (slot[i] === SLOT.hair) { h0 = Math.min(h0, y[i]); h1 = Math.max(h1, y[i]); }
+      if (slot[i] === SLOT.eyes && part[i] === 0) (P[i * 3] >= 0 ? eyeL : eyeR).push(i);
+    }
+    const eye = (ix) => {
+      if (ix.length < 3) return null;
+      let x = 0, yy = 0, z = 0;
+      for (const i of ix) { x += P[i * 3]; yy += P[i * 3 + 1]; z += P[i * 3 + 2]; }
+      x /= ix.length; yy /= ix.length; z /= ix.length;
+      let r = 0;
+      for (const i of ix) r = Math.max(r, Math.hypot(P[i * 3] - x, P[i * 3 + 1] - yy));
+      return { x, y: yy, z, r: Math.max(0.008, r) };
+    };
+    const eyes = [eye(eyeL), eye(eyeR)].filter(Boolean);
+    let face = null;
+    if (eyes.length === 2) {
+      const ey = (eyes[0].y + eyes[1].y) / 2, ex = (eyes[0].x + eyes[1].x) / 2;
+      // ağız: burun altındaki deri yüzeyinin en öndeki noktaları
+      const cand = [];
+      for (let i = 0; i < n; i++) if (slot[i] === SLOT.skin && part[i] === 0 && Math.abs(P[i * 3] - ex) < 0.02 && y[i] < ey - 0.035 && y[i] > ey - 0.09) cand.push(i);
+      cand.sort((a, b) => P[b * 3 + 2] - P[a * 3 + 2]);
+      const top = cand.slice(0, 6);
+      let mx = ex, my = ey - 0.06, mz = eyes[0].z;
+      if (top.length) { mx = 0; my = 0; mz = 0; for (const i of top) { mx += P[i * 3]; my += P[i * 3 + 1]; mz += P[i * 3 + 2]; } mx /= top.length; my /= top.length; mz /= top.length; }
+      face = { eyes, mouth: { x: mx, y: my, z: mz }, eyeDist: Math.abs(eyes[0].x - eyes[1].x) };
+    }
+    const c = { key, outfit: o, geo, slot, orig, y, grime, part, hairY: h0 < h1 ? [h0, h1] : null, face, headwear: !!(this.parts[o.head + '_Head'] || {}).headwear };
     this.combos.set(key, c);
     return c;
   }
@@ -330,6 +389,8 @@ function modularColors(look, z = null) {
   if (look.skin) { const s = lin(look.skin); col[SLOT.skin] = s; col[SLOT.arm] = s; col[SLOT.hand] = s; }
   if (look.gloves && look.gloves !== 'none') col[SLOT.hand] = lin(look.gloveColor || { work: '#c9a86a', tactical: '#2c2c2c', medical: '#7ec8e3' }[look.gloves] || '#555555');
   if (look.hairColor) { const h = lin(look.hairColor); col[SLOT.hair] = h; col[SLOT.beard] = h.clone().multiplyScalar(0.92); col[SLOT.brows] = h.clone().multiplyScalar(0.7); }
+  // insan gözü: taban geometrisi göz akı olur, iris/göz bebeği buildFace ile önüne eklenir
+  if (!z) col[SLOT.eyes] = lin('#e3e0da');
   if (look.top && look.top.color) { const t = lin(look.top.color); col[SLOT.top] = t; col[SLOT.sleeve] = t.clone().multiplyScalar(0.96); }
   if (look.pants && look.pants.color) col[SLOT.pants] = lin(look.pants.color);
   if (look.shoes) col[SLOT.shoes] = lin(look.shoes);
@@ -347,9 +408,19 @@ function paintModular(c, colors, out, dirt = 0.2, blood = 0, faded = false) {
   const { slot: s, orig: O, grime: gr, y: Y } = c;
   const mud = lin('#4a3a28'), red = lin('#5a0f0c');
   const skinLike = (k) => k === SLOT.skin || k === SLOT.arm || k === SLOT.hand || k === SLOT.eyes || k === SLOT.brows || k === SLOT.hair || k === SLOT.beard;
+  const hy = c.hairY, hInv = hy ? 1 / Math.max(0.01, hy[1] - hy[0]) : 0;
   for (let i = 0; i < s.length; i++) {
     const cc = colors[s[i]];
     let r = cc ? cc.r : O[i * 3], g = cc ? cc.g : O[i * 3 + 1], b = cc ? cc.b : O[i * 3 + 2];
+    if (s[i] === SLOT.hair && hy) {
+      // saç: kökler koyu, uçlar açık + tel tel ton farkı (düz tek renk blok görünmesin)
+      const t = (Y[i] - hy[0]) * hInv, f = 0.76 + 0.36 * t + (gr[i] - 0.5) * 0.16;
+      r *= f; g *= f; b *= f;
+    } else if (s[i] === SLOT.skin && c.part && c.part[i] === 0) {
+      // yüz: yanaklarda hafif kan rengi, çene/alın hafif koyu (düz plastik ten görünmesin)
+      const f = 0.97 + (gr[i] - 0.5) * 0.05;
+      r = r * f + 0.012; g *= f; b *= f * 0.995;
+    }
     if (!skinLike(s[i])) {
       if (faded) { const l = r * 0.3 + g * 0.55 + b * 0.15; r = (r * 0.55 + l * 0.45) * 0.78; g = (g * 0.55 + l * 0.45) * 0.78; b = (b * 0.55 + l * 0.45) * 0.78; }
       const low = Math.max(0, 1 - Y[i] / 1.2);
@@ -397,7 +468,7 @@ export class CharacterFactory {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     mesh.frustumCulled = false;
-    if (z && z.emissive) { mesh.material = skinMaterial().clone(); mesh.material.emissive = new THREE.Color(z.emissive); mesh.material.emissiveIntensity = 0.22; }
+    if (z && z.emissive) mesh.material = skinMaterial({ emissive: new THREE.Color(z.emissive), emissiveIntensity: 0.22 });
     const rig = new CharacterRig(model, B.rest);
     const root = new THREE.Group();
     root.add(model);
@@ -420,7 +491,7 @@ export class CharacterFactory {
     const c = ch.base.combo(look.outfit || {});
     if (ch.combo === c) return c;
     const geo = new THREE.BufferGeometry();
-    for (const k of ['position', 'normal', 'skinIndex', 'skinWeight']) geo.setAttribute(k, c.geo.attributes[k]);
+    for (const k of ['position', 'normal', 'skinIndex', 'skinWeight', 'aRough']) geo.setAttribute(k, c.geo.attributes[k]);
     geo.setIndex(c.geo.index);
     geo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(c.slot.length * 3), 3));
     geo.boundingSphere = c.geo.boundingSphere;
@@ -452,8 +523,57 @@ export class CharacterFactory {
     ch.model.scale.set(b, 0.97 + b * 0.03, b);
     for (const a of Object.values(ch.anchors)) for (const child of [...a.children]) if (child.userData.acc) { a.remove(child); disposeTree(child); }
     buildAccessories(ch, look);
+    buildFace(ch, look);
   }
 }
+
+/**
+ * Yüz ayrıntısı (tek ağ, tek çizim çağrısı): iris + göz bebeği + parıltı, dudaklar, kadınlarda kirpik çizgisi.
+ * Konumlar kafa setinin geometrisinden ölçülür (combo.face), Head kemiğinin bağlantı noktasına bağlanır.
+ */
+function buildFace(ch, look) {
+  const c = ch.combo, f = c && c.face;
+  if (!f) return;
+  const E = ch.rig.restData.entries.find((e) => e.name === 'Head');
+  if (!E) return;
+  const fem = isFemaleBase(ch.base.name);
+  const geos = [];
+  const col = new THREE.Color();
+  const add = (geo, hex, x, y, z, sx = 1, sy = 1, sz = 1) => {
+    geo.scale(sx, sy, sz);
+    geo.translate(x - E.wpos.x, y - E.wpos.y, z - E.wpos.z);
+    const n = geo.attributes.position.count, arr = new Float32Array(n * 3);
+    col.set(hex);
+    for (let i = 0; i < n; i++) { arr[i * 3] = col.r; arr[i * 3 + 1] = col.g; arr[i * 3 + 2] = col.b; }
+    geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+    if (geo.index) geo.deleteAttribute('uv');
+    geos.push(geo);
+  };
+  const iris = look.eyeColor || (fem ? '#3f5a3a' : '#4a3321');
+  for (const e of f.eyes) {
+    const r = e.r;
+    add(new THREE.SphereGeometry(r * 0.6, 12, 8), iris, e.x, e.y - r * 0.02, e.z + r * 0.08, 1, 1, 0.42);
+    add(new THREE.SphereGeometry(r * 0.3, 8, 6), '#0c0c0c', e.x, e.y - r * 0.02, e.z + r * 0.2, 1, 1, 0.4);
+    add(new THREE.SphereGeometry(r * 0.11, 6, 5), '#ffffff', e.x + r * 0.17, e.y + r * 0.16, e.z + r * 0.34, 1, 1, 0.5);
+    // üst göz kapağı/kirpik çizgisi (kadında belirgin, erkekte ince gölge)
+    add(new THREE.SphereGeometry(r * 1.02, 10, 6), fem ? '#2a1a16' : '#3a2a22', e.x, e.y + r * 0.78, e.z + r * 0.05, 1, fem ? 0.16 : 0.09, 0.32);
+  }
+  // dudaklar: ten renginin kırmızıya çalan koyusu (kadında biraz daha belirgin)
+  const skin = new THREE.Color(look.skin || '#e0a07a'), lip = skin.clone().lerp(new THREE.Color('#9c3f3a'), fem ? 0.5 : 0.32);
+  const w = f.eyeDist * 0.58;
+  const m = f.mouth;
+  add(new THREE.SphereGeometry(1, 12, 6), '#' + lip.getHexString(), m.x, m.y + 0.0035, m.z + 0.002, w * 0.5, 0.0038, 0.006);
+  add(new THREE.SphereGeometry(1, 12, 6), '#' + lip.clone().multiplyScalar(0.9).getHexString(), m.x, m.y - 0.0035, m.z + 0.0015, w * 0.46, 0.0042, 0.006);
+  const merged = mergeGeometries(geos, false);
+  if (!merged) return;
+  const mesh = new THREE.Mesh(merged, faceMaterial());
+  mesh.name = 'face';
+  mesh.userData.acc = true;
+  mesh.castShadow = false;
+  ch.anchors.head.add(mesh);
+}
+let FACE_MAT = null;
+function faceMaterial() { return FACE_MAT || (FACE_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.3, metalness: 0 })); }
 
 /** Zombi görünümü: rastgele (tohumlu) yıpranmış kıyafet ve saç */
 function zombieLook(z, seed) {

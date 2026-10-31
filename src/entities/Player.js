@@ -153,8 +153,10 @@ export class Player {
     const accel = this.onGround || this.swimming ? (moving ? 12 : 16) : 2.5;
     this.vel.x = damp(this.vel.x, dx * target, accel, dt);
     this.vel.z = damp(this.vel.z, dz * target, accel, dt);
-    // ---- yön
+    // ---- yön (etkileşimde kısa süre hedefe dönülür: kapı koluna, kutuya, yerdeki eşyaya bakarak uzanır)
+    if (moving) this.faceT = 0;
     if (this.aiming || (S.combat && S.combat.attacking)) this.yaw = dampAngle(this.yaw, this.camYaw + Math.PI, 30, dt);
+    else if (this.faceT > 0) { this.faceT -= dt; this.yaw = dampAngle(this.yaw, this.faceYaw, 14, dt); }
     else if (moving && target > 0.1) this.yaw = dampAngle(this.yaw, Math.atan2(dx, dz), this.mode === 'prone' ? 4 : this.sprinting ? 9 : 12, dt);
     // ---- zıplama: tampon + kenar affı (coyote time) + engel atlama
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
@@ -176,6 +178,14 @@ export class Player {
     this.lockMove = Math.max(0, this.lockMove - dt);
     this.grabT = Math.max(0, (this.grabT || 0) - dt);
     this.recoil = damp(this.recoil, 0, 9, dt);
+  }
+
+  /** Etkileşim: hareket yoksa dur sn boyunca (x, z) noktasına dön */
+  faceTo(x, z, dur = 0.5) {
+    const d = Math.hypot(x - this.pos.x, z - this.pos.z);
+    if (d < 0.15) return;
+    this.faceYaw = Math.atan2(x - this.pos.x, z - this.pos.z);
+    this.faceT = dur;
   }
 
   /** Hafif fizik nesnesini (kutu, kasa, çöp kovası) eline al: gövde kinematiğe geçer, önünde taşınır */
