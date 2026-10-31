@@ -87,6 +87,16 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   tutunma sınırlı direksiyon, fren, devrilme önleyici); itilebilir/patlayan nesneler, enkaz, cesetler.
   Etkileşim grupları: STATIC, PLAYER, VEHICLE, PROP, DEBRIS, CORPSE. Fiziksel nesneler her istemcide yerel
   simüle edilir; oyunu etkileyen sonuçlar (ör. pist enkazının son pozu) eylem hattıyla eşitlenir.
+- **Araçlar (Aşama 5):** `VehicleVisuals` her araca kabin (sıra başına iki koltuk, gösterge paneli, direksiyona bağlı
+  dönen simit), yarı saydam camlar (Kenney cam malzemesi araç başına klonlanıp saydamlaştırılır), ön kenardan
+  menteşeli kapı kanatları (binince/inince o taraf açılıp kapanır; `veh_seat` olayıyla herkeste), arka üst kenardan
+  açılan bagaj kapağı (`vehicle_set {trunkOpen}` ile herkeste; panel kapanınca kapanır), far camı ışıması (F ile)
+  ve hasar görselleri ekler: sağlık eşiklerinde gövde ağına göçük (geometri araç başına kopyalanır, çarpma yönüne
+  göre), boya matlaşır/koyulaşır, %50 altında çatlak cam ve bir far söner; onarım sıfırlar. Sürüş yüzeye göre:
+  `Terrain.surfaceAt` (asfalt/beton/toprak/çim/kum/kaya/kar; toprak yol = toprak) → `SURFACES` tablosundan tutunma
+  çarpanı, yuvarlanma direnci (kum/kar yavaşlatır; arazi aracı daha az etkilenir), ıslak/karlı çarpanı ve toz
+  yoğunluğu; aracın `offroad` yeteneği çim/toprak tutunmasını kısmen telafi eder. Çarpışmada Δv'den hasar ve çarpma
+  yönü (göçük yeri); önündeki üs yapısı, bina kapısı ya da pencere `vehicle_ram` ile hasar alır (host uygular).
 - **Yol bulma:** 0,5 m'lik gezinme ızgarası + pencereli A*; kapı/pencere/yapı hücreleri "kırılabilir" sayılır,
   zombiler engeli kırarak yol açar.
 - **Varlıklar:** CC0 modeller `tools/pack-assets.mjs` ile 7 GLB kitinde birleştirilir (~11 MB).
