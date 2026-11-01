@@ -78,10 +78,13 @@ Lobide **Sesli sohbeti aç** ile mikrofonu aç; oyunda **V** tuşuna basılı tu
 (güçlü ekran kartları), *Ultra* (ortam kapanması/AO ve gerçek su yansımaları). Seviye seçilince gölge, bitki örtüsü,
 çözünürlük, AO, su ve efekt ayarları birlikte değişir; sonra tek tek değiştirilebilir. **Performans göstergesi**
 açılırsa ekranda FPS, kare süresi, %1 low, CPU/GPU süresi, çizim çağrısı, üçgen, zombi ve fizik nesnesi sayısı görünür.
+Orta ile Ultra'nın karşılaştırması: `docs/img/kalite-orta-ultra-*.jpg`.
 
 Kendi bilgisayarında ölçmek için tek oyunculu bir oyunda **Duraklat → Ayarlar → Grafik → Performans testini başlat**
 (~45 sn): oyun şehir merkezi, orman, üs ve 40 zombilik bir sürüyü sırayla ölçer, sonucu tablo olarak gösterir;
-**Sonucu kopyala (JSON)** ile paylaşabilirsin.
+**Sonucu kopyala (JSON)** ile paylaşabilirsin. Test sırasında karakterin ve takım arkadaşların hasar almaz, otomatik
+kayıt sona ertelenir; araçtayken başlamaz. Tarayıcıda donanım hızlandırması kapalıysa (yazılım GPU'su) sonuç
+tablosunda uyarı çıkar: o değerler ekran kartının gerçek performansı değildir.
 
 ---
 
@@ -99,10 +102,13 @@ doğrudan `file://` ile açma: tarayıcılar ES modüllerini ve model dosyaları
 ### Testler
 
 ```bash
-npm test             # birim testleri (envanter, ihtiyaçlar, zaman, animasyon paketi, hareket, parça birleştirme…)
+npm test             # birim testleri (envanter, ihtiyaçlar, zaman, animasyon paketi, hareket, parça birleştirme, cephe, ağ, kalite/performans ölçer…)
 npm run test:e2e     # tüm uçtan uca senaryolar sırayla (kendi sunucusunu açar; başsız Chromium + Playwright)
 node tools/e2e.mjs story carry-mp             # seçili senaryolar (günlük: /tmp/e2e-<ad>.log)
 node tools/scenario.mjs tests/e2e/story.mjs   # tek senaryo, elle açılmış sunucuya (`npm start`) karşı
+node tools/e2e.mjs visual                     # görsel regresyon: 14 görüntü Orta kalitede, tests/visual/baseline ile
+VISUAL_BASELINE=1 node tools/e2e.mjs visual   # görsel tabanı yeniden al (başka GPU'da gerekir)
+VISUAL_QUALITY=ultra node tools/e2e.mjs visual  # o kalitede görüntü al, karşılaştırma yok (/tmp/visual-ultra/)
 ```
 
 Ayrıntılar: [`docs/TEST_REPORT.md`](docs/TEST_REPORT.md). Her gönderimde GitHub Actions (`.github/workflows/ci.yml`)

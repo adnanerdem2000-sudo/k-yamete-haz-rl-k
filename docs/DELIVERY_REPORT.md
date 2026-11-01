@@ -1,7 +1,13 @@
 # Teslim Raporu — "Next Level 2.0" turu
 
-Bu belge turun sonunda tamamlanır. Her aşama bitince ilgili bölüm doldurulur; **test edilemeyen sistemler
-ayrıca işaretlenir**, hiçbir şey yalnızca derlendiği için "tamamlandı" sayılmaz.
+Tur 1 Kasım 2026'da sekiz aşamanın sonunda tamamlandı. **Test edilemeyen sistemler ayrıca işaretlendi** (§6);
+hiçbir şey yalnızca derlendiği için "tamamlandı" sayılmadı. Kabul kriterleri §7'de, son test sonuçları §8'de, kalan
+sorunlar §9'da ve `KNOWN_ISSUES.md`'de.
+
+İstemin 18. bölümündeki başlıklar: başlangıç mimarisi §1 · tespit edilen / düzeltilen sorunlar §2–3 · değiştirilen
+dosyalar ve eklenen sistemler §4 · karakterler ve animasyonlar §5 Aşama 2 · fizik Aşama 3 · harita ve çevre Aşama 4 ·
+araçlar Aşama 5 · zombi ve bot YZ Aşama 6 · çok oyunculu Aşama 7 · performans ölçümleri Aşama 8 ve §8 · birim ve
+uçtan uca test sonuçları §8 · gerçek donanım testleri §6 (yapılamadı) · bilinen kalan sorunlar §9.
 
 ## 1. Başlangıç mimarisi (tur başı, commit `bf132f4`)
 - Three.js r187 (vendor), Rapier 3D (compat, vendor), ES modülleri, derlemesiz statik site; PeerJS/WebRTC +
@@ -67,6 +73,25 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
   oyun ~2 kat yavaş) ama sınırı aşmıyordu. Gerçek tarayıcıda imleç ortaya gittiği için oluşmaz. Ağ trafiği,
   ses, bellek sızıntısı adayları sırayla elendi (`tools/dev/mp-mem-probe*.mjs`, `mem-infra-probe.mjs`,
   `trace-probe.mjs`). Aşama 7.
+- **Hasarlı araçta bütün ekranın kararması**: hasarlı doğan araçların göçük geometrisinde normaller yeniden
+  hesaplanınca alanı sıfır üçgenlerin köşeleri sıfır uzunlukta normal alıyordu (kamyonet, minibüs, sedan, SUV,
+  ambulans, kamyon gövdeleri). Gölgelendiricide `normalize(0)` NaN verir; o kenardaki birkaç NaN piksel parlama
+  (bloom) bulanıklığıyla bütün kareye yayılıyor, kare tamamen kararıyordu. Ultra görsel testinde "araç dışı" sahnesi
+  iki koşuda da siyah çıktı; göçükler rastgele olduğu için her kalitede ve her oyunda belirli açılardan olabilirdi.
+  Sondalar (`tools/dev/ultra-black-probe2.mjs`, `nan-object-probe.mjs`): bileşik tamponun 2.073.600 kanalının hepsi
+  NaN, AO normal tamponunda kare ortasında 18 NaN; AO ve su kapalıyken de siyah, parlama kapalıyken görüntü var;
+  ışın o pikselde kamyonetin gövde ağına çarptı, ağda 2 sıfır normal. Aşama 8.
+- **AO'da gizli çatı hayaleti**: AO geçişi normal/derinlik tamponunu ortak bir malzemeyle çizdiği için, oyuncunun
+  içinde bulunduğu binanın köşe gölgelendiricisinde kırpılan çatısı AO tamponunda kalıyor, iç mekân görünümünde
+  gökyüzünde açık renkli bir üçgen bırakıyordu (Ultra, bina içi görüntüsü). Aşama 8.
+- **Ayar varsayılanlarının değişmesi**: `Settings` kayıtta olmayan bölümleri `DEFAULTS` nesnesinin kendisiyle
+  dolduruyordu; kalite ön ayarı ve tuş değişikliği varsayılanları değiştiriyor, "Tüm ayarları sıfırla" eski değerlere
+  dönmüyordu (birim testi eski kodda başarısız). Aşama 8.
+- **Performans testi**: oturum kapanınca kapanmış oturumda çalışmaya devam ediyordu; araçtayken de başlıyor,
+  oyuncuyu araçtan inmeden ışınlıyordu; duraklatılan süre (yalnız çizim) ölçüme giriyor ve kare süresini olduğundan
+  iyi gösteriyordu; botlar sürüde hasar alıyordu; test sırasında gün dönerse otomatik kayıt oyuncuyu sürünün ortasında
+  kaydederdi; dinamik çözünürlük ölçüm sırasında değişebiliyordu; sonuçta su yansıması ayarı yanlış anahtarla
+  (`water`) yazılıyordu; 600 karelik pencere 75 FPS üstünde 8 sn'lik ölçüme sığmıyordu. Aşama 8 inceleme iş akışı.
 
 ## 3. Düzeltilen sorunlar
 - `Interact.findTarget`: uzaklık alanı `dist` oldu; `interact` senaryosu kapı adımı bunu yakalar.
@@ -89,10 +114,28 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
 - Test koşucusu (`tools/scenario.mjs`) sayfalara `requestPointerLock`'u reddeden bir başlangıç betiği ekler
   (`PW_POINTERLOCK=1` ile eski davranış). İki sekmede tarayıcı süreci 94 MB'ta, render süreçleri 750–800 MB'ta
   sabit (önce 2,6 → 5,6 GB ve 2,2–3,3 GB); tek sekmede render süreci 2,4 GB → ~0,8 GB.
+- `VehicleVisuals.dent` yeniden hesaplanan normalleri onarır (`NormalRepair.repairNormals`: sıfır/NaN normal →
+  komşu üçgenin yüz normali), onarımda özgün normaller geri yüklenir; yüklenen modeller de bir kez taranır.
+  Parlamanın yüksek geçiş girişi NaN/sonsuz pikselleri süzer (sonda: NaN yayan ağ eklenince kare kararmadı).
+  `vehicles2` senaryosu her araç modeline üç göçük açıp normalleri tarar.
+- AO geçişi çatı gizliyken birleşik çatı ağlarını çizmez. `Settings` varsayılanları derin kopyalar.
+- `Benchmark.run`: oturum kapanır ya da oda açılırsa iptal (kapanmış oturuma dokunmaz; `benchmark` senaryosu iptalden
+  sonra yeni oyun başlatıp fiziğin ilerlediğini denetler), araçta/yerde/tırmanırken reddeder, duraklatmada ölçümü
+  baştan alır, botları da korur, otomatik kaydı sona erteler, dinamik çözünürlüğü dondurur (`Graphics.holdScale`), ayar
+  değişirse sonucu işaretler; `PerfMonitor` penceresi 8192 kare, GPU kesintisinde bekleyen sorgular atılır.
+- Su yansımasının "kıyı" kısayolu deniz seviyesinin 6 m üstündeki her düzlüğü (şehir merkezi dahil) kıyı sayıyordu →
+  +0,5 m. Gölge aç/kapa yalnız gölge düşüren değil gölge alan (zemin, yol) malzemeleri de yeniden derletir.
+- Lastik sesi: uzaktan sürülen araçtaki yolcu için zemin türü güncellenmiyordu (asfaltta çakıl sesi); oturum
+  `endSession` dışında kapanınca (yeniden bağlanma, host göçü) lastik/patinaj döngüleri çalmaya devam ediyordu.
+- Görsel test: donmuş döngüde ortam ışığı haritası istenen saatin göğüyle yenilenmiyordu (yenileme oyun süresi ve duvar
+  saatine bağlı; öğle sahneleri menünün akşam ışığıyla çiziliyordu) → her sahnede yeniden çizilir. Araçlar rastgele
+  hasarla doğduğu için araç sahneleri koşudan koşuya değişiyordu → çekimden önce gövde hasarsız duruma alınır. Test
+  koşucunun hafif ayarlarıyla (Düşük, %60 çözünürlük, gölge/parlama/çimen kapalı) çalışıyordu → karşılaştırma artık
+  oyunun varsayılanı Orta'da. Aşama 8 öncesi taban bu düzeltilmiş testle Aşama 7 koduyla (`95f460b`) yeniden alındı.
 
 ## 4. Değiştirilen dosyalar ve eklenen sistemler
-Tur başı `bf132f4` ile son commit arasındaki fark `git diff --stat bf132f4..HEAD` ile görülebilir (kaynak, test,
-araç ve CI dosyaları; sayılar §8'de).
+Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): oyun kodunda 51 dosya (12 yeni, 39 değişen;
++3.271 / −189 satır), test, araç ve CI tarafında 63 dosya (+3.726 / −8 satır; 14 görsel taban görüntüsü dahil).
 
 **Yeni modüller (eklenen sistemler)**
 | Dosya | Sistem | Aşama |
@@ -311,7 +354,129 @@ araç ve CI dosyaları; sayılar §8'de).
 - **Yapılmadı / sınırlar:** lobide host düşerse göç yok (oda kapanır); çevrimiçi (PeerJS/TURN) uçtan uca test yok;
   sesli sohbet 3B konumlandırması dinlenemedi; fizik nesnelerinin ara konumları istemcilerde yerel (son konum/taşıma
   eşitlenir); 6 oyunculu ortamın dört oyuncusu gerçek oyun sekmesi değil protokol düzeyinde sahte eş.
+### Aşama 8 — Son kalite
+- **Kalite seviyeleri** (Ayarlar → Grafik → Kalite): Düşük / Orta / Yüksek / Ultra. Seçim gölge, parlama, çimen, AO,
+  su yansıması, görüş mesafesi (300/420/540/700 m) ve çözünürlük ölçeğini (%85/%100/%100/%100) birlikte, tek
+  bildirim ve tek yeniden kurulumla değiştirir; ayrıca gölge haritası 1024/2048/4096/4096, çözünürlük tavanı
+  1×/1×/1,5×/2×, bitki tam model mesafesi (ağaç 38/58/85/120 m), zombi sınırı 26/38/50/50, efekt yoğunluğu
+  %50/%80/%100/%100. Varsayılan Orta; AO ve su yansıması yalnız Ultra'da açık (istem: "her efekti varsayılan olarak
+  açma"). Gölge aç/kapa yalnız gerçekten değişince malzemeleri yeniden derletir.
+- **Grafik:** AO (GTAO, saydam/alfa kesimli yüzey, gökyüzü ve gizli çatı hariç), düzlemsel su yansıması (kameraya en
+  yakın göl/kıyı, 1/3 çözünürlük, eğik yakın düzlem). Islak yüzey (yağmurda pürüzlülük), iç mekân ışığı ve
+  gökyüzünden üretilen ortam ışığı (PMREM) Aşama 4'ten. Parlama girişinde NaN koruması (§2/§3).
+- **Performans ölçümü** (`PerfMonitor`): FPS, ortalama kare süresi, %1 low, CPU ve GPU kare süresi, çizim çağrısı ve
+  üçgen (karenin bütün geçişleri), bellek (JS yığını, GPU geometri/doku), aktif zombi, fizik gövdesi (uyanık/toplam).
+  Oyun içi gösterge ve performans testi kullanır.
+- **Performans testi** (Duraklat → Ayarlar → Grafik): şehir merkezi, orman, üs, 40 zombilik sürü; sahne başına ısınma +
+  8 sn ölçüm; tablo + JSON. Sağlamlık denetimleri `benchmark` senaryosunda: araçtayken reddedildi, test sırasında
+  tetiklenen otomatik kayıt yapılmadı ve sonda bir kez yapıldı, duraklatılan test devam edince tamamlandı, oyun
+  kapanınca test iptal edildi ve ardından açılan yeni oyunda fizik ilerledi, sonuç tablosu dört satır + yazılım GPU'su
+  uyarısı gösterdi.
+- **Ölçümler:** yazılım GPU'sunda (SwiftShader, 576×324) `benchmark` senaryosu, sahne başına 3 sn. Kare hızı
+  0,1–17 FPS arasında (gölgelendirme CPU'da) ve **gerçek donanım performansı değildir**; aşağıdaki çizim çağrısı ve üçgen
+  sayıları kalite seviyelerinin yükünü gösterir (karenin bütün geçişleri: gölge haritası, AO, yansıma, son işlem).
+
+  | Sahne | Çizim: Düşük / Orta / Yüksek / Ultra | Üçgen (milyon): Düşük / Orta / Yüksek / Ultra |
+  |---|---|---|
+  | Şehir merkezi | 462 / 771 / 840 / 1.142 | 2,71 / 3,57 / 3,69 / 5,34 |
+  | Orman | 240 / 513 / 641 / 3.760 | 1,68 / 2,77 / 3,98 / 25,56 |
+  | Üs (ev) | 273 / 531 / 553 / 872 | 1,08 / 1,65 / 1,79 / 3,53 |
+  | Zombi sürüsü (40) | 614 / 1.022 / 1.274 / 1.868 | 3,17 / 4,28 / 4,42 / 6,35 |
+
+  Ultra'da çizim çağrısı Yüksek'in 1,4–1,6 katı (AO normal geçişi); göl yakınında ~5,9 katı (yansıma geçişi + AO +
+  120 m'ye kadar tam model ağaç). İnceleme düzeltmesinden önce şehir merkezi de "kıyı" sayılıp yansıma çiziliyordu
+  (Ultra şehir 1.932 → 1.142 çizim). Fizik: 502–504 gövde, uyanık 5–37. JS yığını ~307 MB.
+- **Görsel regresyon:** 14 görüntü, Orta kalite, aynı (düzeltilmiş, belirlenimci) testle Aşama 7 kodu (`95f460b`)
+  ile Aşama 8 kodu karşılaştırıldı: 13 görüntüde fark %0–0,07 (eşik %2,5); **araç dışı (08a) Aşama 7 kodunda tamamen
+  siyah** (göçük normali NaN hatası, §2), Aşama 8'de doğru. Taban artık Aşama 8 görüntüleri. Ultra
+  (`VISUAL_QUALITY=ultra`): AO temas gölgeleri, 4096'lık gölge haritasıyla ağaç gölgeleri, 700 m görüş, göl yansıması;
+  gizli çatı hayaleti ve kara kare giderildi. Orta–Ultra karşılaştırma görüntüleri `docs/img/` altında.
+- **Ses:** kapı türüne göre açılma sesi (ahşap gıcırtı; metal/hücre/kasa/garaj metalik; cam), barikat kopunca tahta
+  çatırtısı (önce çekiç sesi çalıyordu), gevşek zeminde lastik hışırtısı. Malzeme/kütleye göre çarpışma, zemine göre
+  ayak sesi, iç mekân yankısı, oklüzyon, savaş teması önceki aşamalardan; `audio` senaryosu (HRTF, zemin, yankı,
+  oklüzyon) her koşuda. Hoparlörden dinlenemedi (§6).
+- **İnceleme:** dört mercekli çekişmeli inceleme (işleme, performans, ayarlar, ses/görsel test) 21 bulgu
+  verdi, 16'sı benzersiz; hepsi uygulandı ve çoğu teste bağlandı. En önemlisi: performans testi sırasında menüye
+  dönülünce kapanmış oturuma dokunup Rapier fizik dünyasını bozması (sayfa yenilenmeden yeni oyun başlamıyordu).
+  Diğerleri: "Tüm ayarları sıfırla"nın çalışmaması, şehir merkezinde deniz yansıması, AO geçişinde gölge haritalarının
+  yeniden çizilmesi, araçtayken başlayan test, 600 karelik pencere, yolcunun yanlış lastik sesi, görsel testte ortam
+  ışığı; düşük öncelikli: GPU kesintisi, bot hasarı, otomatik kayıt, dinamik çözünürlük, `waterRefl` anahtarı, gölge
+  aç/kapa yeniden derleme, görsel testte ön ayar/görüş mesafesi, lastik döngüsü sızıntısı. Bulgu başına üç
+  doğrulayıcının turu (67 ajan, ~2,7 saat) uzun sürdüğü için düzeltmeler sonuç beklenmeden uygulandı. Sonuç: 9 bulgu
+  doğrulandı (oylar 3/3 ya da 2/3; hepsi düzeltilmişti), 12'si reddedildi. Reddedilenlerin doğrulayıcıları
+  düzeltmelerden sonra çalıştı; 36 olumsuz oyun hepsi gerekçe olarak düzeltilmiş kodu gösteriyor (ör. menüye dönüşte her
+  beklemeden sonraki oturum denetimi ve atlanan fizik çağrıları). Yani bu reddedilmeler bulguya itiraz değil, düzeltmenin
+  bağımsız bir kod okumasıyla teyidi. Testler sırasında ayrıca NaN kara kare, AO gizli çatı hayaleti, görsel testin
+  Düşük ayarla ve rastgele araç hasarıyla çalışması bulunup düzeltildi.
+- **Regresyon:** birim testleri 47/47; uçtan uca 27/27 (tam koşu 26/27 + `benchmark` yeniden koşusu, §8); görsel
+  regresyon Aşama 8 tabanına göre ≤ %0,06; CI son koşu yeşil. Tam koşunun sonunda bütün çok oyunculu senaryolar
+  (`multiplayer-6` 289 sn, `multiplayer-local` 294 sn, `carry-mp` 296 sn, `host-migration` 608 sn, `host-migration3`
+  866 sn) ve hikâye/final/oynanış senaryoları değişmeden geçti. CI'da genişletilen `ui-clicks` önce bir tıklamada 10 sn
+  zaman aşımına uğradı (yazılım GPU'sunda yeni gölgelendirici derlenen kareler); tıklamalara adım adı ve 60 sn tavan
+  verildi, kalite denetimi gölgesiz "Düşük" ön ayarıyla yapıldı, CI yeşile döndü.
+- **Yapılmadı / sınırlar:** gerçek ekran kartlarında ölçüm (ortamda yalnız yazılım GPU'su); 1080p/60 FPS hedefi
+  doğrulanamadı; Ultra'nın AO ve yansıması sahneyi bir kez daha çizer (çizim çağrısı Yüksek'in 1,4–1,6 katı, göl
+  yakınında ~6 katı), orta sınıf GPU'da Yüksek önerilir; ekran uzayı yansıması (SSR) ve HDRI dosyası yok (ortam ışığı gökyüzü
+  gölgelendiricisinden üretiliyor).
+
 ## 6. Test edilemeyenler
-- Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
-- Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).
-- Hoparlörden ses ve fare işaretçi kilidi (başsız tarayıcı).
+- **Gerçek internet üzerinden WebRTC/TURN bağlantısı:** ortamın ağ kısıtı. TURN yapılandırması birim testiyle ve kod
+  incelemesiyle doğrulandı; aynı protokol yerel taşıyıcıyla (iki/üç sekme, 6 oyunculu ortam) test edildi.
+- **Gerçek ekran kartında performans:** yalnız yazılım GPU'su (SwiftShader) var; FPS değerleri gerçek donanımı temsil
+  etmez, 1080p/60 FPS hedefi doğrulanamadı. Ölçümler kalite seviyelerinin yükü (çizim çağrısı, üçgen, AO/yansıma
+  geçişleri) için kullanıldı. Oyuncunun kendi donanımında ölçmesi için oyun içi performans testi var.
+- **Hoparlörden duyulan ses:** ses grafiği (HRTF, yankı, oklüzyon, sentez sesler) başsız tarayıcıda çalıştırıldı ama
+  dinlenemedi; sesli sohbetin 3B konumlandırması mikrofon/hoparlör olmadığı için yalnız kod incelemesiyle.
+- **Fare işaretçi kilidi:** test koşucusu kilidi kapatır (başsız kabuktaki imleç döngüsü, §2); gerçek tarayıcıda
+  elle denenmedi.
+- **Altı gerçek oyun sekmesi:** 6 oyunculu ortam 2 gerçek sekme + 4 protokol düzeyi sahte eşle; dörtten fazla gerçek
+  sekmeyle host göçü denenmedi.
+- **Öznel nitelikler:** hareketin "robotik/kaygan" hissettirmemesi, görsel kalitenin "belirgin" artışı ölçümlerle ve
+  ekran görüntüleriyle desteklendi ama bir oyuncu tarafından değerlendirilmedi.
+
+## 7. Kabul kriterleri (istemin 17. bölümü)
+| # | Ölçüt | Durum | Kanıt |
+|---|---|---|---|
+| 1 | Altı karakter görsel olarak ayırt edilebilir | Karşılandı | Aşama 2; `lineup`, görsel regresyon 02 (altı kart) |
+| 2 | Hareket robotik/kaygan değil | Kısmen (öznel) | Aşama 2 FootIK, yürüyüş/dönüş ölçümleri (`motion`); oyuncu değerlendirmesi yok |
+| 3 | Özel etkileşimler doğru animasyonla | Karşılandı | Aşama 2; `interact` (hedefe dönme, eylem anına bağlı zamanlama) |
+| 4 | Kapılar ve çekmeceler fiziksel | Karşılandı | Aşama 3; `physics2` (motor, itme, kilit, kırılma, çekmece) |
+| 5 | Kırılabilir nesnelerin çarpışma alanı güncellenir | Karşılandı | Aşama 3; `physics2` (kırılan kapının eklemi kalkar, kanat düşer) |
+| 6 | Cephe ve iç mekân belirgin iyileşir | Karşılandı | Aşama 4; `facade` birim testleri, görsel 04/05/07 |
+| 7 | Araçlar türlerine göre farklı sürülür | Karşılandı | Aşama 5; `vehicles2` (tür ve zemin ölçümleri) |
+| 8 | Araç içi etkileşimler çalışır | Karşılandı | Aşama 5; `vehicles2` (kapı, bagaj, far, direksiyon), görsel 08b |
+| 9 | Zombiler kalabalıkta takılmaz | Kısmen | Aşama 6; `ai2`: 12 zombi aynı noktadan 3 sn'de ayrıştı, oyuncunun içinden geçmedi. 40'lık sürüde takılma ölçülmedi; çok kalabalıkta yol bulma bütçesi kısa takılmalara yol açabilir (KNOWN_ISSUES) |
+| 10 | YZ arkadaşlar kaynak toplar, üs işi yapar | Karşılandı | Aşama 6; `ai2` (yağma ve inşaat emirleri) |
+| 11 | Eşya/araç/animasyon/dünya tutarlı eşitlenir | Karşılandı (yerel taşıyıcı) | Aşama 7; `carry-mp`, `multiplayer-local`, `multiplayer-6`; PeerJS ile uçtan uca yok |
+| 12 | TURN ile gerçek internet bağlantısı test edilir | **Karşılanamadı** | Ortamda internet üzerinden TURN yok; yapılandırma + birim testi var |
+| 13 | Host ayrılması ve yeniden bağlantı doğrulanır | Karşılandı | `host-migration`, `host-migration3`, `multiplayer-6` |
+| 14 | Test bağımlılıkları temiz kurulumda çalışır | Karşılandı | Aşama 1; Playwright `package.json`/kilit dosyasında, CI `npm ci` + `npx playwright install` |
+| 15 | CI yayın öncesi testleri çalıştırır | Kısmen | `ci.yml` her gönderimde birim + `smoke-menu` + `ui-clicks`; `pages.yml` yayından önce birim testlerini koşar ama depo şu an "Deploy from a branch" ile yayınlandığı için canlı yayın testleri beklemiyor |
+| 16 | Gerçek donanımda performans raporu | **Karşılanamadı** | Yalnız yazılım GPU'su; oyun içi performans testi ve JSON çıktısı eklendi |
+| 17 | Hikâye, kayıt, görev, finaller korunur | Karşılandı | `story`, `ending`, `gameplay` |
+| 18 | Ana menü ve oyun içi butonlar gerçek tıklamayla çalışır | Büyük ölçüde | `ui-clicks`: ana menünün altı ekranı + geri, ayar sekmeleri ve kalite seçimi, Tek Oyna → Oyuna Başla, oyunda günlüğün altı sekmesi, duraklat → Ayarlar/Nasıl Oynanır?/Devam Et gerçek fare tıklamasıyla; diğer paneller (inşa, takım, depo, tüccar) işlevleri doğrudan çağıran senaryolarla, yıkıcı düğmeler tıklanmadı |
+
+## 8. Test sonuçları (son koşu, Aşama 8 kodu)
+- **Birim testleri (`npm test`):** 47/47 (9 dosya; dosya başına kapsam `TEST_REPORT.md`'de). Turun başında 31.
+- **Uçtan uca (`node tools/e2e.mjs`, 27 senaryo, sırayla, yazılım GPU'su):** 27/27. Tam koşuda (92 dk) 26/27:
+  `benchmark` yalnız yeni eklenen iptal sonrası denetiminde düştü (yeni oyunda fiziğin 3 sn içinde ilerlemesi
+  bekleniyordu, yazılım GPU'sunda yeni dünyanın ilk kareleri ~7 sn sürüyor). Denetim "3 dk içinde 30 fizik adımı" oldu;
+  oyun kodu değişmeden yeniden koşuldu ve geçti (37 sn'de 30 adım). Senaryo başına süre ve kapsam `TEST_REPORT.md`'de.
+  Turun başında 18 senaryo vardı; 9 yeni senaryo eklendi.
+- **Görsel regresyon:** Aşama 7 → 8, Orta kalite, 14 görüntü: 13'ünde fark %0–0,07; araç dışı Aşama 7'de siyah kare
+  (düzeltilen hata). Tam koşuda Aşama 8 tabanına göre ≤ %0,06. Ultra görüntüleri ve karşılaştırma `docs/img/`.
+- **Performans:** yalnız yazılım GPU'sunda (Aşama 8 bölümündeki tablo); gerçek donanım ölçümü yok (§6).
+- **CI:** her gönderimde birim testleri + `smoke-menu` + `ui-clicks` (GitHub Actions, Ubuntu); bu turun son koşuları
+  yeşil.
+
+## 9. Bilinen kalan sorunlar (özet; tamamı `KNOWN_ISSUES.md`)
+- Gerçek internet üzerinden TURN bağlantısı, gerçek ekran kartında performans ve hoparlörden ses test edilemedi (§6).
+- Lobide host düşerse göç yok (oda kapanır); fizik nesnelerinin ara konumları istemcilerde yerel.
+- Çok kalabalık sürülerde (40+) zombilerin kısa takılması ölçülmedi; yol bulma bütçesi sınırlı.
+- Botlar araç sürmez, kendi başına savunma inşa etmez.
+- Araç kapı/bagaj kanatları gövdeden ayrı model değil; kabin bütün araçlarda aynı prosedürel set.
+- Kıyafetlerde kumaş dokusu/normal haritası ve daha ayrıntılı saç geometrisi yok.
+- Ekran uzayı yansıması (SSR) ve HDRI dosyası yok; su yansıması yalnız en yakın su yüzeyinde.
+- Ultra, orta sınıf ekran kartı için ağır olabilir (çizim çağrısı Yüksek'in 1,4–1,6 katı, göl yakınında ~6 katı).
+- Mobil/dokunmatik kontrol yok.
+

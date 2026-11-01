@@ -1,4 +1,4 @@
-# Bilinen Sorunlar ve Sınırlamalar (v0.1 — web prototipi)
+# Bilinen Sorunlar ve Sınırlamalar ("Next Level 2.0" turu sonu, 1 Kasım 2026)
 
 ## Çok oyunculu
 - **Oda listesi:** Herkese açık PeerJS sinyal sunucusu oda listelemeyi desteklemediği için "Açık Odalar"
@@ -44,9 +44,9 @@
 - Uçak kalkışı ve düşen uçak sahneleri kendi kamerasını kullanmaz; oyuncu kamerası sahneyi uzaktan izler.
 
 ## Görsel / performans
-- Şehir merkezinde kare başına ~400 çizim çağrısı (varsayılan ayarlar, gölgeler açık; önceki sürümde ~1.100), 2,5–3 milyon üçgen çizilir. Zayıf
-  dizüstü GPU'larda **Ayarlar → Grafik → Kalite: Orta/Düşük** ve **Otomatik çözünürlük** önerilir
-  (otomatik çözünürlük varsayılan olarak açıktır).
+- Şehir merkezinde kare başına (gölge haritası ve son işlem geçişleri dahil) Düşük'te ~460, Orta'da (varsayılan) ~770,
+  Ultra'da ~1.140 çizim çağrısı; Orta'da ~3,6 milyon üçgen. Zayıf dizüstü GPU'larda **Ayarlar → Grafik → Kalite:
+  Düşük** ve **Otomatik çözünürlük** önerilir (otomatik çözünürlük varsayılan olarak açıktır).
 - Kalite seviyesinin gölge haritası çözünürlüğü, kenar yumuşatma ve zombi sınırı kısmı tam etki için sayfanın
   yenilenmesini ister (gölge, parlama, çimen, AO, su yansıması, görüş mesafesi, çözünürlük ölçeği anında değişir).
 - Tarayıcı Esc tuşunu işaretçi kilidinden çıkmak için yutar; Esc'ye basınca duraklatma menüsü açılır
@@ -71,8 +71,8 @@
   kare hızları gerçek donanımı temsil etmez ve öyle sunulmaz. 1080p/60 FPS hedefi doğrulanmadı. Gerçek donanım raporu
   için oyuncu **Duraklat → Ayarlar → Grafik → Performans testini başlat** ile dört sahneyi ölçer, sonucu JSON olarak
   kopyalar. Yazılım GPU'su algılanırsa sonuç tablosunda uyarı çıkar.
-- **Ultra pahalıdır:** AO (GTAO) ve gerçek su yansıması sahneyi bir kez daha çizer; çizim çağrısı Yüksek'e göre
-  yaklaşık iki katıdır. Orta sınıf ekran kartında Yüksek önerilir.
+- **Ultra pahalıdır:** AO (GTAO) ve gerçek su yansıması sahneyi bir kez daha çizer; ölçümde çizim çağrısı Yüksek'in
+  1,4–1,6 katı, göl yakınında ~6 katı. Orta sınıf ekran kartında Yüksek önerilir.
 - AO ekran uzayında hesaplanır: ekran kenarında ve ince nesnelerin çevresinde hafif hale görülebilir; saydam ve alfa
   kesimli yüzeyler (yapraklar, cam, su, parçacıklar) AO almaz ve vermez. Oyuncu bir binanın içindeyken (çatı kesit
   görünümü) çevredeki çatılar da AO hesabından çıkarılır.

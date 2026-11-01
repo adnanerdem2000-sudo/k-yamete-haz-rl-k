@@ -255,21 +255,34 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   yükleme ister), çözünürlük tavanı 1×/1×/1,5×/2×, bitki mesafeleri (`Vegetation.RANGES.ultra`), zombi sınırı
   26/38/50/50, efekt yoğunluğu %50/%80/%100/%100 (`Effects.emit`). Gölge aç/kapa artık yalnız gerçekten değiştiğinde
   malzemeleri yeniden derletir.
-- **AO:** `GTAOPass` (three.js r187, `vendor/three/addons`), bileşimde çizimden hemen sonra; saydam yüzeyler, gökyüzü
-  ve `userData.noAO` nesneleri AO tamponuna girmez. Ultra'da varsayılan açık.
+- **AO:** `GTAOPass` (three.js r187, `vendor/three/addons`), bileşimde çizimden hemen sonra; saydam/alfa kesimli
+  yüzeyler, gökyüzü ve `userData.noAO` nesneleri AO tamponuna girmez. AO normal/derinlik tamponunu ortak bir
+  malzemeyle çizdiği için köşe gölgelendiricisindeki çatı kırpması orada yoktur: çatı gizliyken (`userData.roofHide`)
+  birleşik çatı ağları AO'dan çıkarılır. AO çizimi sırasında gölge haritaları yeniden hesaplanmaz. Ultra'da varsayılan
+  açık.
+- **NaN koruması:** parlamanın yüksek geçiş gölgelendiricisi NaN/sonsuz pikselleri sıfırlar (tek bir NaN piksel
+  bulanıklık zincirinde bütün kareye yayılıp ekranı karartıyordu). Kaynak olarak bulunan araç göçüğü normalleri
+  `NormalRepair.repairNormals` ile onarılır; yüklenen glTF modelleri de bir kez taranır (`Assets.normalFixes`).
 - **Su yansıması:** `Water.renderReflection` (`Graphics.beforeRender` kancası): kamera bir göle 150 m'den yakınsa ya
   da kıyıdaysa su düzlemine göre aynalanmış sanal kamerayla sahne üçte bir çözünürlükte çizilir (eğik yakın düzlem,
   su gizli, gölge haritası yeniden hesaplanmaz); su gölgelendiricisi Fresnel ile karıştırır. Ultra'da varsayılan açık.
-- **Performans ölçümü** (`src/core/PerfMonitor.js`): son 600 kare — FPS, ort. kare süresi, %1 low, CPU kare süresi
-  (oyun döngüsünün JS süresi), GPU kare süresi (`EXT_disjoint_timer_query_webgl2` varsa), çizim, üçgen, JS yığını,
-  GPU kaynakları, aktif zombi ve fizik gövdesi (uyanık/toplam). Ayarlar → Grafik → "Performans göstergesi".
-- **Performans testi** (`src/systems/Benchmark.js`): şehir merkezi, orman, üs ve 40 zombilik sürü sahneleri; oyuncu
-  hasar almaz, sürü sonunda kaldırılır, oyuncu yerine döner. Duraklat → Ayarlar → Grafik → "Performans testini
-  başlat"; sonuç tablo + JSON (gerçek donanım raporu için).
+- **Performans ölçümü** (`src/core/PerfMonitor.js`): son 8192 kare — FPS, ort. kare süresi, %1 low, CPU kare süresi
+  (oyun döngüsünün JS süresi), GPU kare süresi (`EXT_disjoint_timer_query_webgl2` varsa; kesinti bildirilirse bekleyen
+  sorgular atılır), çizim ve üçgen (karenin bütün geçişleri: gölge, AO, yansıma, son işlem), JS yığını, GPU
+  kaynakları, aktif zombi ve fizik gövdesi (uyanık/toplam). Ayarlar → Grafik → "Performans göstergesi".
+- **Performans testi** (`src/systems/Benchmark.js`): şehir merkezi, orman, üs ve 40 zombilik sürü sahneleri; sahne
+  başına ısınma (süre + en az birkaç kare: gölgelendirici derlemesi ölçüme girmesin) ve ölçüm penceresi. Oyuncu ve
+  botlar hasar almaz, otomatik kayıt sona ertelenir, dinamik çözünürlük dondurulur (`Graphics.holdScale`), sürü
+  sonunda kaldırılır, oyuncu yerine döner. Oturum kapanır ya da oda açılırsa iptal edilir; araçta/yerdeyken başlamaz;
+  duraklatılırsa ölçüm devam edince baştan alınır; ayarlar test sırasında değişirse sonuç işaretlenir. Duraklat →
+  Ayarlar → Grafik → "Performans testini başlat"; sonuç tablo + JSON (gerçek donanım raporu için), yazılım GPU'su
+  algılanırsa uyarı.
 - **Ses:** kapı türüne göre açılma sesi (ahşap gıcırtı, metal/hücre/kasa/garaj metalik çınlama, cam), barikat
   kopunca tahta çatırtısı (eskiden çekiç sesi çalıyordu), gevşek zeminde lastik hışırtısı (asfaltta yok).
-- **Görsel regresyon** (`tests/e2e/visual.mjs`): istemdeki 12 sahne (13 görüntü), döngü durdurulmuş, saat/hava/
-  rastgelelik sabit; taban `tests/visual/baseline/`.
+- **Görsel regresyon** (`tests/e2e/visual.mjs`): istemdeki 12 sahne (14 görüntü), Orta kalitede (oyunun varsayılanı),
+  döngü durdurulmuş, saat/hava/rastgelelik ve ortam ışığı haritası sabit, araçlar hasarsız; taban
+  `tests/visual/baseline/` (Aşama 8 öncesi kodla alınmış). `VISUAL_QUALITY=<seviye>` oyunun kendi ön ayarını açılıştan
+  önce yazıp karşılaştırmasız görüntü alır (kalite seviyelerinin görsel farkı için).
 
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),
