@@ -6,6 +6,7 @@ import fs from 'node:fs';
 const MODE = process.env.MODE || 'mp';
 const WAIT = +(process.env.WAIT || 60);
 const OUT = process.env.OUT || '/tmp/mem-infra.txt';
+const LEVEL = process.env.LEVEL || 'light'; // light | detailed (detaylı: Oilpan sınıf/arena kırılımı; bellek sınırına yakınken süreç çökertebilir)
 export default async ({ page, url, wait, evalJS, log, newPage }) => {
   const browser = page.context().browser();
   const cdp = await browser.newBrowserCDPSession();
@@ -31,9 +32,9 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
   log('oyunda; bekleniyor', WAIT);
   // izleme oyun başlarken açılır: 10 sn'de bir hafif (light) periyodik döküm + sonda açık istek; detaylı döküm
   // bellek sınırına yakın süreçleri çökertebiliyor
-  await cdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { recordMode: 'recordContinuously', includedCategories: ['disabled-by-default-memory-infra'], memoryDumpConfig: { triggers: [{ mode: 'light', periodic_interval_ms: 10000 }] } } });
+  await cdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { recordMode: 'recordContinuously', includedCategories: ['disabled-by-default-memory-infra'], memoryDumpConfig: { triggers: [{ mode: LEVEL, periodic_interval_ms: 10000 }] } } });
   await wait(WAIT * 1000);
-  try { const dump = await cdp.send('Tracing.requestMemoryDump', { deterministic: false, levelOfDetail: 'light' }); log('döküm', dump); } catch (e) { log('döküm hatası', e.message); }
+  try { const dump = await cdp.send('Tracing.requestMemoryDump', { deterministic: false, levelOfDetail: LEVEL }); log('döküm', dump); } catch (e) { log('döküm hatası', e.message); }
   await wait(1500);
   const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
   await cdp.send('Tracing.end');
@@ -58,6 +59,11 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
     // yalnız üst düzey ve ikinci düzey girdiler; MB cinsinden, en büyük 18
     const rows = [...m.entries()].filter(([n]) => n.split('/').length <= 2).sort((a, b) => b[1] - a[1]).slice(0, 18);
     lines.push(`pid ${pid}: ` + rows.map(([n, v]) => `${n}=${(v / 1048576).toFixed(0)}MB`).join(' '));
+    if (LEVEL === 'detailed') {
+      // Oilpan (blink_gc), v8 ve partition_alloc alt girdileri: ilk 30 (MB)
+      const deep = [...m.entries()].filter(([n]) => /^(blink_gc|v8|partition_alloc|malloc|mojo|blob|discardable|skia)\//.test(n) && n.split('/').length > 2).sort((a, b) => b[1] - a[1]).slice(0, 30);
+      if (deep.length) lines.push(`pid ${pid} ayrıntı: ` + deep.map(([n, v]) => `${n}=${(v / 1048576).toFixed(1)}MB`).join(' '));
+    }
   }
   fs.writeFileSync(OUT, lines.join('\n') + '\n');
   fs.writeFileSync(OUT.replace(/\.txt$/, '') + '.dumps.json', JSON.stringify(events));
