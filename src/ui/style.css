@@ -635,3 +635,10 @@ input[type=range] { width: 200px; accent-color: var(--orange); }
 .panel-open .toasts { top: auto; bottom: 14px; }
 .panel-open .toast { opacity: 0.92; font-size: 13px; padding: 6px 12px; }
 .tl-entry.k-world { border-left-color: #3fa7d6; } .tl-entry.k-choice { border-left-color: #e67e22; background: rgba(230,126,34,0.07); }
+
+/* ağ göstergesi kalite renkleri */
+.hud-net.net-warn { color: #ffd166; }
+.hud-net.net-bad { color: #ff6b6b; animation: netblink 1s steps(2) infinite; }
+@keyframes netblink { 50% { opacity: 0.45; } }
+
+.ice-row textarea.ice-json { flex: 1; min-width: 240px; font: 12px/1.3 monospace; background: rgba(0,0,0,0.35); color: #e8e2d4; border: 1px solid rgba(255,255,255,0.18); border-radius: 6px; padding: 6px; resize: vertical; }

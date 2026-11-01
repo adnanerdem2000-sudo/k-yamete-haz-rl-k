@@ -211,12 +211,13 @@ export class Net {
       }
       case 'joined': this.onClientJoined(peer); break;
       case 'req': if (S && peer.inGame) S.applyAction(msg.type, msg.p || {}, peer.id); break;
-      case 'st': if (S && peer.inGame) this.onRemoteState(peer, msg); break;
+      case 'st': { peer.stCount = (peer.stCount || 0) + 1; if (msg.n !== undefined) { if (peer.stSeq !== undefined && msg.n > peer.stSeq + 1) peer.stLost = (peer.stLost || 0) + (msg.n - peer.stSeq - 1); peer.stSeq = msg.n; } if (S && peer.inGame) this.onRemoteState(peer, msg); break; }
       case 'hold': { const rec = S && S.players.get(peer.id); if (rec) { rec.held = msg.id; rec.avatar && rec.avatar.hold(msg.id); } break; }
       case 'qhook': if (S) S.quests.hook(msg.type, msg.arg); break;
       case 'save': { const rec = S && S.players.get(peer.id); if (rec) rec.saved = msg.d; break; }
       case 'downed': break;
       case 'ping': this.transport.send(pid, { t: 'pong', ts: msg.ts }); break;
+      case 'pong': peer.rtt = performance.now() - msg.ts; break;
       case 'bye': this.dropPeer(pid, true); break;
       default: break;
     }
@@ -227,6 +228,11 @@ export class Net {
     if (msg.ver !== PROTOCOL) { this.transport.send(peer.pid, { t: 'reject', reason: 'Oyun sürümleri farklı. Sayfayı yenileyip tekrar dene.' }); return; }
     // yeniden bağlanma: aynı jeton (şu an bağlı biri kullanıyorsa aynı tarayıcıdan ikinci sekmedir → ek al)
     let token = String(msg.token || uid());
+    // yeniden bağlanma: host eski bağlantının kapandığını henüz görmemiş olabilir → aynı jetonlu eski eşi düşür
+    if (msg.rejoin && token !== this.token) {
+      const old = [...this.peers.values()].find((p) => p !== peer && p.token === token);
+      if (old) { if (this.transport.drop) this.transport.drop(old.pid); this.dropPeer(old.pid, false); }
+    }
     const isLive = (tk) => tk === this.token || [...this.peers.values()].some((p) => p !== peer && p.token === tk);
     if (isLive(token)) { let n = 2; while (isLive(token + '-' + n)) n++; token = token + '-' + n; }
     const rejoining = r.players.find((p) => p.token === token);
@@ -266,6 +272,7 @@ export class Net {
       loot: S.loot.serialize(), ground: S.ground.serialize(), build: S.build.serialize(), vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
       quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(), story: S.storyWorld.serialize(),
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
+      props: S.props && S.props.serializeDynamic ? S.props.serializeDynamic() : null,
       players, you, charId: p ? p.charId : 'mert', name: p ? p.name : 'Oyuncu', look: p ? p.look : {},
     };
   }
@@ -348,11 +355,11 @@ export class Net {
     }
     this.phase = this.phase === 'game' ? 'game' : 'lobby';
     t.onHostData = (m) => this.onHostMsg(m);
-    t.onHostClose = () => this.onHostLost();
-    t.onCall = null;
+    t.onHostClose = (reason) => this.onHostLost(reason);
+    t.onCall = (call) => this.voice.answer && this.voice.answer(call);
     const prof = this.profile();
     const answer = new Promise((res, rej) => { this._joinWait = { res, rej }; setTimeout(() => { if (this._joinWait) { this._joinWait = null; rej(new Error('Oda yanıt vermedi.')); } }, 10000); });
-    t.sendHost({ t: 'hello', ver: PROTOCOL, token: this.token, name: prof.name, charId: prof.charId, look: prof.look });
+    t.sendHost({ t: 'hello', ver: PROTOCOL, token: this.token, name: prof.name, charId: prof.charId, look: prof.look, rejoin: !!opts.reconnect });
     this.rememberRoom(code, local);
     await answer;
     return this.room;
@@ -378,6 +385,9 @@ export class Net {
       case 'pjoin': if (this.session) this.session.addRemotePlayer(m.info); break;
       case 'pleave': if (this.session) this.session.removeRemotePlayer(m.id); break;
       case 'pong': this.rtt = performance.now() - m.ts; break;
+      case 'ping': this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
+      case 'pdata': if (this.session) this.session.offlinePlayers = m.d || {}; break;
+      case 'migrate': this.migrateHint = m; break;
       case 'kick': this.game.ui.alert('Oda sahibi seni odadan çıkardı.'); this.backToMenu(); break;
       case 'host_left': this.game.ui.alert('Oda sahibi oyunu kapattı.'); this.backToMenu(); break;
       default: break;
@@ -386,6 +396,8 @@ export class Net {
 
   async startClientSession(w) {
     const g = this.game;
+    // yeni/yeniden kurulan host oturumu: eski host'un sıra numaraları ve kayıp istatistiği sıfırlanır
+    this.snapSeq = undefined; this.snapLost = 0; this.snapCount = 0; this.loss = 0; this.lossT = 5; this.lastSnap = performance.now();
     if (g.session) { g.session.dispose(); g.session = null; }
     this.session = null;
     this.reconnecting = false;
@@ -396,6 +408,9 @@ export class Net {
   applySnap(m) {
     const S = this.session;
     if (!S) return;
+    this.snapCount = (this.snapCount || 0) + 1;
+    if (m.n !== undefined) { if (this.snapSeq !== undefined && m.n > this.snapSeq + 1) this.snapLost = (this.snapLost || 0) + (m.n - this.snapSeq - 1); this.snapSeq = m.n; }
+    this.lastSnap = performance.now();
     const drift = m.tm - S.time.total;
     if (Math.abs(drift) > 4) S.time.set(m.tm); else S.time.total += drift * 0.15;
     S.time.ff = m.ff || 1;
@@ -415,25 +430,76 @@ export class Net {
     if (m.b) S.bots.applySnapshot(m.b);
   }
 
-  onHostLost() {
+  onHostLost(reason = 'closed') {
     if (this.mode !== 'client') return;
     if (this.phase !== 'game' || !this.session) { this.game.ui.alert('Oda ile bağlantı kesildi.'); this.leave(); this.game.ui.showMainMenu(); return; }
     if (this.reconnecting) return;
     this.reconnecting = true;
+    this.reconnectFails = 0;
+    this.lostReason = reason; this.lostAt = performance.now();
     this.game.ui.showReconnect && this.game.ui.showReconnect();
+    // önce yeniden bağlanmayı dene (geçici takılma/ağ kopması olabilir); host gerçekten yoksa (iki başarısız deneme)
+    // oda sırasına göre ilk çevrimiçi istemci yeni host olur, diğerleri aynı kodla ona bağlanır
     this.tryReconnect(0);
   }
 
   async tryReconnect(n) {
     if (!this.reconnecting) return;
-    if (n >= 8) { this.reconnecting = false; this.game.ui.alert('Oda sahibine yeniden bağlanılamadı. Oda kapanmış olabilir.'); this.backToMenu(); return; }
+    if (n >= 40) { this.reconnecting = false; this.game.ui.alert('Oda sahibine yeniden bağlanılamadı. Oda kapanmış olabilir.'); this.backToMenu(); return; }
     try {
       if (this.transport) this.transport.close();
       await this.join(this.joinCode, { local: this.joinLocal, reconnect: true });
       // welcome mesajı gelince oturum yeniden kurulur
     } catch (e) {
+      this.reconnectFails = (this.reconnectFails || 0) + 1;
+      // göç: sekme kapanışı gibi kesin kayıpta 5 sn + 2 başarısız deneme; sessizlikte (host takılmış olabilir:
+      // yükleme, uzun kare) 90 sn beklenir; bu istemci oyunu yüklerken asla (host da yükleniyor olabilir)
+      const since = performance.now() - (this.lostAt || 0);
+      const sure = this.lostReason === 'closed' ? since > 5000 : since > 90000;
+      if (this.reconnectFails >= 2 && sure && this.game.state === 'playing' && this.successor() === this.myId) {
+        try { await this.migrateToHost(); return; } catch (err) { console.warn('Host göçü başarısız, yeniden denenecek', err); }
+      }
       setTimeout(() => this.tryReconnect(n + 1), 3000);
     }
+  }
+
+  /** Göç adayı: oda listesinde host olmayan, çevrimiçi oyuncular arasında kimliği en küçük olan */
+  successor() {
+    if (!this.room) return null;
+    const c = this.room.players.filter((p) => !p.isHost && p.online !== false).map((p) => p.id).sort();
+    return c[0] || null;
+  }
+
+  /** Bu istemci yeni host olur: aynı oda kodu, mevcut oturum (durum korunur), diğerleri yeniden bağlanır */
+  async migrateToHost() {
+    const S = this.session, g = this.game;
+    if (!S) throw new Error('oturum yok');
+    const code = this.joinCode, local = this.joinLocal, oldRoom = this.room;
+    const oldHostId = (oldRoom.players.find((p) => p.isHost) || {}).id;
+    try { if (this.transport) this.transport.close(); } catch { /* yoksay */ }
+    this.transport = local ? new LocalTransport() : new PeerTransport();
+    // eski host'un kimliği (PeerJS) hemen boşalmayabilir: birkaç deneme
+    let ok = false;
+    for (let i = 0; i < 10 && !ok; i++) {
+      try { await this.transport.startHost(code); ok = true; } catch (e) { if (i === 9) { try { this.transport.close(); } catch { /* yoksay */ } this.transport = null; throw e; } await new Promise((r) => setTimeout(r, 2000)); }
+    }
+    this.mode = 'host'; this.phase = 'game'; this.reconnecting = false;
+    this.room = { ...oldRoom, players: oldRoom.players.filter((p) => p.id !== oldHostId).map((p) => ({ ...p, isHost: p.id === this.myId, online: p.id === this.myId, pid: p.id === this.myId ? this.transport.id : null })) };
+    const t = this.transport;
+    t.onPeerOpen = (pid) => this.peers.set(pid, { pid, id: null, token: null, inGame: false, lastSeen: performance.now() });
+    t.onPeerData = (pid, msg) => this.onPeerMsg(pid, msg);
+    t.onPeerClose = (pid) => this.dropPeer(pid, false);
+    t.onCall = (call) => this.voice.answer && this.voice.answer(call);
+    // oturum: host yetkisine geç; eski host ve diğer oyuncular yeniden bağlanana dek çevrimdışı sayılır
+    if (oldHostId) S.removeRemotePlayer(oldHostId);
+    for (const q of [...S.players.values()]) if (!q.isLocal) { if (q.saved && q.token) { S.offlinePlayers = S.offlinePlayers || {}; S.offlinePlayers[q.token] = q.saved; } S.removeRemotePlayer(q.id); }
+    S.becomeHost();
+    this.session = S;
+    this.snapT = 0.1; this.pingT = 2;
+    this.rememberRoom(code, local);
+    g.ui.hideReconnect && g.ui.hideReconnect();
+    S.ui.toast('Oda sahibi ayrıldı — oda sana devredildi. Diğerleri yeniden bağlanıyor…', 'warn', 5);
+    this.changed();
   }
 
   backToMenu() {
@@ -481,9 +547,31 @@ export class Net {
     const typing = this.game.ui && this.game.ui.isTyping && this.game.ui.isTyping();
     this.voice.update(this.game.input, typing);
     if (!S || this.phase !== 'game') return;
+    if (this.voice.updateSpatial) this.voice.updateSpatial(S);
     if (this.isHost) {
       this.snapT -= dt;
       if (this.snapT <= 0) { this.snapT = 0.1; this.sendSnapshots(); }
+      // eşlere ping (gecikme) ve 5 sn'de bir durum paketi sayımı (kayıp tahmini: beklenen 15/sn)
+      this.pingT -= dt;
+      if (this.pingT <= 0) {
+        this.pingT = 2;
+        for (const peer of this.peers.values()) if (peer.inGame) this.transport.send(peer.pid, { t: 'ping', ts: performance.now() });
+      }
+      this.lossT = (this.lossT ?? 5) - dt;
+      if (this.lossT <= 0) {
+        this.lossT = 5;
+        // kayıp = atlanan sıra numarası / (gelen + atlanan): gönderim sıklığından bağımsız
+        for (const peer of this.peers.values()) { if (peer.inGame) { const got = peer.stCount || 0, lost = peer.stLost || 0; peer.loss = got + lost ? lost / (got + lost) : 0; } peer.stCount = 0; peer.stLost = 0; }
+      }
+      // tüm oyuncuların kayıt verisi herkeste yedeklenir: host düşerse yeni host envanterleri iade edebilir
+      this.pdataT = (this.pdataT ?? 6) - dt;
+      if (this.pdataT <= 0) {
+        this.pdataT = 8;
+        const d = { ...(S.offlinePlayers || {}) };
+        d[this.token] = S.localData();
+        for (const q of S.players.values()) if (!q.isLocal && q.token && q.saved) d[q.token] = q.saved;
+        this.broadcast({ t: 'pdata', d });
+      }
     } else {
       this.sendT -= dt;
       if (this.sendT <= 0) { this.sendT = 1 / 15; this.sendState(); }
@@ -491,10 +579,32 @@ export class Net {
       if (this.saveT <= 0) { this.saveT = 8; this.transport.sendHost({ t: 'save', d: S.localData() }); }
       this.pingT -= dt;
       if (this.pingT <= 0) { this.pingT = 2; this.transport.sendHost({ t: 'ping', ts: performance.now() }); }
+      // anlık görüntü kaybı (beklenen 10/sn) ve bayatlık
+      this.lossT = (this.lossT ?? 5) - dt;
+      if (this.lossT <= 0) { this.lossT = 5; const got = this.snapCount || 0, lost = this.snapLost || 0; this.loss = got + lost ? lost / (got + lost) : 0; this.snapCount = 0; this.snapLost = 0; }
     }
   }
 
-  summaryOf(st) { return { health: Math.round(st.health), maxHealth: st.maxHealth, hunger: Math.round(st.hunger), thirst: Math.round(st.thirst), downed: !!st.downed }; }
+  /** Ağ göstergesi için özet: gecikme (ms), kayıp (0–1), bayatlık (sn), eşler */
+  netStats() {
+    const now = performance.now();
+    if (this.isHost) {
+      const peers = [...this.peers.values()].filter((p) => p.inGame).map((p) => ({ id: p.id, rtt: Math.round(p.rtt || 0), loss: +(p.loss || 0).toFixed(2), stale: +((now - (p.lastSeen || now)) / 1000).toFixed(1) }));
+      const worst = peers.reduce((a, p) => Math.max(a, p.rtt), 0), loss = peers.reduce((a, p) => Math.max(a, p.loss), 0);
+      return { host: true, rtt: worst, loss, stale: peers.reduce((a, p) => Math.max(a, p.stale), 0), peers };
+    }
+    return { host: false, rtt: Math.round(this.rtt || 0), loss: +(this.loss || 0).toFixed(2), stale: +((now - (this.lastSnap || now)) / 1000).toFixed(1), peers: [] };
+  }
+
+  /** Bağlantı kalitesi sınıfı: good / warn / bad */
+  netQuality() {
+    const n = this.netStats();
+    if (n.stale > 2 || n.loss > 0.3 || n.rtt > 350) return 'bad';
+    if (n.loss > 0.08 || n.rtt > 150 || n.stale > 0.8) return 'warn';
+    return 'good';
+  }
+
+  summaryOf(st) { const S = this.session; return { health: Math.round(st.health), maxHealth: st.maxHealth, hunger: Math.round(st.hunger), thirst: Math.round(st.thirst), downed: !!st.downed, radio: S && S.inventory && S.inventory.has && S.inventory.has('radio') ? 1 : 0 }; }
 
   compactAnim(a) {
     return { mode: a.mode, speed: Math.round(a.speed * 10) / 10, vy: Math.round((a.vy || 0) * 10) / 10, yaw: Math.round(a.yaw * 100) / 100, pitch: Math.round((a.pitch || 0) * 100) / 100, aim: !!a.aim, steer: Math.round((a.steer || 0) * 100) / 100, emote: a.emote || null, carrying: !!a.carrying, moveAngle: Math.round((a.moveAngle || 0) * 100) / 100, roll: a.roll ? 1 : 0, tired: a.tired ? 1 : 0, carryBox: a.carryBox ? 1 : 0, act: a.act || null };
@@ -504,7 +614,7 @@ export class Net {
     const S = this.session;
     const pl = S.local;
     this.transport.sendHost({
-      t: 'st', p: [Math.round(pl.pos.x * 100) / 100, Math.round(pl.pos.y * 100) / 100, Math.round(pl.pos.z * 100) / 100],
+      t: 'st', n: (this.stSeq = (this.stSeq || 0) + 1), p: [Math.round(pl.pos.x * 100) / 100, Math.round(pl.pos.y * 100) / 100, Math.round(pl.pos.z * 100) / 100],
       a: this.compactAnim(pl.animState()), v: pl.vehicle ? pl.vehicle.id : 0, s: pl.seat || 0, h: this.summaryOf(S.localStats),
       held: pl.avatar.heldId, spk: this.voice.talking ? 1 : 0,
     });
@@ -520,16 +630,18 @@ export class Net {
       pl.push([p.id, +p.pos.x.toFixed(2), +p.pos.y.toFixed(2), +p.pos.z.toFixed(2), p.anim || { mode: 'ground', speed: 0, yaw: 0 }, p.held || null, p.vehicleId || 0, p.seat || 0, p.summary || null, p.speaking ? 1 : 0]);
     }
     const bots = S.bots.snapshot();
+    const seq = (this.snapSeqOut = (this.snapSeqOut || 0) + 1);
     for (const peer of this.peers.values()) {
       if (!peer.inGame) continue;
       const rec = S.players.get(peer.id);
       const pos = rec ? rec.pos : S.local.pos;
-      this.transport.send(peer.pid, { t: 'snap', tm: Math.round(S.time.total * 100) / 100, ff: S.time.ff, pl, z: S.zombies.snapshotFor(pos.x, pos.z), b: bots });
+      this.transport.send(peer.pid, { t: 'snap', n: seq, tm: Math.round(S.time.total * 100) / 100, ff: S.time.ff, pl, z: S.zombies.snapshotFor(pos.x, pos.z), b: bots });
     }
   }
 
   leave() {
-    if (this.mode === 'off' && !this.transport) return;
+    if (this.mode === 'off' && !this.transport && !this.room && !this.session && this.phase === 'idle') return;
+    this.reconnecting = false;
     try {
       if (this.mode === 'client' && this.transport) this.transport.sendHost({ t: 'bye' });
       if (this.mode === 'host' && this.transport) {
@@ -546,6 +658,7 @@ export class Net {
     this.phase = 'idle';
     this.room = null;
     this.session = null;
+    this.snapSeq = undefined; this.snapLost = 0; this.snapCount = 0; this.loss = 0; this.snapSeqOut = 0; this.stSeq = 0;
     this.peers.clear();
     this.pending = [];
     this.saveData = null;

@@ -60,7 +60,16 @@ Gereksinim: WebGL 2 destekli güncel bir tarayıcı (Chrome / Edge / Firefox / S
 **Arkadaşlarla Oyna → Oda Kur** → 6 haneli oda kodunu ya da **Davet Bağlantısı**'nı arkadaşına gönder →
 arkadaşın **Odaya Katıl**'dan kodu girer (ya da bağlantıya tıklar) → herkes karakter seçip **Hazırım** der →
 oda sahibi **Oyunu Başlat**. Bağlantı eşler arası (WebRTC / PeerJS) kurulur, sunucu kurmana gerek yoktur.
-Lobide **Sesli sohbeti aç** ile mikrofonu aç; oyunda **V** tuşuna basılı tutarak konuş.
+Lobide **Sesli sohbeti aç** ile mikrofonu aç; oyunda **V** tuşuna basılı tutarak konuş. Ses yakınlık sesidir
+(35 m'ye kadar, yönlü); iki tarafta da **telsiz** varsa mesafe sınırı yoktur.
+
+- **Bağlantı göstergesi:** HUD'daki ağ simgesi gecikme (ms) ve paket kaybını gösterir (yeşil/sarı/kırmızı).
+- **Kopma / host göçü:** Bağlantı koparsa oyun otomatik yeniden bağlanmayı dener; oda sahibi gerçekten
+  düşmüşse sıradaki oyuncu aynı oda koduyla yeni oda sahibi olur ve oyun dünyası (zombiler, kapılar, taşınan
+  eşyalar, envanterler) kaldığı yerden sürer.
+- **Kurumsal/mobil ağ (TURN):** Bağlantı kurulamıyorsa kendi TURN sunucunu **Ayarlar → Oyun → TURN sunucuları (JSON)**
+  alanına JSON olarak gir (`[{"urls":"turn:sunucu:3478","username":"...","credential":"..."}]`). Kimlik
+  bilgileri yalnız bu tarayıcıda saklanır; oyuna gömülü değildir.
 
 > Aynı bilgisayarda iki sekmeyle denemek için "Bağlantı: **Yerel test**" seçeneğini kullan.
 

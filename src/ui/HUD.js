@@ -130,8 +130,13 @@ export class HUD {
     this.countEl.classList.toggle('urgent', d < 3);
     this.weatherEl.textContent = S.weather.label() + (T.ff > 1 ? ' · ⏩ Uyku' : '');
     const net = this.game.net;
-    if (net.active) this.netEl.textContent = net.isHost ? `🛰️ Oda ${net.room ? net.room.code : ''} · Host` : `🛰️ Oda ${net.room ? net.room.code : ''} · ${Math.round(net.rtt)} ms`;
-    else this.netEl.textContent = '';
+    if (net.active) {
+      const n = net.netStats ? net.netStats() : { rtt: Math.round(net.rtt || 0), loss: 0, stale: 0 };
+      const q = net.netQuality ? net.netQuality() : 'good';
+      const lossTxt = n.loss > 0.02 ? ` · kayıp %${Math.round(n.loss * 100)}` : '';
+      this.netEl.textContent = `${q === 'bad' ? '📵' : q === 'warn' ? '📶' : '🛰️'} Oda ${net.room ? net.room.code : ''} · ${net.isHost ? 'Host' : ''}${net.isHost && n.peers && n.peers.length ? ` · en kötü ${n.rtt} ms` : net.isHost ? '' : `${n.rtt} ms`}${lossTxt}${n.stale > 1.5 ? ' · bağlantı zayıf' : ''}`;
+      this.netEl.className = 'hud-net net-' + q;
+    } else { this.netEl.textContent = ''; this.netEl.className = 'hud-net'; }
   }
 
   updateTeam(S) {

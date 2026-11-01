@@ -133,7 +133,7 @@ export class PhysProps {
     const d = this.pw.addDynamic(g, shape, x, y, z, { quat: { x: q.x, y: q.y, z: q.z, w: q.w }, density: def.mass / Math.max(0.01, vol), friction: 0.7, bounce: 0.1, group: G.PROP, linDamp: 0.2, angDamp: 0.5 });
     d.body.sleep();
     if (S.contacts) S.contacts.register(d, def.shape === 'cyl' ? (kind === 'trash' ? 'plastic' : 'metal') : 'wood');
-    const prop = { id, kind, def, d, alive: true, carrier: null };
+    const prop = { id, kind, def, d, alive: true, carrier: null, x0: x, y0: y, z0: z };
     d.prop = prop;
     this.props.push(prop);
     this.byId.set(id, prop);
@@ -154,6 +154,28 @@ export class PhysProps {
     }
     if (best) best.dist = bd;
     return best;
+  }
+
+  /** Geç katılan istemci için: yerinden oynamış ya da taşınan nesnelerin pozu ve taşıyıcısı */
+  serializeDynamic() {
+    const out = [];
+    for (const p of this.props) {
+      if (!p.alive) continue;
+      const t = p.d.body.translation(), r = p.d.body.rotation();
+      const moved = p.carrier || p.d.carried || Math.abs(t.x - (p.x0 ?? t.x)) > 0.05 || Math.abs(t.z - (p.z0 ?? t.z)) > 0.05 || Math.abs(t.y - (p.y0 ?? t.y)) > 0.05;
+      if (moved) out.push({ id: p.id, p: packPose(t, r), by: p.carrier || null });
+    }
+    return out;
+  }
+
+  applyDynamic(list) {
+    const S = this.s;
+    for (const e of list || []) {
+      const prop = this.byId.get(e.id);
+      if (!prop || !prop.alive) continue;
+      if (e.by && e.by !== S.localId) { prop.carrier = e.by; this.pw.setCarried(prop.d, true); }
+      else if (e.p) this.pw.placeAtRest(prop.d, e.p);
+    }
   }
 
   /** Taşıma olayı (her istemcide): yerel oyuncunun kendi alma/bırakması zaten uygulanmıştır (iyimser) */

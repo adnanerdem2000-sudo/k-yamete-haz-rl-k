@@ -527,6 +527,22 @@ export class Bots {
     }
   }
 
+  /** Host göçü: istemci vekilleri (BotProxy) aynı konumda gerçek botlara dönüşür */
+  promoteProxies() {
+    const S = this.s;
+    const out = [];
+    for (const p of this.list) {
+      if (!(p instanceof BotProxy)) { out.push(p); continue; }
+      const b = new Bot(this, p.charId, { id: p.id, x: p.pos.x, y: p.pos.y, z: p.pos.z });
+      b.stats.health = p.stats.health; b.stats.hunger = p.stats.hunger; b.stats.thirst = p.stats.thirst; b.stats.downed = !!p.stats.downed;
+      b.order = p.order || 'follow';
+      p.dispose();
+      out.push(b);
+    }
+    this.list = out;
+    void S;
+  }
+
   updateProxies(dt) {
     const S = this.s;
     for (const p of this.list) {

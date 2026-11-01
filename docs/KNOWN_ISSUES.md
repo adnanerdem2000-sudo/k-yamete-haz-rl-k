@@ -4,23 +4,32 @@
 - **Oda listesi:** Herkese açık PeerJS sinyal sunucusu oda listelemeyi desteklemediği için "Açık Odalar"
   yalnızca *aynı tarayıcıdaki* yerel odaları ve daha önce girilen odaları gösterir. Çevrimiçi katılım
   oda kodu ya da davet bağlantısıyla yapılır.
-- **NAT/güvenlik duvarı:** WebRTC bağlantısı yalnızca STUN kullanır; bazı kurumsal/mobil ağlarda TURN
-  sunucusu olmadan bağlantı kurulamayabilir. (Çözüm: ROADMAP'teki kendi sinyal/TURN sunucusu.)
-- **Host göçü yok:** Oda sahibi oyundan çıkarsa oda kapanır. Otomatik kayıt her gün host'ta alınır;
-  oda sahibi kaydı yükleyip odayı yeniden kurabilir, arkadaşlar aynı tarayıcıyla katılınca eşyaları iade edilir.
+- **NAT/güvenlik duvarı:** WebRTC bağlantısı varsayılan olarak yalnızca STUN kullanır; bazı kurumsal/mobil
+  ağlarda TURN sunucusu olmadan bağlantı kurulamayabilir. Kendi TURN sunucun varsa **Ayarlar → Oyun → TURN
+  sunucuları** alanına JSON olarak gir (ya da `?ice=` parametresi / `window.KIYAMET_ICE`); kimlik bilgisi koda
+  yazılmaz, yalnız bu tarayıcıda saklanır. Gerçek TURN ile bağlantı bu ortamda test edilemedi.
+- **Host göçü (sınırlı):** Oda sahibi düşerse istemciler önce yeniden bağlanmayı dener; host gerçekten yoksa
+  (kapanış iletisi + 5 sn ya da 90 sn sessizlik, iki başarısız deneme) oda sırasındaki ilk çevrimiçi istemci aynı
+  oda koduyla yeni host olur; diğerleri ona bağlanır. Dünya/zombi/bot/kapı/eşya durumu son anlık görüntüden ve
+  8 sn'de bir yayımlanan oyuncu kayıt paketinden devralınır; aradaki en fazla 8 sn'lik envanter değişikliği
+  kaybolabilir. Göç yalnız oyun sırasında ('playing') yapılır; lobide host düşerse oda kapanır. Üç ve daha
+  fazla sekmeyle göç yazılım GPU'lu test ortamında (bellek) denenemedi; iki sekme + sonradan katılan test edildi.
 - **Çevrimiçi (PeerJS) taşıyıcı** bu geliştirme ortamında internet kısıtı nedeniyle uçtan uca test
   edilemedi; aynı protokol yerel taşıyıcıyla (iki sekme) test edildi. Sorun olursa "Yerel test" ile
   karşılaştırarak bildirmen yeterli.
 - Takas dükkânının stok bilgisi her oyuncunun kendi tarayıcısında tutulur (stoklar oyuncular arasında
   eşitlenmez).
-- Sesli sohbet yakınlık (3B) sesi değil, takım telsizi gibi her yerden duyulur.
-- Fiziksel nesneler (variller, pist enkazları, paraşütlü paket) her istemcide yerel simüle edilir; pist
-  enkazının son konumu hareket ettiren oyuncudan eşitlenir, ara konumlar istemciler arasında farklı görünebilir.
+- Sesli sohbet yakınlık sesidir (Web Audio PannerNode, 35 m'den uzakta duyulmaz); iki tarafta da **telsiz**
+  varsa mesafesiz duyulur. Başsız test ortamında mikrofon/hoparlör olmadığı için 3B konumlandırma yalnız kod
+  incelemesiyle doğrulandı. Yalnız PeerJS taşıyıcısında çalışır (yerel iki sekmede ses yok).
+- Fiziksel nesneler (variller, pist enkazları, paraşütlü paket) her istemcide yerel simüle edilir; taşınan nesne
+  ve son konumlar host'tan eşitlenir (sonradan katılan/yeni host dinamik nesnelerin konumlarını hoş geldin
+  paketinden alır); ara konumlar istemciler arasında farklı görünebilir.
 - Vahşi hayvanlar (olaylardaki kurt sürüsü ve geyikler dahil) yalnızca oda sahibinde simüle edilir.
 
 ## Oynanış
-- Yapay zekâ takım arkadaşları basit davranışlara sahiptir (takip, savaş, kaldırma, kendini besleme);
-  yağma yapmaz ve inşa etmez. Emirler: Takip et / Burada bekle / Üsse dön.
+- Yapay zekâ takım arkadaşları: takip, savaş, kaldırma, kendini besleme, yağma (`loot`) ve yarım kalan yapıyı
+  tamamlama (`build`) emirleri. Araç sürmez (yolcu biner), kendi başına savunma inşa etmez.
 - Yerleştirilen yapılar köprü/su üzerine kurulamaz; bazı karmaşık arazilerde "Engel var" uyarısı
   beklenenden sık çıkabilir (yeri biraz değiştir).
 - Zombiler engelleri kırarken yol bulma bütçesi sınırlıdır; çok kalabalık sürülerde bazı zombiler

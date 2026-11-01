@@ -63,7 +63,7 @@ export class LocalTransport extends Base {
   connect(code) {
     return new Promise((res, rej) => {
       this.ch = new BroadcastChannel('kiyamet-room-' + code);
-      const t = setTimeout(() => { this.ch.close(); rej(new Error('Oda bulunamadı. Kodu kontrol et (yerel test modunda oda aynı tarayıcıda açık olmalı).')); }, 2500);
+      const t = setTimeout(() => { this.ch.close(); rej(new Error('Oda bulunamadı. Kodu kontrol et (yerel test modunda oda aynı tarayıcıda açık olmalı).')); }, 10000);
       this.lastHost = performance.now();
       this.ch.onmessage = (ev) => {
         const m = ev.data;
@@ -72,13 +72,18 @@ export class LocalTransport extends Base {
         if (m.from !== this.hostId) return;
         this.lastHost = performance.now();
         if (m.k === 'data') this.onHostData(m.d);
-        else if (m.k === 'close') { this.hostId = null; this.onHostClose(); }
+        else if (m.k === 'close') { this.hostId = null; this.onHostClose('closed'); } // sekme kapandı: kesin kayıp
       };
       this.post({ k: 'connect', from: this.id });
+      this._tick = performance.now();
       this._hb = setInterval(() => {
         if (!this.hostId) return;
+        const now = performance.now();
+        // bu sekme uzun süre takıldıysa (yükleme, gölgelendirici derlemesi) host'un sessizliği ölçülemez: süreyi sıfırla
+        if (now - this._tick > 10000) this.lastHost = now;
+        this._tick = now;
         this.post({ k: 'hb', from: this.id, to: this.hostId });
-        if (performance.now() - this.lastHost > TIMEOUT) { this.hostId = null; this.onHostClose(); }
+        if (now - this.lastHost > TIMEOUT) { this.hostId = null; this.onHostClose('timeout'); } // sessizlik: belirsiz kayıp
       }, 1500);
     });
   }
@@ -97,6 +102,19 @@ export class LocalTransport extends Base {
   }
 }
 
+/** ICE listesi temizliği: yalnız stun/stuns/turn/turns şemaları; turn girdilerinde kullanıcı adı + parola zorunlu */
+export function sanitizeIce(list) {
+  if (!Array.isArray(list)) return null;
+  const ok = (u) => typeof u === 'string' && /^(stun|stuns|turn|turns):/i.test(u);
+  return list.filter((x) => {
+    if (!x || !x.urls) return false;
+    const urls = Array.isArray(x.urls) ? x.urls : [x.urls];
+    if (!urls.length || !urls.every(ok)) return false;
+    const needsCred = urls.some((u) => /^turns?:/i.test(u));
+    return !needsCred || (typeof x.username === 'string' && x.username && typeof x.credential === 'string' && x.credential);
+  }).map((x) => ({ urls: x.urls, ...(x.username ? { username: x.username, credential: x.credential } : {}) }));
+}
+
 // ============================================================================ PeerJS (WebRTC)
 export class PeerTransport extends Base {
   constructor() {
@@ -109,9 +127,24 @@ export class PeerTransport extends Base {
 
   static available() { return typeof window.Peer === 'function'; }
 
+  /**
+   * ICE sunucuları: varsayılan STUN listesi + isteğe bağlı TURN. TURN kimlik bilgileri koda yazılmaz; sırayla
+   * window.KIYAMET_ICE (sayfa yapılandırması, ör. GitHub Pages'te ayrı bir config.js), localStorage
+   * 'kiyamet.net.ice' (ayarlar ekranındaki JSON alanı buraya yazar) ve ?ice= URL parametresinden okunur.
+   * Biçim: [{ urls, username?, credential? }]
+   */
+  static iceServers() {
+    const base = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }];
+    const parse = (v) => { if (!v) return null; try { const a = typeof v === 'string' ? JSON.parse(v) : v; return sanitizeIce(a); } catch { return null; } };
+    let extra = parse(window.KIYAMET_ICE);
+    if (!extra) { try { extra = parse(localStorage.getItem('kiyamet.net.ice')); } catch { /* yoksay */ } }
+    if (!extra) { try { extra = parse(new URLSearchParams(location.search).get('ice')); } catch { /* yoksay */ } }
+    return extra && extra.length ? [...base, ...extra] : base;
+  }
+
   makePeer(id) {
-    // Varsayılan PeerJS bulut sinyal sunucusu + Google STUN
-    return new window.Peer(id, { debug: 1, config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:global.stun.twilio.com:3478' }] } });
+    // Varsayılan PeerJS bulut sinyal sunucusu + STUN (+ yapılandırılmış TURN)
+    return new window.Peer(id, { debug: 1, config: { iceServers: PeerTransport.iceServers() } });
   }
 
   startHost(code) {
@@ -153,7 +186,7 @@ export class PeerTransport extends Base {
         this.hostConn = conn;
         conn.on('open', () => { if (done) return; done = true; clearTimeout(to); res(); });
         conn.on('data', (d) => this.onHostData(d));
-        conn.on('close', () => { if (!this.closed) this.onHostClose(); });
+        conn.on('close', () => { if (!this.closed) this.onHostClose('closed'); });
         conn.on('error', (e) => console.warn('Bağlantı hatası', e));
       });
       peer.on('error', (e) => {

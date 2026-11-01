@@ -63,9 +63,12 @@ Yazılım GPU'sunda bile 18–28 FPS ölçüldü; gerçek GPU'larda çok daha y�
 hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indirir.
 
 ## Test edilemeyenler
-- PeerJS (WebRTC) ile gerçek internet üzerinden bağlantı ve sesli sohbet: geliştirme ortamının ağ kısıtı
-  nedeniyle çalıştırılamadı. Protokol aynı olduğundan yerel taşıyıcı testleri mantığı doğrular; NAT/TURN
-  kaynaklı sorunlar `KNOWN_ISSUES.md`'de.
+- PeerJS (WebRTC) ile gerçek internet üzerinden bağlantı, TURN sunucusu ve sesli sohbet (3B konumlandırma
+  dahil): geliştirme ortamının ağ kısıtı ve mikrofon/hoparlör yokluğu nedeniyle çalıştırılamadı. Protokol aynı
+  olduğundan yerel taşıyıcı testleri (`multiplayer-local`, `carry-mp`, `host-migration`) mantığı doğrular;
+  NAT/TURN kaynaklı sorunlar `KNOWN_ISSUES.md`'de.
+- Host göçü üç ve daha fazla sekmeyle: yazılım GPU'lu ortamda üç oyun sekmesi bellek sınırını aşıyor; iki sekme +
+  göçten sonra katılan üçüncü oyuncu test edildi.
 - Gerçek GPU'da kare hızı, hoparlörden duyulan ses (başsız tarayıcıda ses grafiği çalışır ama dinlenemez)
   ve fare işaretçi kilidi (başsız modda desteklenmez; savaş girdisi kilit gerektirir).
 

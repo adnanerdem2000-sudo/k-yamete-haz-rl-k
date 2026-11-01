@@ -771,6 +771,23 @@ export class Session {
     }
   }
 
+  /** Host göçü: bu istemci oyunun otoritesi olur — zombi/bot simülasyonu başlar, araçlar dinamik gövdeye döner */
+  becomeHost() {
+    this.isHost = true;
+    this.offlinePlayers = this.offlinePlayers || {};
+    // istemci zombi görünümleri (eski host'un anlık görüntüsü) hayalet kalmasın: temizle, bölge nüfusunu yeniden kur
+    for (const id of [...this.zombies.views.keys()]) this.zombies.removeZombie(id);
+    this.zombies.list.clear();
+    this.zombies.init();
+    if (this.bots && this.bots.promoteProxies) this.bots.promoteProxies();
+    // ayrılan oyuncuların koltukları boşalır; sürücüsüz araçlar dinamik gövdeye döner
+    for (const v of this.vehicles.list) {
+      for (let i = 0; i < v.seats.length; i++) if (v.seats[i] && v.seats[i] !== this.localId && !this.players.has(v.seats[i]) && !(this.bots && this.bots.byId && this.bots.byId(v.seats[i]))) v.seats[i] = null;
+      if (!v.seats[0] || v.seats[0] === this.localId) { v.netTarget = null; v.setRemote(false); }
+    }
+    if (this.doorPhys) for (const r of this.doorPhys.doors) r.cmdT = 0;
+  }
+
   addRemotePlayer(info) {
     if (this.players.has(info.id) && this.players.get(info.id).avatar) return this.players.get(info.id);
     const cdef = CHARACTERS[info.charId] || CHARACTERS.mert;
@@ -907,6 +924,7 @@ export class Session {
     this.loadDoors(w.doors);
     this.storyWorld.load(w.story);
     if (w.env) { this.env.streetPower = w.env.streetPower !== false; this.env.doom = w.env.doom || 0; this.env.redMist = w.env.redMist || 0; }
+    if (w.props && this.props && this.props.applyDynamic) this.props.applyDynamic(w.props);
     this.zombies.initClient();
     for (const p of w.players || []) if (p.id !== this.localId) this.addRemotePlayer(p);
     this.selectHotbar(0);

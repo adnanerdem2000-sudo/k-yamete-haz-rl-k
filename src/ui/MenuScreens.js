@@ -403,6 +403,22 @@ export class Menus {
           this.choice('Bir oyun günü', DAY_OPTS.map((d) => [d, `${d} dk`]), gp.dayMinutes, (v) => { Settings.set('gameplay.dayMinutes', v); render(); }),
           toggle('Kamera sarsıntısı', 'gameplay.cameraShake'), toggle('Hasar sayıları', 'gameplay.damageNumbers'), toggle('İpuçları', 'gameplay.tutorialHints'),
           h('p.muted', 'Gün süresi yeni oyunlarda geçerli olur. Kalıcı ölüm kapalıdır: yere düşen oyuncu kaldırılabilir ya da üste döner.'),
+          (() => {
+            // çevrimiçi oda için isteğe bağlı TURN sunucuları: kimlik bilgisi yalnız bu tarayıcıda (localStorage) tutulur
+            const ta = h('textarea.ice-json', { rows: 2, spellcheck: false, placeholder: '[{"urls":"turn:sunucu:3478","username":"kullanici","credential":"sifre"}]' });
+            try { ta.value = localStorage.getItem('kiyamet.net.ice') || ''; } catch { /* yoksay */ }
+            ta.addEventListener('change', () => {
+              const v = ta.value.trim();
+              if (!v) { try { localStorage.removeItem('kiyamet.net.ice'); } catch { /* yoksay */ } this.ui.toast('TURN listesi temizlendi (yalnız STUN).', 'info'); return; }
+              let a;
+              try { a = JSON.parse(v); if (!Array.isArray(a) || !a.every((x) => x && x.urls)) throw new Error('biçim'); }
+              catch { this.ui.toast('Geçersiz JSON: [{"urls":…, "username":…, "credential":…}] biçiminde olmalı.', 'warn', 5); return; }
+              try { localStorage.setItem('kiyamet.net.ice', JSON.stringify(a)); } catch { this.ui.toast('TURN listesi kaydedilemedi: tarayıcı depolaması kapalı ya da dolu.', 'warn', 5); return; }
+              this.ui.toast(`${a.length} TURN/STUN sunucusu kaydedildi; yeni odalarda geçerli.`, 'good');
+            });
+            return h('div.opt-row.ice-row', h('span.opt-label', 'TURN sunucuları (JSON)'), ta);
+          })(),
+          h('p.muted', 'Kurumsal/mobil ağlarda WebRTC bağlantısı için TURN gerekebilir. Boşsa yalnız genel STUN kullanılır; kimlik bilgileri sunucuya ya da koda yazılmaz.'),
           button('Tüm Ayarları Sıfırla', () => this.ui.confirm('Tüm ayarlar varsayılana dönsün mü?', () => { Settings.reset(); render(); }), 'small red'));
       }
       root.append(

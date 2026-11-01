@@ -42,6 +42,14 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
 - **Bitki örtüsü yeniden kurulumu**: iki çağıranın farklı görüş mesafesi vermesi her karede tam yeniden kuruluma
   yol açıyordu (sabit kare çizen testler). Yazılım GPU'sunda GPU belleği şişiyordu.
 - **Zamanlama denetimleri duvar saatiyle**: yavaş karelerde etkileşim testi yanlış negatif veriyordu.
+- **Host göçünde çatallanma (split-brain)**: istemci, host'un yavaş kare/yükleme takılmasını (yerel taşıyıcı
+  kalp atışı gecikmesi) "host düştü" sanıp yeni host oluyor; iki dünya birden sürüyordu. Aşama 7'de bulundu.
+- **Aynı jetonla yeniden katılım**: kopan oyuncu geri gelince eski eş kaydı silinmeden ikinci kayıt açılıyordu
+  (çift avatar). Aşama 7.
+- **`Net.leave()` erken dönüşü**: yeniden bağlanırken çağrılan `leave` taşıyıcıyı kapatmıyordu. Aşama 7.
+- **Araç sürücü değişiminde `onRoad` TDZ hatası** (yüzey bloğu değişkenden önce okunuyordu); Aşama 5 inceleme.
+- **Çok oyunculu testlerde iki sekme belleği**: yazılım GPU'lu ortamda iki oyun sekmesi + GPU süreci birlikte
+  13,4 GB'lık süreç grubu sınırına dayanıyor; `carry-mp` sekmeleri çöküyordu. Aşama 7'de ölçüldü (aşağıda).
 
 ## 3. Düzeltilen sorunlar
 - `Interact.findTarget`: uzaklık alanı `dist` oldu; `interact` senaryosu kapı adımı bunu yakalar.
@@ -51,6 +59,13 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
 - `Vegetation.update`: parametre değişse de en sık 0,2 sn'de bir kurulum (kamera 50 m sıçramadıkça).
 - `interact` / `physics2` senaryoları simülasyon zamanıyla ölçer; `physics2` adım/sn denetimi yazılım GPU'sunda
   bilgi amaçlı.
+- `Net.onHostLost`: önce yeniden bağlanma (40 deneme), göç yalnız "kesin kayıp"ta (kapanış iletisi + 5 sn ya da
+  90 sn sessizlik, iki başarısız deneme, oyun 'playing' durumunda, sırada ilk çevrimiçi istemci). `LocalTransport`
+  kalp atışı takılma koruması (sekme 10 sn donarsa zaman aşımı sıfırlanır), bağlanma zaman aşımı 10 sn.
+- `Net.onHello`: aynı jetonla gelen eş eski kaydı düşürür; `leave()` yalnız gerçekten boştayken erken döner;
+  sıra sayaçları oturum başında/çıkışta sıfırlanır.
+- `sanitizeIce`: yalnız `stun:`/`turn:`/`turns:` şemaları, TURN için kullanıcı adı + kimlik bilgisi zorunlu;
+  ayarlar ekranında JSON ve depolama hataları ayrı iletilerle.
 
 ## 4. Değiştirilen dosyalar ve eklenen sistemler
 _(aşamalar ilerledikçe doldurulur)_
