@@ -1,10 +1,12 @@
-// Görüntü motoru: WebGL renderer, kamera, son işlem (bloom + renk derecelendirme + vinyet).
+// Görüntü motoru: WebGL renderer, kamera, son işlem (AO [Ultra] + bloom + renk derecelendirme + vinyet).
+// Kalite seviyesi: çözünürlük tavanı, bloom, AO; GPU kare süresi PerfMonitor ile ölçülür.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { Settings } from './Settings.js';
 
@@ -72,6 +74,8 @@ export class Graphics {
     this.composer.addPass(this.gradePass);
     this.composer.addPass(this.outputPass);
     this.grade = this.gradePass.uniforms;
+    this.beforeRender = new Set(); // çizimden önce (ör. su yansıması): fn(renderer, scene, camera)
+    this.perf = null;
 
     this.applySettings();
     Settings.onChange((path) => { if (path === '*' || path.startsWith('graphics')) this.applySettings(); });
@@ -82,16 +86,48 @@ export class Graphics {
 
   applySettings() {
     const g = Settings.get('graphics');
+    const shadowChanged = this._shadows !== undefined && this._shadows !== !!g.shadows;
+    this._shadows = !!g.shadows;
     this.renderer.shadowMap.enabled = !!g.shadows;
     this.bloomPass.enabled = !!g.bloom && g.quality !== 'low';
+    this.bloomPass.strength = g.quality === 'ultra' ? 0.38 : 0.32;
+    this.setAO(!!g.ao);
     this.camera.fov = g.fov;
     this.camera.far = g.viewDistance;
     this.camera.updateProjectionMatrix();
-    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, g.quality === 'high' ? 1.5 : 1) * (g.renderScale || 1);
+    // çözünürlük tavanı kaliteye göre: düşük/orta 1×, yüksek 1,5×, ultra 2× (cihaz oranıyla sınırlı)
+    this.basePixelRatio = Math.min(window.devicePixelRatio || 1, g.quality === 'ultra' ? 2 : g.quality === 'high' ? 1.5 : 1) * (g.renderScale || 1);
     if (!g.autoScale) this.dynScale = 1;
     this.pixelRatio = this.basePixelRatio * (this.dynScale || 1);
     this.resize();
-    this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined && o.castShadow) o.material.needsUpdate = true; });
+    // gölge aç/kapa malzemeleri yeniden derletir: yalnız gerçekten değiştiğinde (her ayar değişiminde değil)
+    if (shadowChanged) this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined && o.castShadow) o.material.needsUpdate = true; });
+  }
+
+  /** Ortam kapanması (GTAO): ilk açılışta kurulur, sonra yalnız etkinleştirilir/kapatılır */
+  setAO(on) {
+    if (on && !this.gtaoPass) {
+      const p = new GTAOPass(this.scene, this.camera, Math.max(1, window.innerWidth), Math.max(1, window.innerHeight));
+      p.output = GTAOPass.OUTPUT.Default;
+      p.blendIntensity = 0.9;
+      p.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 12, distanceFallOff: 1 });
+      p.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      // saydam yüzeyler (su, cam, parçacık), alfa kesimli yapraklar (normal tamponunda dolu dörtgen olurdu), gökyüzü ve
+      // işaretli nesneler AO tamponuna girmez
+      p._overrideVisibility = function () {
+        const cache = this._visibilityCache;
+        this.scene.traverse((o) => {
+          if (!o.visible) return;
+          const m = o.material;
+          const tr = m && (Array.isArray(m) ? m.some((x) => x && (x.transparent || x.alphaTest > 0)) : m.transparent || m.alphaTest > 0);
+          if (o.isPoints || o.isLine || o.isLine2 || o.isSprite || tr || o.userData.noAO) { o.visible = false; cache.push(o); }
+        });
+      };
+      this.composer.insertPass(p, 1);
+      this.gtaoPass = p;
+      this.resize();
+    }
+    if (this.gtaoPass) this.gtaoPass.enabled = !!on;
   }
 
   resize() {
@@ -106,7 +142,14 @@ export class Graphics {
 
   render(dt, time) {
     this.grade.uTime.value = time;
+    // çizim/üçgen sayaçları karenin bütün geçişlerini (yansıma, AO, bloom…) toplasın: renderer her render() çağrısında
+    // sıfırlardı ve sayaç yalnız son tam ekran geçişini (1 çizim) gösterirdi
+    const info = this.renderer.info;
+    info.autoReset = false; info.reset();
+    if (this.perf) this.perf.gpuBegin(); // GPU süresine yansıma çizimi de dahil
+    for (const fn of this.beforeRender) fn(this.renderer, this.scene, this.camera);
     this.composer.render(dt);
+    if (this.perf) this.perf.gpuEnd();
     this.frameTimes.push(dt);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
     this.autoScale(dt);

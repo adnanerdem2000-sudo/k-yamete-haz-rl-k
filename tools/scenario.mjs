@@ -78,6 +78,8 @@ try {
 const key = /^\[(log|shot|shot-fail|eval-error|scenario-error|p\d+:pageerror|p\d+:error)\]/;
 const rest = logs.filter((l) => !key.test(l)).slice(-40);
 console.log(logs.filter((l) => key.test(l) || rest.includes(l)).join('\n'));
+const asserts = errors.filter((e) => /^\[assert\]/.test(e));
+if (asserts.length) console.log('\n--- denetim hataları ---\n' + asserts.join('\n'));
 console.log(`\n== ${ok && !errors.length ? 'OK' : 'HATA'} · ${errors.length} hata`);
 await browser.close();
 process.exit(ok && !errors.length ? 0 : 1);

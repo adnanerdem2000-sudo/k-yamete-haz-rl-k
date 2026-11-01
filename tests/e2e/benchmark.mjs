@@ -1,58 +1,49 @@
-// Performans ölçümü (Aşama 8): dört sahnede (mahalle, şehir caddesi, orman, iç mekân) kare süresi, çizim çağrısı,
-// üçgen sayısı, fizik adımı/sn ve bellek. Menü dünyası + oyun içi (spawn). Sonuç: /tmp/benchmark.json ve günlük.
-// Yazılım GPU'sunda mutlak değerler düşüktür; karşılaştırma için göreli kullanılır (aynı ortamda iki sürüm).
+// Performans ölçümü (Aşama 8): oyun içi performans testi (src/systems/Benchmark.js: şehir merkezi, orman, üs, 40
+// zombilik sürü) dört kalite seviyesinde (Düşük/Orta/Yüksek/Ultra) çalıştırılır. Ölçülen: FPS, ort. kare süresi,
+// %1 low, CPU kare süresi, GPU kare süresi (zaman sorgusu varsa), çizim çağrısı, üçgen, JS yığını, zombi ve fizik
+// gövdesi sayısı. Sonuç: /tmp/benchmark.json. YAZILIM GPU'SU (SwiftShader) mutlak değerleri gerçek donanım performansı
+// DEĞİLDİR; burada kalite seviyelerinin yükü gerçekten değiştirdiği (çizim/üçgen/AO/yansıma) doğrulanır. Gerçek donanım
+// raporu için oyuncu Duraklat → Ayarlar → Grafik → "Performans testini başlat" ile aynı testi çalıştırır.
 import fs from 'node:fs';
-export default async ({ page, url, evalJS, log, wait }) => {
-  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
+export default async ({ page, url, evalJS, log, errors }) => {
+  const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
+  await page.goto(url, { waitUntil: 'load', timeout: 180000 });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 300000 });
-  const quality = await evalJS(page, () => window.__game.settings.get('graphics.quality'));
-  const scenes = [
-    ['mahalle', [-262, 1.7, 182], [-230, 2.5, 160]],
-    ['sehir', [70, 1.7, -28], [96, 3, -36]],
-    ['orman', [-640, 2.0, 120], [-600, 3, 90]],
-    ['ic-mekan', null, null],
-  ];
-  const out = { quality, when: new Date().toISOString(), scenes: {} };
-  for (const [name, c, t] of scenes) {
-    const r = await evalJS(page, async ([name, c, t]) => {
-      const g = window.__game, T = g.world.terrain, cam = g.gfx.camera;
-      cancelAnimationFrame(g.raf); g.loop = () => {};
-      document.getElementById('ui-root').style.display = 'none'; g.menu.group.visible = false;
-      if (c) { cam.position.set(c[0], T.heightAt(c[0], c[2]) + c[1], c[2]); cam.lookAt(t[0], T.heightAt(t[0], t[2]) + t[1], t[2]); }
-      else { const b = g.world.buildings.find((q) => q.rooms.some((r) => r.type === 'living')); const r = b.rooms.find((q) => q.type === 'living'); cam.position.set(r.minX + 0.6, b.floorY + 1.5, r.minZ + 0.6); cam.lookAt((r.minX + r.maxX) / 2, b.floorY + 1.0, (r.minZ + r.maxZ) / 2); g.world.setRoofHidden && g.world.setRoofHidden(b); }
-      g.world.vegetation.update(cam.position, g.settings.get('graphics.viewDistance'), true, 1, g.settings.get('graphics.quality'));
-      g.world.cullInteriors(cam.position, 1); g.world.instancer.cull(cam.position, 420);
-      g.env.update(0.016, g.time, 13 * 60, cam.position, null);
-      // ısınma 2 kare, ölçüm 6 kare
-      for (let i = 0; i < 2; i++) g.gfx.render(0.016, g.time);
-      const info = g.gfx.renderer.info;
-      const times = [];
-      for (let i = 0; i < 6; i++) { const a = performance.now(); g.gfx.render(0.016, g.time + i * 0.016); g.gfx.renderer.getContext().finish && g.gfx.renderer.getContext().finish(); times.push(performance.now() - a); }
-      times.sort((a, b) => a - b);
-      const mem = performance.memory ? Math.round(performance.memory.usedJSHeapSize / 1048576) : null;
-      return { name, msMedian: +times[3].toFixed(1), msMin: +times[0].toFixed(1), calls: info.render.calls, triangles: info.render.triangles, geometries: info.memory.geometries, textures: info.memory.textures, programs: info.programs ? info.programs.length : null, heapMB: mem };
-    }, [name, c, t]);
-    log(name, r);
-    out.scenes[name] = r;
+  await evalJS(page, () => { const g = window.__game; g.ui.onLockChange = () => {}; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
+  await page.waitForFunction(() => window.__game && window.__game.state === 'playing' && window.__game.session, null, { timeout: 300000 });
+  const out = { when: new Date().toISOString(), note: 'Başsız Chromium + SwiftShader (yazılım GPU): mutlak değerler gerçek donanımı temsil etmez.', runs: {} };
+  for (const q of ['low', 'medium', 'high', 'ultra']) {
+    const r = await evalJS(page, async (q) => {
+      const g = window.__game;
+      const m = await import('/src/core/Settings.js');
+      m.applyQualityPreset(q);
+      // test ortamı: çözünürlük ölçeği sabit (yazılım GPU'su), otomatik ölçek kapalı
+      m.Settings.setMany('graphics', { renderScale: 0.6, autoScale: false });
+      const w = g.world.water, refl0 = w ? w.reflCount : 0;
+      const res = await g.benchmark.run({ seconds: 3, warm: 1, warmFrames: 2, minFrames: 3, maxSeconds: 60 });
+      return { ...res, ao: !!(g.gfx.gtaoPass && g.gfx.gtaoPass.enabled), reflections: w ? w.reflCount - refl0 : 0, passes: g.gfx.composer.passes.filter((p) => p.enabled).map((p) => p.constructor.name) };
+    }, q);
+    if (!r) { check(false, 'performans testi çalışmadı', q); continue; }
+    out.runs[q] = r;
+    log(q, { ao: r.ao, yansima: r.reflections, gecisler: r.passes, gpu: r.gpu });
+    for (const s of r.results) log(`  ${q}/${s.scene}`, { fps: s.fps, ms: s.frameMs, low1: s.low1, cpu: s.cpuMs, gpu: s.gpuMs, cizim: s.calls, ucgen: s.triangles, zombi: s.zombies, fizik: `${s.physAwake}/${s.physBodies}`, yigin: s.heapMB });
+    check(r.results.length === 4 && r.results.every((s) => s.frames > 0 && s.calls > 0), 'dört sahne ölçülmeli (kare ve çizim > 0)', { q, n: r.results.length });
   }
-  // oyun içi: spawn noktasında 3 sn fizik adımı/sn ve güncelleme süresi
-  await page.goto(url, { waitUntil: 'load', timeout: 120000 });
-  await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 300000 });
-  await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
-  await page.waitForFunction(() => window.__game && window.__game.state === 'playing' && window.__game.session, null, { timeout: 150000 });
-  await wait(2000);
-  const game = await evalJS(page, async () => {
-    const g = window.__game, S = g.session, P = g.phys;
-    let upd = 0, n = 0;
-    const u0 = S.update.bind(S);
-    S.update = (dt) => { const a = performance.now(); u0(dt); upd += performance.now() - a; n++; };
-    const s0 = P.steps, t0 = performance.now();
-    await new Promise((r) => setTimeout(r, 3000));
-    const dtMs = performance.now() - t0;
-    return { adimPerSn: +((P.steps - s0) / (dtMs / 1000)).toFixed(1), updateMs: n ? +(upd / n).toFixed(1) : null, kare: n, zombi: S.zombies.views.size, nesne: S.props ? S.props.props.length : 0, kapi: S.doorPhys ? S.doorPhys.doors.length : 0 };
-  });
-  log('oyun içi', game);
-  out.game = game;
+  const R = out.runs;
+  if (R.low && R.ultra) {
+    const sum = (q, k) => R[q].results.reduce((a, s) => a + (s[k] || 0), 0);
+    log('toplam çizim (düşük / orta / yüksek / ultra)', ['low', 'medium', 'high', 'ultra'].map((q) => R[q] ? sum(q, 'calls') : null));
+    log('toplam üçgen (düşük / ultra)', sum('low', 'triangles'), sum('ultra', 'triangles'));
+    check(sum('ultra', 'calls') > sum('low', 'calls'), 'Ultra, Düşük\'ten daha fazla çizim yapmalı (AO + yansıma + bitki)', { low: sum('low', 'calls'), ultra: sum('ultra', 'calls') });
+    check(R.ultra.ao && !R.low.ao, 'AO yalnız Ultra\'da açık olmalı', { low: R.low.ao, ultra: R.ultra.ao });
+    check(R.ultra.reflections > 0 && R.low.reflections === 0, 'su yansıması Ultra\'da (orman gölü) çizilmeli, Düşük\'te çizilmemeli', { low: R.low.reflections, ultra: R.ultra.reflections });
+    const horde = R.ultra.results.find((s) => s.scene === 'suru');
+    check(horde && horde.zombies >= 30, 'sürü sahnesinde en az 30 zombi ölçülmeli', horde && horde.zombies);
+  }
+  // performans testi sonrası oyuncu eski yerine döner, sürü kaldırılır
+  const after = await evalJS(page, () => { const S = window.__game.session; return { zombies: S.zombies.list.size, running: window.__game.benchmark.running }; });
+  log('test sonrası', after);
+  check(after && !after.running && after.zombies < 30, 'test sonrası sürü kaldırılmalı', after);
   fs.writeFileSync('/tmp/benchmark.json', JSON.stringify(out, null, 2));
   log('yazıldı', '/tmp/benchmark.json');
 };

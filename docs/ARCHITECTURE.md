@@ -248,6 +248,29 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 - **Göçte zombiler:** `Session.becomeHost` istemcinin gördüğü zombileri (tür, konum, yön) gerçek zombiye çevirir; bölge
   nüfusu ve öldürülen sayıları `pdata`/hoş geldin paketiyle paylaşılır (`zoneState`) ve geri yüklenir.
 
+## Son kalite (Aşama 8)
+- **Kalite seviyeleri** (`Settings.QUALITY_PRESETS`, `applyQualityPreset`): Düşük / Orta / Yüksek / Ultra. Seçim
+  gölge, parlama, çimen, AO, su yansıması, görüş mesafesi ve çözünürlük ölçeğini tek bildirimle (`Settings.setMany`)
+  değiştirir; kaliteye bağlı olanlar: gölge haritası 1024/2048/4096/4096, kenar yumuşatma (Düşük'te kapalı, yeniden
+  yükleme ister), çözünürlük tavanı 1×/1×/1,5×/2×, bitki mesafeleri (`Vegetation.RANGES.ultra`), zombi sınırı
+  26/38/50/50, efekt yoğunluğu %50/%80/%100/%100 (`Effects.emit`). Gölge aç/kapa artık yalnız gerçekten değiştiğinde
+  malzemeleri yeniden derletir.
+- **AO:** `GTAOPass` (three.js r187, `vendor/three/addons`), bileşimde çizimden hemen sonra; saydam yüzeyler, gökyüzü
+  ve `userData.noAO` nesneleri AO tamponuna girmez. Ultra'da varsayılan açık.
+- **Su yansıması:** `Water.renderReflection` (`Graphics.beforeRender` kancası): kamera bir göle 150 m'den yakınsa ya
+  da kıyıdaysa su düzlemine göre aynalanmış sanal kamerayla sahne üçte bir çözünürlükte çizilir (eğik yakın düzlem,
+  su gizli, gölge haritası yeniden hesaplanmaz); su gölgelendiricisi Fresnel ile karıştırır. Ultra'da varsayılan açık.
+- **Performans ölçümü** (`src/core/PerfMonitor.js`): son 600 kare — FPS, ort. kare süresi, %1 low, CPU kare süresi
+  (oyun döngüsünün JS süresi), GPU kare süresi (`EXT_disjoint_timer_query_webgl2` varsa), çizim, üçgen, JS yığını,
+  GPU kaynakları, aktif zombi ve fizik gövdesi (uyanık/toplam). Ayarlar → Grafik → "Performans göstergesi".
+- **Performans testi** (`src/systems/Benchmark.js`): şehir merkezi, orman, üs ve 40 zombilik sürü sahneleri; oyuncu
+  hasar almaz, sürü sonunda kaldırılır, oyuncu yerine döner. Duraklat → Ayarlar → Grafik → "Performans testini
+  başlat"; sonuç tablo + JSON (gerçek donanım raporu için).
+- **Ses:** kapı türüne göre açılma sesi (ahşap gıcırtı, metal/hücre/kasa/garaj metalik çınlama, cam), barikat
+  kopunca tahta çatırtısı (eskiden çekiç sesi çalıyordu), gevşek zeminde lastik hışırtısı (asfaltta yok).
+- **Görsel regresyon** (`tests/e2e/visual.mjs`): istemdeki 12 sahne (13 görüntü), döngü durdurulmuş, saat/hava/
+  rastgelelik sabit; taban `tests/visual/baseline/`.
+
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),
   14 NPC (selam, sohbet konuları `lore`, ticaret bayrağı), 29 görev, 38 belge, 7 final.

@@ -7,6 +7,9 @@ import { LOOT } from '../data/loot.js';
 import { PROJECTS } from '../data/buildables.js';
 import { clamp } from '../core/util.js';
 
+// kapı türüne göre açılma/kapanma sesi (ahşap: gıcırtı; metal/hücre/kasa/garaj: metalik; cam)
+const DOOR_SOUND = { metal: 'door_metal', cell: 'door_metal', vault: 'door_metal', lab: 'door_metal', garage: 'door_metal', glass2: 'door_glass' };
+
 export class Interact {
   constructor(session) {
     this.s = session;
@@ -67,7 +70,7 @@ export class Interact {
   // ======================================================================= kapı/pencere durumu
   applyDoorState(d, e, silent = false) {
     const S = this.s;
-    const wasBroken = d.broken;
+    const wasBroken = d.broken, prevBar = d.barricade || 0;
     if (e.target !== undefined) d.target = e.target;
     if (e.broken !== undefined) d.broken = e.broken;
     if (e.barricade !== undefined) {
@@ -81,8 +84,8 @@ export class Interact {
     S.world.physics.setEnabled(d.collider, blocking);
     if (!silent) {
       if (d.broken && !wasBroken) { S.audio.play('bash', { at: d.center, vol: 1 }); S.fx.hit(d.center.x, d.y0 + 1, d.center.z, 'wood'); S.world.doorRenderer.updateDoor(d); S.props.burst(d.center.x, d.y0 + 1, d.center.z, d.kind === 'metal' ? 'metal' : 'wood', 6, [d.inward.x, d.inward.z]); }
-      else if (e.target !== undefined) S.audio.play('door', { at: d.center, vol: 0.8 });
-      if (e.barricade !== undefined) S.audio.play('build', { at: d.center, vol: 0.8 });
+      else if (e.target !== undefined) S.audio.play(DOOR_SOUND[d.kind] || 'door', { at: d.center, vol: 0.8 });
+      if (e.barricade !== undefined && e.barricade !== prevBar) S.audio.play(e.barricade < prevBar ? 'barricade_break' : 'build', { at: d.center, vol: e.barricade < prevBar ? 1 : 0.8 });
     } else S.world.doorRenderer.updateDoor(d);
     if (silent) { d.open01 = d.target; S.world.doorRenderer.updateDoor(d); }
   }
@@ -107,7 +110,7 @@ export class Interact {
 
   applyWindowState(w, e, silent = false) {
     const S = this.s;
-    const wasBroken = w.broken;
+    const wasBroken = w.broken, prevBar = w.barricade || 0;
     if (e.broken !== undefined) w.broken = e.broken;
     if (e.hp !== undefined) w.hp = e.hp;
     if (e.barricade !== undefined) {
@@ -117,7 +120,7 @@ export class Interact {
     S.world.setPaneVisible(w.paneIndex, !w.broken);
     S.world.physics.setEnabled(w.collider, !w.broken || w.barricade > 0);
     if (!silent && w.broken && !wasBroken) { S.audio.play('glass', { at: w.center, vol: 1 }); S.fx.emit(w.center.x, w.center.y, w.center.z, 14, { color: '#cfefff', speed: 3, life: 0.6, size: 0.1 }); S.props.burst(w.center.x, w.center.y, w.center.z, 'glass', 7, [w.inward.x * 0.6, w.inward.z * 0.6]); }
-    if (!silent && e.barricade !== undefined) S.audio.play('build', { at: w.center, vol: 0.8 });
+    if (!silent && e.barricade !== undefined && e.barricade !== prevBar) S.audio.play(e.barricade < prevBar ? 'barricade_break' : 'build', { at: w.center, vol: e.barricade < prevBar ? 1 : 0.8 });
   }
 
   updateWindowBoards(w) {

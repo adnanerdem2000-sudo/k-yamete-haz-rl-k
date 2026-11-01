@@ -16,6 +16,8 @@ import { Net } from './net/Net.js';
 import { Session } from './Session.js';
 import { mapBase } from './systems/MapSystem.js';
 import { PhysicsWorld } from './physics/PhysicsWorld.js';
+import { PerfMonitor } from './core/PerfMonitor.js';
+import { Benchmark } from './systems/Benchmark.js';
 
 const TIPS = [
   'İpucu: Silah sesleri zombileri çeker. Her sorunu silahla çözme.',
@@ -32,6 +34,9 @@ export class Game {
   constructor(canvas, uiRoot) {
     this.canvas = canvas;
     this.gfx = new Graphics(canvas);
+    this.perf = new PerfMonitor(this.gfx.renderer); // FPS/kare süresi/%1 low/CPU-GPU süresi (gösterge + performans testi)
+    this.gfx.perf = this.perf;
+    this.benchmark = new Benchmark(this);
     this.scene = this.gfx.scene;
     this.input = new Input(canvas);
     this.bus = new EventBus();
@@ -67,6 +72,9 @@ export class Game {
       await this.world.build((l) => { step++; setP(0.45 + step * 0.06, l); });
       // uzak ağaç kartlarının atlası ilk güncellemede oluşturucuyla çizilir
       if (this.world.vegetation) this.world.vegetation.renderer = this.gfx.renderer;
+      // su yansıması (Ultra / ayar): ana çizimden önce; gökyüzü AO tamponuna girmez
+      if (this.world.water && this.world.water.renderReflection) this.gfx.beforeRender.add((r, s, c) => this.world.water.renderReflection(r, s, c));
+      if (this.world.sky && this.world.sky.mesh) this.world.sky.mesh.userData.noAO = true;
       setP(0.88, 'Fizik motoru hazırlanıyor…');
       await PhysicsWorld.load();
       this.phys = new PhysicsWorld(this.world);
@@ -104,6 +112,8 @@ export class Game {
 
   loop() {
     const now = performance.now();
+    const rawMs = now - this.last; // ölçüm için sınırlanmamış kare aralığı
+    if (this.perf) this.perf.begin();
     let dt = (now - this.last) / 1000;
     this.last = now;
     if (dt > 0.1) dt = 0.1;
@@ -120,6 +130,7 @@ export class Game {
     }
     this.gfx.render(dt, this.time);
     this.input.endFrame();
+    if (this.perf) this.perf.end(rawMs);
     this.raf = requestAnimationFrame(() => this.loop());
   }
 

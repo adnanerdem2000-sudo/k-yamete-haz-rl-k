@@ -42,7 +42,8 @@ export class Environment {
     this.sun = new THREE.DirectionalLight(0xffffff, 3);
     this.sun.castShadow = true;
     const q = Settings.get('graphics.quality');
-    this.sun.shadow.mapSize.set(q === 'high' ? 4096 : q === 'medium' ? 2048 : 1024, q === 'high' ? 4096 : q === 'medium' ? 2048 : 1024);
+    const sm = q === 'ultra' || q === 'high' ? 4096 : q === 'medium' ? 2048 : 1024;
+    this.sun.shadow.mapSize.set(sm, sm);
     const sc = this.sun.shadow.camera;
     sc.left = -55; sc.right = 55; sc.top = 55; sc.bottom = -55; sc.near = 1; sc.far = 400;
     this.sun.shadow.bias = -0.0004;

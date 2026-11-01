@@ -73,6 +73,16 @@ Lobide **Sesli sohbeti aç** ile mikrofonu aç; oyunda **V** tuşuna basılı tu
 
 > Aynı bilgisayarda iki sekmeyle denemek için "Bağlantı: **Yerel test**" seçeneğini kullan.
 
+### Grafik kalitesi ve performans testi
+**Ayarlar → Grafik → Kalite**: *Düşük* (zayıf ekran kartları), *Orta* (orta seviye bilgisayarlar), *Yüksek*
+(güçlü ekran kartları), *Ultra* (ortam kapanması/AO ve gerçek su yansımaları). Seviye seçilince gölge, bitki örtüsü,
+çözünürlük, AO, su ve efekt ayarları birlikte değişir; sonra tek tek değiştirilebilir. **Performans göstergesi**
+açılırsa ekranda FPS, kare süresi, %1 low, CPU/GPU süresi, çizim çağrısı, üçgen, zombi ve fizik nesnesi sayısı görünür.
+
+Kendi bilgisayarında ölçmek için tek oyunculu bir oyunda **Duraklat → Ayarlar → Grafik → Performans testini başlat**
+(~45 sn): oyun şehir merkezi, orman, üs ve 40 zombilik bir sürüyü sırayla ölçer, sonucu tablo olarak gösterir;
+**Sonucu kopyala (JSON)** ile paylaşabilirsin.
+
 ---
 
 ## 💻 Yerelde çalıştırma (geliştirme)

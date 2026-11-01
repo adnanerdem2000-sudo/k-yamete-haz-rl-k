@@ -38,8 +38,18 @@ export class Benchmark {
 
   async wait(ms) { await new Promise((r) => setTimeout(r, ms)); }
 
-  /** seconds: ölçüm süresi (sahne başına), warm: ısınma; onProgress(sahneAdı, i, n) */
-  async run({ seconds = 8, warm = 2, onProgress = null, scenes = null } = {}) {
+  /** En az n kare çizilene dek (en fazla maxS sn) bekle: yavaş GPU'da sabit süre içinde hiç kare bitmeyebilir */
+  async waitFrames(n, maxS, fromReset = false) {
+    const perf = this.game.perf, n0 = fromReset ? 0 : perf.n, t0 = performance.now();
+    while (perf.n - n0 < n && performance.now() - t0 < maxS * 1000) await this.wait(100);
+  }
+
+  /**
+   * seconds: ölçüm süresi (sahne başına), warm: ısınma (sn); warmFrames: ısınmada en az bu kadar kare (gölgelendirici
+   * derlemesi ölçüme girmesin); minFrames: ölçümde en az bu kadar kare; maxSeconds: kare beklemelerinin tavanı.
+   * onProgress(sahneAdı, i, n)
+   */
+  async run({ seconds = 8, warm = 2, warmFrames = 2, minFrames = 0, maxSeconds = 60, onProgress = null, scenes = null } = {}) {
     const g = this.game, S = g.session;
     if (!S || !S.isHost || (g.net && g.net.active)) throw new Error('Performans testi yalnız tek oyunculu oyunda çalışır.');
     if (this.running) throw new Error('Performans testi zaten çalışıyor.');
@@ -68,8 +78,10 @@ export class Benchmark {
           }
         }
         await this.wait(warm * 1000);
+        await this.waitFrames(warmFrames, maxSeconds);
         g.perf.reset();
         await this.wait(seconds * 1000);
+        if (minFrames) await this.waitFrames(minFrames, maxSeconds, true);
         results.push({ scene: sc.id, name: sc.name, ...g.perf.stats(g) });
         for (const id of spawned.splice(0)) S.zombies.removeZombie(id);
       }

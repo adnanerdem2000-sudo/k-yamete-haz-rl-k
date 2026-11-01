@@ -500,6 +500,7 @@ export class Vehicles {
     if (v.water) { const dock = S.world.interactables.find((i) => i.type === 'boat_dock'); if (dock) { ex = dock.x; ez = dock.z - 3; } }
     v.inThr = 0; v.inSteer = 0; v.inHB = false;
     S.audio.stopLoop('skid_local');
+    S.audio.stopLoop('tire_local');
     S.local.spawnAt(ex, S.world.physics.groundHeight(ex, ez, v.pos.y + 2) + 0.05, ez, v.yaw);
     S.local.camYaw = v.yaw + Math.PI;
     S.local.mode = 'ground';
@@ -558,6 +559,10 @@ export class Vehicles {
     S.audio.loop('engine_local', v.def.sound || 'engine', { vol: v.broken || v.fuel <= 0 ? 0 : 0.35 + sp / v.def.maxSpeed * 0.4, rate: 0.6 + sp / v.def.maxSpeed * 1.4 });
     if (v.skid > 0.4 && sp > 6) S.audio.loop('skid_local', 'skid', { vol: Math.min(0.5, (v.skid - 0.4) * 0.8), rate: 1 });
     else S.audio.stopLoop('skid_local');
+    // lastik: toprak/kum/çimen/kar/kayada yuvarlanma hışırtısı (hızla artar); asfaltta yok
+    const loose = v.surface && v.surface !== 'asphalt' && v.surface !== 'concrete' && !v.water;
+    if (loose && sp > 2) S.audio.loop('tire_local', 'gravel', { vol: Math.min(0.32, 0.06 + sp / v.def.maxSpeed * 0.3), rate: 0.8 + sp / v.def.maxSpeed * 0.6 });
+    else S.audio.stopLoop('tire_local');
     S.local.noise = sp > 2 ? 18 : 6;
   }
 

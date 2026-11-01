@@ -293,7 +293,18 @@ export class UIManager {
   // ======================================================================= kare güncellemesi
   update(dt) {
     const S = this.S;
-    if (Settings.get('graphics.fpsCounter')) { this.fps.classList.remove('hidden'); this._fpsT = (this._fpsT || 0) - dt; if (this._fpsT <= 0) { this._fpsT = 0.5; this.fps.textContent = `${this.game.gfx.fps} FPS · ${this.game.gfx.renderer.info.render.calls} çizim`; } } else this.fps.classList.add('hidden');
+    if (Settings.get('graphics.fpsCounter')) {
+      this.fps.classList.remove('hidden');
+      this._fpsT = (this._fpsT || 0) - dt;
+      if (this._fpsT <= 0) {
+        this._fpsT = 0.5;
+        // performans göstergesi: son 120 kare — FPS, ort. kare süresi, %1 low, CPU/GPU süresi, çizim, üçgen, zombi, fizik, bellek
+        const g = this.game, st = g.perf ? g.perf.stats(g, 120) : null;
+        this.fps.textContent = st
+          ? `${st.fps} FPS · ${st.frameMs} ms · %1 low ${st.low1} · CPU ${st.cpuMs} ms${st.gpuMs !== null ? ` · GPU ${st.gpuMs} ms` : ''} · ${st.calls} çizim · ${Math.round(st.triangles / 1000)}k üçgen · zombi ${st.zombies} · fizik ${st.physAwake}/${st.physBodies}${st.heapMB ? ` · ${st.heapMB} MB` : ''}`
+          : `${g.gfx.fps} FPS · ${g.gfx.renderer.info.render.calls} çizim`;
+      }
+    } else this.fps.classList.add('hidden');
     if (!S || this.game.state !== 'playing') return;
     this.hud.update(dt);
     this.panels.update(dt);

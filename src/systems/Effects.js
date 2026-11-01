@@ -1,5 +1,6 @@
 // Görsel efektler: stilize vuruş kıvılcımları, toz, duman, ateş, mermi izleri, namlu alevi,
 // işaret (ping), yüzen hasar sayıları. Şiddet stilize ve ölçülü tutulur.
+import { Settings } from '../core/Settings.js';
 import * as THREE from 'three';
 import { softDot } from '../world/TextureFactory.js';
 
@@ -37,6 +38,9 @@ export class Effects {
   }
 
   emit(x, y, z, n, o = {}) {
+    // kalite: düşük %50, orta %80, yüksek/ultra %100 parçacık (en az 1)
+    const q = Settings.get('graphics.quality');
+    n = Math.max(1, Math.round(n * (q === 'low' ? 0.5 : q === 'medium' ? 0.8 : 1)));
     for (let k = 0; k < n; k++) {
       let i = this.parts.length < MAX ? this.parts.length : -1;
       if (i < 0) { this.parts.shift(); i = this.parts.length; }

@@ -43,6 +43,7 @@ const RANGES = {
   low: { tree: [16, 38], bush: [0, 60], rock: [18, 180], grass: [0, 26], ground: [0, 32], thin: 0.5 },
   medium: { tree: [30, 58], bush: [0, 80], rock: [30, 240], grass: [0, 38], ground: [0, 46], thin: 1 },
   high: { tree: [42, 85], bush: [0, 100], rock: [40, 300], grass: [0, 48], ground: [0, 58], thin: 1 },
+  ultra: { tree: [60, 120], bush: [0, 140], rock: [60, 400], grass: [0, 70], ground: [0, 80], thin: 1 },
 };
 const TILE = 256; // impostor atlas karesi (piksel)
 // rüzgâr: pivot (m, bu yüksekliğin altı sabit), genlik (yükseklik başına), yaprak titreşimi

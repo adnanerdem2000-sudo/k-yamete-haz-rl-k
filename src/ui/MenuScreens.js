@@ -1,7 +1,7 @@
 // Menü ekranları: ana menü (tahta tabelalar), tek oyuncu, arkadaşlarla oyna (oda kur/katıl/liste),
 // oda lobisi, karakterler, özelleştirme (3B vitrin), ayarlar, nasıl oynanır, krediler.
 import { h, clear, portrait, bar, button, banner } from './dom.js';
-import { Settings, DEFAULT_BINDINGS, ACTION_LABELS } from '../core/Settings.js';
+import { Settings, DEFAULT_BINDINGS, ACTION_LABELS, applyQualityPreset } from '../core/Settings.js';
 import { keyLabel } from '../core/Input.js';
 import { CHARACTERS, CHARACTER_IDS, OPTIONS, PALETTES, COLLECTIONS, BASE_FACES, OUTFIT_SETS, OUTFIT_NAMES } from '../entities/CharacterFactory.js';
 import { SaveSystem, SLOT_NAMES } from '../systems/SaveSystem.js';
@@ -365,6 +365,28 @@ export class Menus {
   }
 
   // ======================================================================= AYARLAR
+  /** Oyun içi performans testi: paneli kapatır, oyunu sürdürür, bitince sonuç tablosuyla ayarları yeniden açar */
+  async runBenchmark() {
+    const g = this.game, S = g.session;
+    this.ui.closePanel();
+    if (S) S.paused = false;
+    this.ui.toast('Performans testi başladı: şehir merkezi, orman, üs ve zombi sürüsü. Lütfen bekle…', 'info', 5);
+    try {
+      this.benchResult = await g.benchmark.run({ seconds: 8, warm: 2, onProgress: (name, i, n) => this.ui.toast(`Performans testi ${i + 1}/${n}: ${name}`, 'info', 3) });
+      this.setTab = 'graphics';
+      this.openSettings(true);
+    } catch (e) { this.ui.toast('Performans testi: ' + e.message, 'warn', 5); }
+  }
+
+  benchTable(res) {
+    const rows = res.results.map((r) => h('tr', h('td', r.name), h('td', String(r.fps)), h('td', String(r.frameMs)), h('td', String(r.low1)), h('td', String(r.cpuMs)), h('td', r.gpuMs === null ? '—' : String(r.gpuMs)), h('td', String(r.calls)), h('td', Math.round(r.triangles / 1000) + 'k'), h('td', String(r.zombies)), h('td', `${r.physAwake}/${r.physBodies}`)));
+    return h('div.bench',
+      h('h3', 'Performans testi sonucu'),
+      h('p.muted', `${res.gpu || 'GPU bilinmiyor'} · ${res.resolution[0]}×${res.resolution[1]} · kalite: ${res.quality} · sahne başına ${res.seconds} sn`),
+      h('table.bench-table', h('thead', h('tr', ['Sahne', 'FPS', 'ms', '%1 low', 'CPU ms', 'GPU ms', 'Çizim', 'Üçgen', 'Zombi', 'Fizik (uyanık/toplam)'].map((t) => h('th', t)))), h('tbody', rows)),
+      button('Sonucu kopyala (JSON)', () => { const t = JSON.stringify(res, null, 2); if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => this.ui.toast('Sonuç panoya kopyalandı.', 'good'), () => this.ui.toast('Kopyalanamadı.', 'warn')); }, 'small'));
+  }
+
   openSettings(inGame = false) {
     this.setTab = this.setTab || 'graphics';
     const root = h('div' + (inGame ? '.panel.settings-panel' : '.screen.settings'));
@@ -384,11 +406,20 @@ export class Menus {
       let body;
       if (this.setTab === 'graphics') {
         body = h('div.set-body',
-          this.choice('Kalite', [['low', 'Düşük'], ['medium', 'Orta'], ['high', 'Yüksek']], g.quality, (v) => { Settings.set('graphics.quality', v); render(); this.ui.toast('Gölge çözünürlüğü ve kenar yumuşatma için oyunu yeniden yükle.', 'info', 4); }),
-          toggle('Gölgeler', 'graphics.shadows'), toggle('Parlama (bloom)', 'graphics.bloom'), toggle('Çimen', 'graphics.grass'), toggle('Otomatik çözünürlük (akıcılık)', 'graphics.autoScale'), toggle('FPS göstergesi', 'graphics.fpsCounter'),
+          // kalite ön ayarı alt ayarları (gölge, bitki, çözünürlük, AO, su, efekt, görüş mesafesi) birlikte değiştirir
+          this.choice('Kalite', [['low', 'Düşük'], ['medium', 'Orta'], ['high', 'Yüksek'], ['ultra', 'Ultra']], g.quality, (v) => { applyQualityPreset(v); render(); this.ui.toast('Kalite ön ayarı uygulandı. Gölge çözünürlüğü, kenar yumuşatma ve zombi sınırı için oyunu yeniden yükle.', 'info', 5); }),
+          h('p.muted', 'Düşük: zayıf ekran kartları · Orta: orta seviye bilgisayarlar · Yüksek: güçlü ekran kartları · Ultra: ortam kapanması (AO) ve gerçek su yansımalarıyla yüksek donanım.'),
+          toggle('Gölgeler', 'graphics.shadows'), toggle('Parlama (bloom)', 'graphics.bloom'), toggle('Çimen', 'graphics.grass'),
+          toggle('Ortam kapanması (AO)', 'graphics.ao'), toggle('Su yansımaları', 'graphics.waterRefl'),
+          toggle('Otomatik çözünürlük (akıcılık)', 'graphics.autoScale'), toggle('Performans göstergesi (FPS, kare süresi)', 'graphics.fpsCounter'),
           slider('Çözünürlük ölçeği', 'graphics.renderScale', 0.5, 1, 0.05, (v) => `%${Math.round(v * 100)}`),
           slider('Görüş mesafesi', 'graphics.viewDistance', 200, 700, 20, (v) => `${v} m`),
-          slider('Görüş açısı (FOV)', 'graphics.fov', 55, 95, 1, (v) => `${v}°`));
+          slider('Görüş açısı (FOV)', 'graphics.fov', 55, 95, 1, (v) => `${v}°`),
+          (() => {
+            const S = this.game.session, ok = inGame && S && S.isHost && !this.game.net.active;
+            return ok ? button('Performans testini başlat (~45 sn)', () => this.runBenchmark(), 'small') : h('p.muted', 'Performans testi (şehir merkezi, orman, üs, zombi sürüsü) tek oyunculu bir oyunda Duraklat → Ayarlar → Grafik ekranından çalıştırılır.');
+          })(),
+          this.benchResult ? this.benchTable(this.benchResult) : null);
       } else if (this.setTab === 'audio') {
         const pct = (v) => `%${Math.round(v * 100)}`;
         body = h('div.set-body', slider('Genel ses', 'audio.master', 0, 1, 0.05, pct), slider('Müzik', 'audio.music', 0, 1, 0.05, pct), slider('Efektler', 'audio.sfx', 0, 1, 0.05, pct), slider('Ortam sesleri', 'audio.ambient', 0, 1, 0.05, pct), slider('Sesli sohbet', 'audio.voice', 0, 1, 0.05, pct), slider('Mikrofon eşiği (açık mik.)', 'audio.micGate', 0.005, 0.1, 0.005, (v) => v.toFixed(3)));

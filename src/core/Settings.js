@@ -19,7 +19,7 @@ export const ACTION_LABELS = {
 };
 
 export const DEFAULTS = {
-  graphics: { quality: 'medium', shadows: true, renderScale: 1, autoScale: true, viewDistance: 420, fov: 70, bloom: true, grass: true, fpsCounter: false },
+  graphics: { quality: 'medium', shadows: true, renderScale: 1, autoScale: true, viewDistance: 420, fov: 70, bloom: true, grass: true, ao: false, waterRefl: false, fpsCounter: false },
   controls: { mouseSens: 1, invertY: false, bindings: { ...DEFAULT_BINDINGS } },
   audio: { master: 0.8, music: 0.55, sfx: 0.85, ambient: 0.7, voice: 1, micGate: 0.02 },
   gameplay: { dayMinutes: 24, cameraShake: true, damageNumbers: true, tutorialHints: true },
@@ -53,9 +53,35 @@ class SettingsStore {
     this.save();
     for (const fn of this.listeners) fn(path, value);
   }
+  /** Birden çok anahtarı yaz, dinleyicilere tek bildirim (prefix) gönder: ör. kalite ön ayarı → tek yeniden kurulum */
+  setMany(prefix, obj) {
+    let o = this.data;
+    for (const k of prefix.split('.')) o = o[k];
+    Object.assign(o, obj);
+    this.save();
+    for (const fn of this.listeners) fn(prefix, obj);
+  }
   onChange(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
   save() { try { localStorage.setItem(KEY, JSON.stringify(this.data)); } catch { /* depolama kapalı olabilir */ } }
   reset() { this.data = deepMerge(DEFAULTS, { player: this.data.player }); this.save(); for (const fn of this.listeners) fn('*', null); }
 }
 
 export const Settings = new SettingsStore();
+
+/**
+ * Kalite seviyeleri: seçilince alt ayarlar bu değerlere çekilir (sonra tek tek değiştirilebilir).
+ * Ayrıca kaliteye göre: gölge haritası (1024/2048/4096/4096), kenar yumuşatma (düşükte kapalı), çözünürlük tavanı
+ * (1×/1×/1,5×/2×), bitki örtüsü mesafeleri, zombi sınırı (26/38/50/50), efekt yoğunluğu (%50/%80/%100/%100).
+ * AO (ortam kapanması, GTAO) ve gerçek su yansıması (düzlemsel) yalnız Ultra'da varsayılan açık: ikisi de sahneyi
+ * bir kez daha çizer (çizim çağrısı ~2×).
+ */
+export const QUALITY_PRESETS = {
+  low: { shadows: false, bloom: false, grass: false, ao: false, waterRefl: false, viewDistance: 300, renderScale: 0.85 },
+  medium: { shadows: true, bloom: true, grass: true, ao: false, waterRefl: false, viewDistance: 420, renderScale: 1 },
+  high: { shadows: true, bloom: true, grass: true, ao: false, waterRefl: false, viewDistance: 540, renderScale: 1 },
+  ultra: { shadows: true, bloom: true, grass: true, ao: true, waterRefl: true, viewDistance: 700, renderScale: 1 },
+};
+export function applyQualityPreset(q) {
+  if (!QUALITY_PRESETS[q]) return;
+  Settings.setMany('graphics', { quality: q, ...QUALITY_PRESETS[q] });
+}
