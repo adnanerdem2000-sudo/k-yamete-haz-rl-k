@@ -178,6 +178,13 @@ export class Environment {
     this.hemi.groundColor.copy(k.hemiGround);
     // ortam haritası varken yarım yarımküre ışığı (ortam ışığının kalanı ortam haritasından)
     this.hemi.intensity = k.hemi * (this.envRT ? 0.45 : 1) * (1 - overcast * 0.3) + this.flash * 3;
+    // yer altı: gökyüzü/güneş ışığı toprağın içine sızmasın (odanın kendi lambaları ve el feneri aydınlatır)
+    this._under = (this._under || 0) + ((this.underground ? 1 : 0) - (this._under || 0)) * Math.min(1, dt * 4);
+    if (this._under > 0.001) { const u = this._under; this.hemi.intensity *= 1 - 0.88 * u; this.sun.intensity *= 1 - 0.97 * u; this.game.gfx.scene.environmentIntensity = 0.35 * (1 - 0.8 * u); }
+    else if (this.game.gfx.scene.environmentIntensity !== 0.35) this.game.gfx.scene.environmentIntensity = 0.35;
+    // yer altında deniz/göl düzlemleri çizilmez: deniz seviyesinin (y = 0) altına inen odaları yatay bir su yüzü kesmesin
+    const wat = this.world.water, under = !!this.underground;
+    if (wat && wat._under !== under) { wat._under = under; for (const m of wat.meshes) m.material.visible = !under; }
     // gökyüzü
     const sky = this.world.sky.uniforms;
     const grey = _c2.set(isNight ? '#1a1f2c' : '#9aa3ad');
@@ -253,7 +260,7 @@ export class Environment {
 
   updateParticles(dt, cam) {
     const W = this.weather;
-    const on = W.rain > 0.05;
+    const on = W.rain > 0.05 && !this.underground;
     this.rain.visible = on;
     if (on) {
       const p = this.rain.geometry.attributes.position.array;
@@ -329,7 +336,9 @@ export class Environment {
     // ışık havuzu: en yakın lambalar + ekstra ışıklar
     const cx = cam.position.x, cz = cam.position.z;
     const cands = [];
-    if (on) {
+    // yer altındaysa yüzey lambaları toprağın içinden sızmasın; yüzeydeyse sığınak ışıkları seçilmesin
+    const uz = this.underground || null;
+    if (on && !uz) {
       for (const l of this.world.lamps) {
         if (l.state === 'dead') continue;
         const d2 = (l.x - cx) ** 2 + (l.z - cz) ** 2;
@@ -337,12 +346,13 @@ export class Environment {
       }
     }
     // iç mekân: kameranın içinde olduğu binanın tavan lambaları (gece + elektrik) → sıcak, kısa menzilli ışık
-    if (on) {
+    if (on && !uz) {
       const b = this.world.buildingAt(cx, cz, cam.position.y);
       if (b && b.lamps) for (const l of b.lamps) cands.push({ x: l.x, y: l.y, z: l.z, d2: ((l.x - cx) ** 2 + (l.z - cz) ** 2) * 0.3, color: 0xffd9a0, intensity: 14, range: 9 });
     }
     for (const e of this.extraLights) {
       if (!e.on) continue;
+      if ((e.zone || null) !== uz) continue;
       const d2 = (e.x - cx) ** 2 + (e.z - cz) ** 2;
       if (d2 < 80 * 80) cands.push({ ...e, d2: d2 * 0.5, intensity: e.intensity * (e.flicker ? 0.85 + Math.random() * 0.3 : 1) * (night || e.always ? 1 : 0.25) });
     }

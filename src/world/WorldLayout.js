@@ -226,6 +226,15 @@ export const DECOR_BUILDINGS = [
 
 // Önemli noktalar (harita simgeleri ve görevler için)
 export const POIS = [
+  // yer altı sığınakları (world/Underground.js SHELTERS ile aynı giriş noktaları)
+  { id: 'sh_sehir', name: 'Halk Sığınağı', x: 63, z: 58, icon: 'cave' },
+  { id: 'sh_hastane', name: 'Hastane Bodrumu', x: -102, z: -68, icon: 'cave' },
+  { id: 'sh_askeri', name: 'Komuta Sığınağı', x: 300, z: -318, icon: 'cave' },
+  { id: 'sh_ciftlik', name: 'Fırtına Mahzeni', x: -572, z: 106, icon: 'cave' },
+  { id: 'sh_orman', name: 'Orman Mağarası', x: -303.4, z: -196, icon: 'cave' },
+  { id: 'sh_fener', name: 'Fener Mahzeni', x: -592.5, z: 544, icon: 'cave' },
+  { id: 'sh_dag', name: 'Maden Galerisi', x: -368, z: -344, icon: 'cave' },
+  { id: 'sh_lab', name: 'Laboratuvar B1', x: 12, z: -420, icon: 'cave' },
   { id: 'home', name: 'Üs (Evimiz)', x: -285, z: 150, icon: 'base' },
   { id: 'market', name: 'Market', x: -99, z: 189, icon: 'shop' },
   { id: 'park', name: 'Park', x: -194, z: 212, icon: 'park' },

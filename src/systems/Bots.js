@@ -182,7 +182,8 @@ export class Bots {
   think(b, dt, mins) {
     const S = this.s;
     const st = b.stats;
-    st.tick(mins, { ambient: S.weather.temperature, sheltered: !!S.world.buildingAt(b.pos.x, b.pos.z, b.pos.y), inBase: S.isInBase(b.pos), comfort: S.isInBase(b.pos) ? S.build.comfort01() : 0, night: S.time.isNight, sleeping: S.time.ff > 1 && S.isInBase(b.pos) });
+    const bz = S.world.under ? S.world.under.zoneAt(b.pos.x, b.pos.y + 0.5, b.pos.z) : null; // yer altı sığınağı bölgesi
+    st.tick(mins, { ambient: S.weather.temperature, sheltered: !!S.world.buildingAt(b.pos.x, b.pos.z, b.pos.y) || !!bz, inBase: S.isInBase(b.pos), comfort: S.isInBase(b.pos) ? S.build.comfort01() : 0, night: S.time.isNight, sleeping: S.time.ff > 1 && S.isInBase(b.pos) });
     b.cool -= dt;
     b.think -= dt;
     b.talkT -= dt;
@@ -212,6 +213,14 @@ export class Bots {
       this.selfCare(b);
     }
     const L = this.leader();
+    // ---- yer altı sığınağı: lider sığınağa inince takipçi bot da (kararmalı ışınlamanın ardından) iner, çıkınca çıkar
+    if (b.order === 'follow' && S.world.under && !L.vehicle && !b.vehicleId) {
+      const Lz = S.local.zone || null;
+      if ((Lz ? Lz.id : null) !== (bz ? bz.id : null)) {
+        b.zoneT = (b.zoneT || 0) + dt;
+        if (b.zoneT > 1.2) { b.zoneT = 0; this.followZone(b, Lz, L); }
+      } else b.zoneT = 0;
+    }
     // ---- araç: lider araçtaysa bot da biner
     if (L.vehicle && b.order === 'follow') {
       if (!b.vehicleId) {
@@ -478,6 +487,23 @@ export class Bots {
     b.pos.x = pr.x; b.pos.z = pr.z;
     b.pos.y += (g - b.pos.y) * Math.min(1, dt * 15);
     if (S.world.terrain.isWater(b.pos.x, b.pos.z)) b.pos.y = Math.max(b.pos.y, S.world.terrain.waterLevelAt(b.pos.x, b.pos.z) - 1.1);
+  }
+
+  /** Lideri sığınağa (Z) ya da yüzeye (Z yok) izle: merdivenin dibinde, oyuncunun önünde boş bir nokta */
+  followZone(b, Z, L) {
+    const S = this.s;
+    b.path = null;
+    if (!Z) { this.teleportNear(b, L.pos); return; }
+    const sp = Z.spawn, i = this.list.indexOf(b), side = i % 2 ? 1 : -1, ahead = 1.2 + Math.floor(i / 2) * 0.9;
+    const c = Math.cos(sp.yaw), s = Math.sin(sp.yaw);
+    for (const [lx, lz] of [[side * 0.8, ahead], [-side * 0.8, ahead], [0, ahead + 0.9], [side * 0.8, 0]]) {
+      const x = sp.x + lx * c + lz * s, z = sp.z - lx * s + lz * c;
+      if (S.world.under.zoneAt(x, sp.y + 0.5, z) !== Z) continue;
+      if (S.world.physics.overlapsBox(x - 0.3, z - 0.3, x + 0.3, z + 0.3, sp.y + 0.3, sp.y + 1.7)) continue;
+      b.pos.set(x, sp.y, z);
+      return;
+    }
+    b.pos.set(sp.x, sp.y, sp.z);
   }
 
   teleportNear(b, p) {

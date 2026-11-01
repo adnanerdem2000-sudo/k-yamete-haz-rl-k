@@ -270,7 +270,7 @@ export class Net {
     }
     return {
       seed: S.seed, time: S.time.serialize(), flags: S.flags, relations: S.relations, difficulty: S.cfg.difficulty,
-      loot: S.loot.serialize(), lootUse: S.loot.usageSnapshot(), ground: S.ground.serialize(), build: S.build.serialize(), vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
+      loot: S.loot.serialize(), lootUse: S.loot.usageSnapshot(), ground: S.ground.serialize(), build: S.build.serialize(), shelters: S.shelters ? S.shelters.serialize() : null, vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
       quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(), story: S.storyWorld.serialize(),
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
       props: S.props && S.props.serializeDynamic ? S.props.serializeDynamic() : null,

@@ -442,7 +442,7 @@ export class Player {
   updateCamera(dt) {
     const S = this.session;
     const cam = this.game.gfx.camera;
-    const indoor = !!this.inside;
+    const indoor = !!(this.inside || this.zone);
     const driving = this.mode === 'drive' || this.mode === 'seat';
     let dist = driving ? 8.5 : this.aiming ? 2.3 : indoor ? 3.2 : 4.4;
     if (this.mode === 'prone' || this.mode === 'downed') dist = 3.2;
@@ -488,8 +488,9 @@ export class Player {
     this.camFree = this.camFree === undefined ? free : free < this.camFree ? damp(this.camFree, free, 30, dt) : damp(this.camFree, free, 3.5, dt);
     const d = Math.min(this.camDist, this.camFree);
     const tx = pivot.x + dirX * d, ty = pivot.y + dirY * d, tz = pivot.z + dirZ * d;
-    const gy = S.world.terrain.heightAt(tx, tz) + 0.4;
-    this.camPos.set(tx, Math.max(ty, gy), tz);
+    const Z = this.zone;
+    if (Z) this.camPos.set(tx, Math.min(Z.ceilY - 0.25, Math.max(Z.floorY + 0.35, ty)), tz);
+    else { const gy = S.world.terrain.heightAt(tx, tz) + 0.4; this.camPos.set(tx, Math.max(ty, gy), tz); }
     cam.position.copy(this.camPos);
     if (this.camShake > 0) {
       cam.position.x += (Math.random() - 0.5) * this.camShake * 0.25;

@@ -128,6 +128,8 @@ export class Vegetation {
   add(type, x, z, rot = 0, s = 1, y = null) {
     const T = TYPES[type];
     if (!T) return;
+    // dışlama (ör. yer altı sığınağı girişleri): rastgele sayılar çağrılmadan önce çekildiği için dağılımın geri kalanı değişmez
+    if (this.exclude && this.exclude(x, z)) return;
     const h = Math.abs(Math.sin(x * 12.9898 + z * 78.233) * 43758.5453) % 1;
     const model = T.models[Math.floor(h * T.models.length) % T.models.length];
     const base = T.scale[0] + (T.scale[1] - T.scale[0]) * ((h * 7.31) % 1);

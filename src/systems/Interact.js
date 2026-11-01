@@ -226,6 +226,7 @@ export class Interact {
 
   describeInteractable(it) {
     const S = this.s;
+    if ((it.type === 'shelter' || it.type === 'shelter_exit' || it.type === 'shelter_power') && S.shelters) return S.shelters.describe(it);
     switch (it.type) {
       case 'generator': return S.build.generatorInfo(it);
       case 'bunker': return S.build.bunkerInfo(it);
@@ -446,6 +447,7 @@ export class Interact {
     const S = this.s;
     const inv = S.inventory;
     switch (it.type) {
+      case 'shelter': case 'shelter_exit': case 'shelter_power': if (S.shelters) S.shelters.use(it); break;
       case 'generator': S.build.useGenerator(it); break;
       case 'bunker': S.build.useBunker(it); break;
       case 'campfire_pit': S.build.useFirePit(it); break;

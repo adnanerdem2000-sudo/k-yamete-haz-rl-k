@@ -184,7 +184,7 @@ export class Endings {
     if (mist > 0.5 && !this.escaped.has(S.localId)) {
       const p = S.local.pos;
       const safeHigh = p.y > 34;
-      const inBunker = S.build.bunkerY !== undefined && Math.abs(p.y - S.build.bunkerY) < 2;
+      const inBunker = !!S.local.zone; // herhangi bir yer altı sığınağı (ev sığınağı dahil)
       const sealed = S.local.inside === S.world.home && S.build.defenseScore() >= 20;
       if (!safeHigh && !inBunker && !sealed) { this._mistT = (this._mistT || 0) + dt; if (this._mistT > 1) { this._mistT = 0; S.damageLocal(4, 'internal'); } }
     }
@@ -196,7 +196,7 @@ export class Endings {
     const v = S.local.vehicle;
     if (v && !v.def.water && S.time.minuteOfDay >= 21 * 60 && dist(S.local.pos.x, S.local.pos.z, BRIDGE.end.x, BRIDGE.end.z) < BRIDGE.exitR && this.readiness().convoy.ok) S.act('escape', { how: 'convoy' });
     // sığınak
-    if (S.build.bunkerY !== undefined && S.build.bunker.stage >= 4 && Math.abs(S.local.pos.y - S.build.bunkerY) < 2 && m >= 22 * 60 && !this.escaped.has(S.localId) && this.readiness().bunker.ok) S.act('escape', { how: 'bunker' });
+    if (S.build.bunkerY !== undefined && S.build.bunker.stage >= 4 && S.local.zone && S.local.zone.id === 'ev' && m >= 22 * 60 && !this.escaped.has(S.localId) && this.readiness().bunker.ok) S.act('escape', { how: 'bunker' });
     // şafak: son savunma sonucu
     if (S.isHost && day >= 31 && S.time.minuteOfDay >= 6 * 60) this.finish('dawn');
   }

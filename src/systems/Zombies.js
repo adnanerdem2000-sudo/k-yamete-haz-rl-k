@@ -396,7 +396,10 @@ export class Zombies {
     let sightMul = night ? (def.nightOnly ? 1.4 : 0.55) : 1;
     sightMul *= 1 - dark * 0.3;
     let best = null, bestScore = 0;
+    const under = S.world.under;
     for (const p of players) {
+      // yer altı sığınağındaki oyuncu (toprak altında): yüzeydeki zombi onu ne görür ne duyar
+      if (under && p.y < S.world.terrain.heightAt(p.x, p.z) - 2 && under.zoneAt(p.x, p.y + 0.5, p.z)) continue;
       const d = dist(p.x, p.z, zb.x, zb.z);
       let sight = def.sight * sightMul * (p.crouch ? 0.55 : 1) * (p.light && night ? 1.6 : 1) * (p.vehicle ? 1.5 : 1);
       if (p.id === S.localId && S.localProfile.stats.stealth) sight /= Math.sqrt(S.localProfile.stats.stealth);

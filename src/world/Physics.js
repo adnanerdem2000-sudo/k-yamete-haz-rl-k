@@ -124,6 +124,8 @@ export class CollisionWorld {
    */
   groundHeight(x, z, feetY = 1e9, step = 0.55, radius = 0.0) {
     let g = this.terrain.heightAt(x, z);
+    // yer altı sığınağı: ayak arazinin altında ve bir sığınak hacmindeyse zemin araziden değil oda zemininden başlar
+    if (this.under && feetY < g - 1 && this.under.cavityAt(x, feetY + 0.5, z)) g = -1e9;
     let surf = null;
     const list = this.query(x - radius, z - radius, x + radius, z + radius, this._tmpList || (this._tmpList = []));
     for (const c of list) {
@@ -231,7 +233,7 @@ export class CollisionWorld {
     const stepT = 1.0;
     for (let t = 0; t < best; t += stepT) {
       const x = ox + dx * t, y = oy + dy * t, z = oz + dz * t;
-      if (y < this.terrain.heightAt(x, z)) {
+      if (y < this.terrain.heightAt(x, z) && !(this.under && this.under.cavityAt(x, y, z))) {
         // ince ayar
         let a = Math.max(0, t - stepT), b = t;
         for (let k = 0; k < 6; k++) {

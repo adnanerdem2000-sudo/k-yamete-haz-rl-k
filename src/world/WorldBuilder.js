@@ -18,6 +18,7 @@ import { signTexture, dropSignTextures } from './TextureFactory.js';
 import { BUILDINGS, DECOR_BUILDINGS, ROADS, REGIONS, REGION_BY_ID, LAKE, SIGNPOSTS, WORLD, BRIDGE, SMOKE_SITES } from './WorldLayout.js';
 import { buildDressing } from './Dressing.js';
 import { scatterBiomes } from './BiomeScatter.js';
+import { buildShelters, UnderZones } from './Underground.js';
 import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
 
@@ -89,12 +90,19 @@ export class World {
       this.lab();
       this.forest();
       buildExtraRegions(this);
+      // yer altı sığınakları: kimlikleri açık (sh:<id>:…), başka hiçbir kimliği kaydırmaz; giriş tabelaları birleştirilen
+      // tabela atlasına girsin diye tabelalardan önce kurulur; çarpışma dünyası bölgeleri bilir
+      this.under = new UnderZones();
+      this.physics.under = this.under;
+      buildShelters(this);
       this.signposts();
       this.mergeSigns();
       this.addGeo(this.geo);
     });
     await step('Orman büyüyor…', () => {
       this.vegetation = new Vegetation(this);
+      // sığınak girişlerinin (ve yüzeydeki çıkış noktalarının) çevresinde ağaç/kaya/çalı bitmesin
+      this.vegetation.exclude = (x, z) => (this.shelters || []).some((sh) => Math.hypot(x - sh.entry.x, z - sh.entry.z) < (sh.def.entry === 'mine' ? 6 : 5));
       for (const [x, z, a, y] of this._planters || []) this.vegetation.add('flowerBush', x, z, a, 0.7, y);
       // kıyamet sonrası sokak dokusu (zemin izleri, ot, çöp, moloz): bitkiler kurulmadan önce
       this.dressing = buildDressing(this, this._crashSpots || []);

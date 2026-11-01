@@ -735,10 +735,15 @@ export class Build {
       this.bunkerFloor = S.world.physics.addFloor(bp.x - 4, bp.z - 3, bp.x + 4, bp.z + 3, y);
       this.bunkerCols = [this.bunkerFloor];
       for (const [a, b2, c, d] of [[-4.2, -3.2, 4.2, -3], [-4.2, 3, 4.2, 3.2], [-4.2, -3, -4, 3], [4, -3, 4.2, 3]]) this.bunkerCols.push(S.world.physics.addBox(bp.x + a, bp.z + b2, bp.x + c, bp.z + d, y, y + 3, { kind: 'wall', blocksNav: false }));
-      S.world.interactables.push({ id: 'bunker_exit', type: 'ladder', x: bp.x + 3.3, y: y + 1.2, z: bp.z, top: S.world.terrain.heightAt(bp.x, bp.z) + 0.3, bottom: y, name: 'Sığınaktan Çık' });
+      // çıkış: kararmalı ışınlama (eskiden 7 m toprağın içinden tırmanan merdiven); bölge kaydı ve tavan döşemesi:
+      // kamera odada kalır, yağmur yağmaz, zombiler göremez (Shelters/Underground ile aynı hat)
+      S.world.interactables.push({ id: 'bunker_exit', type: 'shelter_exit', shelter: 'ev', x: bp.x + 3.3, y: y + 1.2, z: bp.z, name: 'Ev Sığınağı' });
+      if (S.world.under) S.world.under.remove('ev');
+      if (S.world.under) S.world.under.add({ id: 'ev', name: 'Ev Sığınağı', floorY: y, ceilY: y + 3, rooms: [{ minX: bp.x - 4, maxX: bp.x + 4, minZ: bp.z - 3, maxZ: bp.z + 3 }], minX: bp.x - 4, maxX: bp.x + 4, minZ: bp.z - 3, maxZ: bp.z + 3, spawn: { x: bp.x, y: y + 0.05, z: bp.z, yaw: 0 } });
+      this.bunkerCols.push(S.world.physics.addBox(bp.x - 4.2, bp.z - 3.2, bp.x + 4.2, bp.z + 3.2, y + 3, y + 3.4, { kind: 'wall', walkable: false, blocksNav: false }));
       S.world.interactables.push({ id: 'bunker_bed', type: 'bed', x: bp.x - 2, y: y + 0.5, z: bp.z + 1.6, name: 'Sığınak Yatağı' });
       this.bunkerY = y;
-      this.bunkerLight = { x: bp.x, y: y + 2.6, z: bp.z, color: 0xfff0c8, intensity: 14, range: 10, on: true, always: true };
+      this.bunkerLight = { x: bp.x, y: y + 2.6, z: bp.z, color: 0xfff0c8, intensity: 14, range: 10, on: true, always: true, zone: 'ev' };
       S.env.extraLights.push(this.bunkerLight);
     }
     this.bunkerLight.on = b.stage >= 4 || this.powered;
@@ -747,6 +752,7 @@ export class Build {
   enterBunker() {
     const S = this.s;
     const bp = S.world.bunkerPos;
+    S.ui.fadeFlash && S.ui.fadeFlash();
     S.local.spawnAt(bp.x, this.bunkerY + 0.1, bp.z, 0);
     S.ui.toast('Sığınaktasın. Merdivenden yukarı çıkabilirsin.', 'info', 3);
   }
@@ -875,6 +881,7 @@ export class Build {
     for (const c of this.bunkerCols || []) this.s.world.physics.remove(c);
     const W = this.s.world;
     W.interactables = W.interactables.filter((i) => i.id !== 'bunker_exit' && i.id !== 'bunker_bed');
+    if (W.under) W.under.remove('ev'); // dünya oturumlar arasında kalır: ev sığınağı bölgesi bir sonraki oyuna taşınmasın
     if (this.homeLights) for (const l of this.homeLights) { const k = this.s.env.extraLights.indexOf(l); if (k >= 0) this.s.env.extraLights.splice(k, 1); }
     if (this.gardenVis) for (const o of this.gardenVis.values()) this.s.game.scene.remove(o);
     this.s.game.scene.remove(this.group);

@@ -19,6 +19,7 @@ import { DoorPhysics } from './physics/DoorPhysics.js';
 import { Drawers } from './physics/Drawers.js';
 import { Fronts } from './systems/Fronts.js';
 import { DayThreats } from './systems/DayThreats.js';
+import { Shelters } from './systems/Shelters.js';
 import { installBuoyancy } from './physics/Buoyancy.js';
 import { ContactSounds } from './physics/ContactSounds.js';
 import { Interact } from './systems/Interact.js';
@@ -126,6 +127,7 @@ export class Session {
     this.drawers = this.game.phys ? new Drawers(this) : null;
     this.fronts = new Fronts(this); // dolap kanatları, buzdolabı/fırın kapakları, sandık kapakları (görsel, eşitlenir)
     this.dayThreats = new DayThreats(this); // gündüz: yağmacı devriyeleri, başıboş köpekler, alacakaranlık/şafak duyuruları
+    this.shelters = new Shelters(this); // yer altı sığınakları: giriş/çıkış, kilit, jeneratör, ışıklar
     this.build = new Build(this);
     this.zombies = new Zombies(this);
     this.vehicles = new Vehicles(this);
@@ -327,6 +329,10 @@ export class Session {
     if (pl.carriedBy) this.followCarrier(pl);
     if (pl.carryProp) pl.updateCarry(); // taşınan nesne: oyuncunun bu karedeki son konumuyla
     this.local.inside = this.world.buildingAt(pl.pos.x, pl.pos.z, pl.pos.y);
+    // yer altı sığınağı bölgesi: kamera, yağmur/ıslanma, ses ortamı, ışıklar ve zombi algısı buna bakar
+    this.local.zone = this.world.under ? this.world.under.zoneAt(pl.pos.x, pl.pos.y + 0.5, pl.pos.z) : null;
+    this.env.underground = this.local.zone ? this.local.zone.id : null;
+    if (this.shelters) this.shelters.update(dt);
     this.combat.update(dt, input, blocking);
     this.interact.update(dt, input, blocking);
     this.handleHotkeys(input, blocking);
@@ -390,7 +396,7 @@ export class Session {
     this.world.cullInteriors(cam.position, dt);
     this.updateRoofs();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, Math.atan2(cam.position.x - pl.pos.x, cam.position.z - pl.pos.z) + Math.PI);
-    this.audio.setEnvironment(!!pl.inside);
+    this.audio.setEnvironment(!!(pl.inside || pl.zone));
     this.updateAmbience(dt);
   }
 
@@ -403,9 +409,10 @@ export class Session {
     const a = this.audio;
     const W = this.env.weather;
     const night = this.time.isNight;
-    a.loop('amb_wind', 'wind', { vol: 0.08 + W.storm * 0.35 + W.rain * 0.05, bus: 'ambient' });
-    a.loop('amb_rain', 'rain', { vol: W.rain * 0.45 * (this.local.inside ? 0.5 : 1), bus: 'ambient' });
-    a.loop('amb_day', 'ambience', { vol: night ? 0.05 : 0.22 * (1 - W.rain), bus: 'ambient' });
+    a.loop('amb_wind', 'wind', { vol: this.local.zone ? 0.015 : 0.08 + W.storm * 0.35 + W.rain * 0.05, bus: 'ambient' });
+    const under = !!this.local.zone;
+    a.loop('amb_rain', 'rain', { vol: under ? 0 : W.rain * 0.45 * (this.local.inside ? 0.5 : 1), bus: 'ambient' });
+    a.loop('amb_day', 'ambience', { vol: this.local.zone ? 0 : night ? 0.05 : 0.22 * (1 - W.rain), bus: 'ambient' });
     this._sirenT = (this._sirenT ?? 20) - dt;
     if (this._sirenT < 0) { this._sirenT = 25 + Math.random() * 40; if (this.time.day < 20) a.play('siren', { vol: 0.5, bus: 'ambient' }); }
     // uzaktan gelen olay sesleri (köpek havlaması, tek tük silah, çığlık, inilti, korna): görüş dışındaki dünya da
@@ -417,7 +424,7 @@ export class Session {
       const table = night ? [['bark', 3], ['rifle', 2], ['pistol', 2], ['scream', 1], ['groan', 3]] : [['bark', 4], ['rifle', 1], ['pistol', 1], ['horn', 1], ['groan', 1]];
       let w = Math.random() * table.reduce((s, [, k]) => s + k, 0), name = table[0][0];
       for (const [n, k] of table) { w -= k; if (w <= 0) { name = n; break; } }
-      if (!(this.endings && this.endings.active)) a.play(name, { at: { x: p.x + Math.cos(ang) * r, y: p.y + 4, z: p.z + Math.sin(ang) * r }, range: 520, vol: name === 'bark' || name === 'groan' ? 0.55 : 0.4, bus: 'ambient', vary: 0.2 });
+      if (!(this.endings && this.endings.active) && !this.local.zone) a.play(name, { at: { x: p.x + Math.cos(ang) * r, y: p.y + 4, z: p.z + Math.sin(ang) * r }, range: 520, vol: name === 'bark' || name === 'groan' ? 0.55 : 0.4, bus: 'ambient', vary: 0.2 });
     }
     // dinamik müzik yoğunluğu
     const threat = this.zombies.threatLevel || 0;
@@ -436,7 +443,7 @@ export class Session {
     const st = this.localStats;
     const pl = this.local;
     const W = this.env.weather;
-    const inside = !!pl.inside;
+    const inside = !!(pl.inside || pl.zone);
     const nearFire = this.build.nearFire(pl.pos);
     const raincoat = this.equipment.body2 === 'raincoat';
     // öğle güneşi: açıkta (bina/sığınak/araç dışı), açık havada, 10.30–17.30 arası, sıcaklık 23 °C üstünde
@@ -742,6 +749,7 @@ export class Session {
   surfaceAt(p, inside = null) {
     const T = this.world.terrain;
     const th = T.heightAt(p.x, p.z);
+    if (p.y < th - 1 && this.world.under) { const Z = this.world.under.zoneAt(p.x, p.y + 0.5, p.z); if (Z) return Z.cave ? 'gravel' : 'hard'; }
     if (p.y - th > 0.35) {
       const b = inside || this.world.buildingAt(p.x, p.z);
       if (b) { const f = b.tpl && b.tpl.style && b.tpl.style.floor; return f === 'woodfloor' || f === 'wood' ? 'wood' : f === 'tiles' ? 'tile' : 'hard'; }
@@ -786,7 +794,8 @@ export class Session {
       if (p.isLocal || p.isBot || !p.avatar) continue;
       // anlık görüntüler arasında yumuşak geçiş
       if (p.target) {
-        p.pos.lerp(p.target, Math.min(1, dt * 12));
+        // ışınlanma (sığınağa iniş/çıkış, yeniden doğma): uzun mesafeyi kaydırmadan atla
+        if (p.pos.distanceToSquared(p.target) > 64) p.pos.copy(p.target); else p.pos.lerp(p.target, Math.min(1, dt * 12));
         p.avatar.root.position.copy(p.pos);
       }
       p.avatar.update(dt, p.anim || { mode: 'ground', speed: 0 });
@@ -868,7 +877,7 @@ export class Session {
       time: this.time.serialize(), flags: this.flags, relations: this.relations,
       results: { ...this.results, vehicles: [...this.results.vehicles] },
       players, hostToken: this.token,
-      loot: this.loot.serialize(), ground: this.ground.serialize(), build: this.build.serialize(), zombies: this.zombies.serialize(),
+      loot: this.loot.serialize(), ground: this.ground.serialize(), build: this.build.serialize(), shelters: this.shelters.serialize(), zombies: this.zombies.serialize(),
       vehicles: this.vehicles.serialize(), npcs: this.npcs.serialize(), quests: this.quests.serialize(), events: this.events.serialize(),
       map: this.map.serialize(), weather: this.weather.serialize(), bots: this.bots.serialize(), doors: this.serializeDoors(), timeline: this.timeline.serialize(), story: this.storyWorld.serialize(),
     };
@@ -901,6 +910,7 @@ export class Session {
     this.loot.load(data.loot);
     this.ground.load(data.ground);
     this.build.load(data.build);
+    this.shelters.load(data.shelters);
     this.zombies.load(data.zombies);
     this.vehicles.load(data.vehicles);
     this.npcs.load(data.npcs);
@@ -958,6 +968,7 @@ export class Session {
     if (w.lootUse) this.loot.applyUsage(w.lootUse); // o an açık dolaplar (sonradan katılan da açık görsün)
     this.ground.load(w.ground);
     this.build.load(w.build);
+    if (this.shelters) this.shelters.load(w.shelters);
     this.vehicles.load(w.vehicles);
     this.npcs.load(w.npcs);
     this.quests.load(w.quests);
@@ -976,7 +987,7 @@ export class Session {
     this.disposed = true;
     this.audio.occluder = null;
     this.audio.setEnvironment(false);
-    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.doorPhys, this.drawers, this.fronts, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.doorPhys, this.drawers, this.fronts, this.shelters, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
     if (this.buoyancyOff) this.buoyancyOff();
     if (this.contacts) this.contacts.dispose();
     if (this.living) for (const l of Object.values(this.living)) { this.game.scene.remove(l.mesh); l.mesh.geometry.dispose(); l.mesh.material.dispose(); }
