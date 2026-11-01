@@ -518,7 +518,7 @@ export class Player {
     return {
       mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.mode === 'climb' ? this.climbV || 0 : this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
       aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying, carryBox: !!this.carryProp,
-      mood: st && st.morale < 30 ? 1 : 0, tired: !!(st && st.stamina < 15), act: this.avatar.lastAct || null, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
+      mood: st && st.morale < 30 ? 1 : 0, tired: !!(st && st.stamina < 15), act: this.avatar.lastAct || null, actT: this.avatar.lastActAt ? (performance.now() - this.avatar.lastActAt) / 1000 : 0, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
     };
   }
 

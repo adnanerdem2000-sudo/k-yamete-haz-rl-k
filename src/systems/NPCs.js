@@ -9,6 +9,16 @@ import { RNG, dist, clamp, dampAngle, wrapAngle } from '../core/util.js';
 import { forestMask } from '../world/Terrain.js';
 import { rayCyl } from './Combat.js';
 
+// Tüccar stokları (gün başına tohumdan aynı başlangıç; satışlar host üzerinden eşitlenir)
+export const TRADE_STOCK = {
+  hasan: ['canned_food', 'bread', 'water_bottle', 'bandage', 'nails', 'plank', 'seeds', 'rope', 'cloth', 'painkiller', 'hammer', 'tea'],
+  riza: ['ammo_9mm', 'shells', 'pistol', 'jerrycan', 'engine_part', 'car_battery', 'tire', 'repair_kit', 'antibiotics', 'first_aid', 'electronics', 'metal_sheet', 'screws', 'duct_tape', 'mre', 'energy_drink', 'backpack_large', 'flashlight', 'battery'],
+  // Dağ köyü (köy kurtarılınca): kiler, kaynak suyu, yün ve av malzemesi
+  omer: ['bread', 'honey', 'cheese', 'apple', 'corn', 'water_bottle', 'warm_jacket', 'leather', 'rope', 'seeds', 'bow', 'arrow', 'lighter', 'sleeping_bag'],
+};
+// hayvan durumları (ağ anlık görüntüsünde indeks olarak)
+const ASTATE = ['graze', 'flee', 'attack'];
+
 const ANIMALS = {
   deer: { name: 'Geyik', hp: 60, speed: 7.5, size: [0.45, 1.1, 1.3], color: '#b07a4a', flee: true, herd: [2, 4], drops: [['raw_meat', 3], ['leather', 1]], leg: 0.75, antlers: true },
   stag: { name: 'Erkek Geyik', hp: 130, speed: 8, size: [0.5, 1.3, 1.5], color: '#8a5a32', flee: true, charge: true, dmg: 22, drops: [['raw_meat', 5], ['leather', 2]], leg: 0.85, antlers: true },
@@ -108,6 +118,13 @@ export class NPCs {
     S.onEvt('npc_state', (e) => { const n = this.byId(e.id); if (!n) return; if (e.visible !== undefined) n.setVisible(e.visible); if (e.follow !== undefined) n.follow = e.follow; if (e.x !== undefined) { n.pos.set(e.x, S.world.physics.groundHeight(e.x, e.z, e.y ?? 1e9), e.z); n.home = { x: e.x, z: e.z }; } if (e.alive === false) { n.alive = false; n.setVisible(false); } if (e.stay !== undefined) n.stay = e.stay; });
     S.on('animal_hit', (p, from) => this.hitAnimal(p.id, p.dmg, from));
     S.onEvt('animal_die', (e) => { const a = this.animals.find((x) => x.id === e.id); if (a) { a.dead = true; a.deadT = 0; if (a.view) a.view.die(); } });
+    // takas: stok host'ta düşer, değişiklik herkese yayılır; para/eşya yalnız alıcıda
+    S.on('trade_buy', (p, from) => this.hostTradeBuy(p, from));
+    S.on('trade_refund', (p, from) => this.hostTradeRefund(p, from));
+    S.onEvt('trade_stock', (e) => this.applyTradeStock(e));
+    this._sales = new Map(); // host: oyuncu|tüccar:gün|eşya → ödemesi beklenen satış sayısı (iade yalnız bunlar için)
+    // hayvan saldırı/sarsılma görseli ve sesi herkeste (yapay zekâ host'ta)
+    S.onEvt('animal_fx', (e) => this.applyAnimalFx(e));
   }
 
   init() {
@@ -140,6 +157,154 @@ export class NPCs {
 
   byId(id) { return this.list.find((n) => n.id === id); }
   spawnAnimal(type, x, z) { const a = new Animal(this, type, x, z); this.animals.push(a); return a; }
+
+  // ======================================================================= takas (çok oyunculu eşitleme)
+  /** Tüccarın o günkü stoğu: tohum + gün → her istemcide aynı başlangıç; satışlar 'trade_stock' olayıyla */
+  tradeStock(npcId, day = this.s.time.day) {
+    const S = this.s;
+    S._trade = S._trade || {};
+    const key = npcId + ':' + day;
+    if (!S._trade[key]) {
+      const rng = new RNG(S.seed + key);
+      const pool = (TRADE_STOCK[npcId] || TRADE_STOCK.hasan).filter((id) => ITEMS[id]);
+      S._trade[key] = rng.shuffle([...pool]).slice(0, 8).map((id) => ({ id, qty: ITEMS[id].stack > 1 ? rng.int(2, Math.min(ITEMS[id].stack, 12)) : 1 }));
+    }
+    return S._trade[key];
+  }
+
+  /** Host: satın alma isteği — stok varsa düşer; sonuç (başarılı/başarısız) herkese yayılır */
+  hostTradeBuy(p, from) {
+    const S = this.s;
+    if (!p || !p.npc || !p.id || !ITEMS[p.id]) return;
+    const day = Number.isFinite(p.day) ? p.day : S.time.day;
+    const it = this.tradeStock(p.npc, day).find((x) => x.id === p.id);
+    if (!it || it.qty <= 0) { S.emit({ k: 'trade_stock', npc: p.npc, day, id: p.id, qty: it ? it.qty : 0, by: from, fail: 1 }); return; }
+    it.qty--;
+    const sk = `${from}|${p.npc}:${day}|${p.id}`;
+    this._sales.set(sk, (this._sales.get(sk) || 0) + 1);
+    S.emit({ k: 'trade_stock', npc: p.npc, day, id: p.id, qty: it.qty, by: from, price: Math.max(0, Math.round(p.price || 0)) });
+  }
+
+  /** Host: alıcı ödeyemedi (çift tıklama, bu arada para harcandı) → satış geri alınır, stok herkeste geri artar */
+  hostTradeRefund(p, from) {
+    const S = this.s;
+    if (!p || !p.npc || !p.id) return;
+    const day = Number.isFinite(p.day) ? p.day : S.time.day;
+    const sk = `${from}|${p.npc}:${day}|${p.id}`;
+    const n = this._sales.get(sk) || 0;
+    if (n <= 0) return; // kayıtlı satış yoksa iade yok
+    if (n === 1) this._sales.delete(sk); else this._sales.set(sk, n - 1);
+    const it = this.tradeStock(p.npc, day).find((x) => x.id === p.id);
+    if (!it) return;
+    it.qty++;
+    S.emit({ k: 'trade_stock', npc: p.npc, day, id: p.id, qty: it.qty });
+  }
+
+  /** Herkes: stok güncellenir; alıcı parayı öder ve eşyayı alır; açık takas paneli yenilenir */
+  applyTradeStock(e) {
+    const S = this.s;
+    const it = this.tradeStock(e.npc, e.day).find((x) => x.id === e.id);
+    if (it) it.qty = e.qty;
+    if (e.by === S.localId) {
+      if (S.ui && S.ui.panels) S.ui.panels.tradePending = false;
+      if (e.fail) S.ui.toast('Bu ürün stokta kalmadı.', 'warn');
+      else if (S.inventory.count('money') >= e.price) { if (e.price > 0) S.inventory.remove('money', e.price); S.giveLocal(e.id, 1); S.game.audio.play('pickup', { vol: 0.6 }); }
+      else { S.ui.toast('Yeterli paran yok.', 'warn'); S.act('trade_refund', { npc: e.npc, day: e.day, id: e.id }); }
+    }
+    const ui = S.ui;
+    if (ui && ui.panel && ui.panel.name === 'trade' && ui.panels && ui.panels.tradeRender) ui.panels.tradeRender();
+  }
+
+  // ======================================================================= hayvanlar: çok oyunculu
+  /** Host: hayvan algısı/saldırısı/doğması için bütün oyuncuların konumları (yerel + uzak) */
+  playerAnchors() {
+    const S = this.s, out = [];
+    for (const q of S.players.values()) {
+      if (q.isLocal) out.push({ id: q.id, local: true, x: S.local.pos.x, y: S.local.pos.y, z: S.local.pos.z, sneak: S.local.mode === 'crouch' || S.local.mode === 'prone' });
+      else if (q.pos) out.push({ id: q.id, local: false, x: q.pos.x, y: q.pos.y, z: q.pos.z, sneak: !!(q.anim && (q.anim.mode === 'crouch' || q.anim.mode === 'prone')) });
+    }
+    if (!out.length) out.push({ id: S.localId, local: true, x: S.local.pos.x, y: S.local.pos.y, z: S.local.pos.z, sneak: S.local.mode === 'crouch' || S.local.mode === 'prone' });
+    return out;
+  }
+
+  /** Host → istemci anlık görüntüsü: oyuncuya 170 m içindeki hayvanlar [id, tür, x, z, yön, hız, durum, bayrak, grup, sıra, can] */
+  animalSnapshotFor(x, z, r = 170) {
+    const out = [];
+    for (const a of this.animals) {
+      if (dist(a.x, a.z, x, z) > r) continue;
+      out.push([a.id, a.type, Math.round(a.x * 100) / 100, Math.round(a.z * 100) / 100, Math.round(a.yaw * 100) / 100, Math.round((a.speed || 0) * 10) / 10, Math.max(0, ASTATE.indexOf(a.state)), (a.graze ? 1 : 0) | (a.dead ? 2 : 0), a.group || 0, a.slot || 0, Math.max(0, Math.round(a.hp))]);
+    }
+    return out;
+  }
+
+  /** İstemci: anlık görüntüdeki hayvanları kur/güncelle; listede olmayanları kaldır (host uzaklaştırdı) */
+  applyAnimalSnapshot(list) {
+    const S = this.s;
+    if (S.isHost || !Array.isArray(list)) return;
+    const seen = new Set();
+    for (const e of list) {
+      const [id, type, x, z, yaw, sp, st, fl, group, slot, hp] = e;
+      if (!ANIMALS[type]) continue;
+      seen.add(id);
+      let a = this.animals.find((q) => q.id === id);
+      if (!a) {
+        a = new Animal(this, type, x, z);
+        a.id = id; a.remote = true; a.yaw = yaw;
+        if (a.view) a.view.visYaw = yaw;
+        this.animals.push(a);
+      }
+      a.nx = x; a.nz = z; a.sx = x; a.sz = z; a.netAt = performance.now();
+      a.nyaw = yaw; a.netSpeed = sp; a.state = ASTATE[st] || 'graze'; a.graze = !!(fl & 1);
+      a.group = group || a.group; a.slot = slot || 0;
+      if (Number.isFinite(hp)) a.hp = hp;
+      if ((fl & 2) && !a.dead) { a.dead = true; a.deadT = 0; a.x = x; a.z = z; a.y = S.world.terrain.heightAt(x, z); a.root.position.set(a.x, a.y, a.z); if (a.view) a.view.die(); }
+    }
+    for (let i = this.animals.length - 1; i >= 0; i--) {
+      const a = this.animals[i];
+      if (seen.has(a.id)) continue;
+      this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1);
+    }
+  }
+
+  /** Herkes: hayvan saldırı klibi + sesi, vuruş sarsılması (host'un yapay zekâsından olay olarak) */
+  applyAnimalFx(e) {
+    const a = this.animals.find((x) => x.id === e.id);
+    if (!a || a.dead) return;
+    if (e.fx === 'attack') {
+      if (a.view) a.view.attack(e.d || 0.6);
+      this.s.audio.play(a.type === 'wolf' ? 'bark' : 'hit', { at: a, vol: 0.8, rate: a.type === 'bear' ? 0.5 : a.type === 'wolf' ? 0.8 : 1 });
+    } else if (e.fx === 'flinch' && a.view) a.view.flinch();
+  }
+
+  /** Host göçü: istemcide kopya olarak duran hayvanlar bu makinede simüle edilmeye başlar */
+  promoteAnimals() {
+    // son anlık görüntünün konumu (tahminle kaymış konum değil) yetkili olur
+    for (const a of this.animals) { a.remote = false; if (a.sx !== undefined) { a.x = a.sx; a.z = a.sz; a.y = this.s.world.terrain.heightAt(a.x, a.z); } a.nx = a.nz = a.sx = a.sz = undefined; a.t = a.t || 0; a.atkCd = a.atkCd || 0; }
+  }
+
+  /** İstemci: host'tan gelen hayvanı enterpolasyon + yön tahminiyle taşı (yapay zekâ yok) */
+  updateRemoteAnimal(a, dt) {
+    const S = this.s;
+    const sp = a.netSpeed || 0;
+    if (a.nx !== undefined) {
+      // anlık görüntüler arası tahmin: yalnız son görüntüden sonraki 0,4 sn (host takılırsa hayvan kaymaz)
+      if (sp > 0 && performance.now() - (a.netAt || 0) < 400) { a.nx += Math.sin(a.nyaw) * sp * dt; a.nz += Math.cos(a.nyaw) * sp * dt; }
+      const dx = a.nx - a.x, dz = a.nz - a.z;
+      if (dx * dx + dz * dz > 144) { a.x = a.nx; a.z = a.nz; } else { const k = Math.min(1, dt * 8); a.x += dx * k; a.z += dz * k; }
+      a.yaw = dampAngle(a.yaw, a.nyaw, 8, dt);
+      a.y = S.world.terrain.heightAt(a.x, a.z);
+    }
+    a.speed = sp;
+    a.root.position.set(a.x, a.y, a.z);
+    if (a.view) a.view.update(dt, { speed: sp, yaw: a.yaw, graze: a.state === 'graze' && a.graze });
+    else {
+      a.phase += sp * dt * 4;
+      const sw = Math.sin(a.phase) * Math.min(1, sp / 3) * 0.7;
+      a.legs[0].rotation.x = sw; a.legs[3].rotation.x = sw; a.legs[1].rotation.x = -sw; a.legs[2].rotation.x = -sw;
+      a.head.rotation.x = sp === 0 && a.state === 'graze' ? 0.6 : 0;
+      a.root.rotation.y = a.yaw;
+    }
+  }
 
   /** Olaylar: bir noktanın çevresinde sürü (kurt, geyik…). target verilirse sürü saldırır */
   spawnPack(type, around, n, target = null, r = 35) {
@@ -324,7 +489,7 @@ export class NPCs {
     // erkek geyik yaralanınca saldırır; kurtlar yaralanınca sürüyle birlikte saldırır, çok yaralıysa kaçar
     a.state = a.def.charge && a.hp > a.def.hp * 0.25 ? 'attack' : a.def.flee ? 'flee' : a.def.pack && a.hp < a.def.hp * 0.35 ? 'flee' : 'attack';
     a.target = from;
-    if (a.view) a.view.flinch();
+    S.emit({ k: 'animal_fx', id: a.id, fx: 'flinch' });
     if (a.def.pack && a.state === 'attack') for (const o of this.animals) if (o !== a && !o.dead && o.type === a.type && dist(o.x, o.z, a.x, a.z) < 30) o.state = 'attack';
     if (a.def.herd) for (const o of this.animals) if (o !== a && !o.dead && o.def.flee && dist(o.x, o.z, a.x, a.z) < 25) o.state = 'flee';
     if (a.hp <= 0) {
@@ -489,15 +654,18 @@ export class NPCs {
 
   updateAnimals(dt) {
     const S = this.s;
-    const p = S.local.pos;
-    // nüfus (host)
+    // çok oyunculu: hayvanları yalnız host simüle eder (istemciler anlık görüntüden kopya taşır); algı, saldırı,
+    // doğma ve kaybolma bütün oyunculara göre
+    const anchors = S.isHost ? this.playerAnchors() : null;
+    // nüfus (host): her seferinde (çok oyunculuda rastgele) bir oyuncunun çevresinde
     if (S.isHost) {
       this._spawnT = (this._spawnT || 0) - dt;
       if (this._spawnT <= 0) {
         this._spawnT = 3;
+        const p = anchors.length > 1 ? anchors[Math.floor(Math.random() * anchors.length)] : anchors[0];
         const alive = this.animals.filter((a) => !a.dead).length;
         const fm = forestMask(p.x, p.z);
-        if (alive < 9 && (fm > 0.3 || p.y > 25)) {
+        if (alive < Math.min(15, 9 + 2 * (anchors.length - 1)) && (fm > 0.3 || p.y > 25)) {
           const a = Math.random() * Math.PI * 2, r = 45 + Math.random() * 40;
           const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
           if (!S.world.terrain.isWater(x, z) && !S.world.buildingAt(x, z) && forestMask(x, z) > 0.25) {
@@ -513,20 +681,25 @@ export class NPCs {
     }
     for (let i = this.animals.length - 1; i >= 0; i--) {
       const a = this.animals[i];
-      const pd = dist(a.x, a.z, p.x, p.z);
       if (a.dead) {
         a.deadT += dt;
         if (a.view) a.view.update(dt, { speed: 0 });
         else a.root.rotation.z = Math.min(1, a.deadT * 3) * Math.PI / 2;
-        if (a.deadT > 30) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); }
+        if (a.deadT > 30 && S.isHost) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); } // istemcide anlık görüntü kaldırır
         continue;
       }
-      if (pd > 170) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); continue; }
+      if (!S.isHost) { this.updateRemoteAnimal(a, dt); continue; }
+      // en yakın oyuncu (algı, kaybolma); saldırırken hedef oyuncu (vuran/üstüne salınan) 60 m içindeyse o
+      let p = anchors[0], npd = Infinity;
+      for (const q of anchors) { const d = dist(a.x, a.z, q.x, q.z); if (d < npd) { npd = d; p = q; } }
+      let pd = npd;
+      if (a.target && a.state === 'attack') { const q = anchors.find((x) => x.id === a.target); if (q) { const d = dist(a.x, a.z, q.x, q.z); if (d < 60) { p = q; pd = d; } } }
+      if (npd > 170) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); continue; }
       a.t += dt;
       a.atkCd -= dt;
       const def = a.def;
       // ---- algı
-      const sneak = S.local.mode === 'crouch' || S.local.mode === 'prone';
+      const sneak = p.sneak;
       if (def.flee && !def.charge) {
         if (pd < (sneak ? 9 : 20)) a.state = 'flee';
         else if (a.state === 'flee' && pd > 40) a.state = 'graze';
@@ -566,16 +739,22 @@ export class NPCs {
         if (pd < (def.charge ? 2.4 : 1.9) && a.atkCd <= 0 && packReady && S.isHost && Math.abs(wrapAngle(a.yaw - toP)) < 0.8) {
           a.atkCd = def.charge ? 2.2 : def.pack ? 2.4 + Math.random() * 1.2 : 1.4;
           if (def.pack) this.packNext.set(a.group, S.t + 1.9 + Math.random() * 0.6); // sürü sırayla, aralıklı saldırır
-          if (a.view) a.view.attack(def.charge ? 0.65 : 0.6);
-          const dmg = def.dmg;
+          S.emit({ k: 'animal_fx', id: a.id, fx: 'attack', d: def.charge ? 0.65 : 0.6 });
+          const dmg = def.dmg, victim = p.id, vLocal = p.local;
           S.later(def.charge ? 0.3 : 0.26, () => {
             if (a.dead) return;
-            if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < (def.charge ? 2.8 : 2.3)) {
-              S.damageLocal(dmg, a.type === 'bear' || def.charge ? 'heavy' : 'zombie');
-              if (def.charge) { S.local.vel.x += Math.sin(a.yaw) * 7; S.local.vel.z += Math.cos(a.yaw) * 7; S.local.vel.y = 3; }
+            const R = def.charge ? 2.8 : 2.3, kind = a.type === 'bear' || def.charge ? 'heavy' : 'zombie';
+            if (vLocal) {
+              if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < R) {
+                S.damageLocal(dmg, kind);
+                if (def.charge) { S.local.vel.x += Math.sin(a.yaw) * 7; S.local.vel.z += Math.cos(a.yaw) * 7; S.local.vel.y = 3; }
+              }
+            } else {
+              // uzak oyuncu: hasar (boğa/ayıda itme) yalnız o oyuncuya olay olarak gider
+              const rp = S.players.get(victim);
+              if (rp && rp.pos && dist(a.x, a.z, rp.pos.x, rp.pos.z) < R) S.emit({ k: 'dmg_player', to: victim, amount: dmg, kind, from: a.id, push: def.charge ? [Math.round(Math.sin(a.yaw) * 700) / 100, Math.round(Math.cos(a.yaw) * 700) / 100, 3] : undefined });
             }
           });
-          S.audio.play(a.type === 'wolf' ? 'bark' : 'hit', { at: a, vol: 0.8, rate: a.type === 'bear' ? 0.5 : a.type === 'wolf' ? 0.8 : 1 });
           // kurt saldırıdan sonra geri çekilir (vur-kaç)
           if (def.pack) a.retreatT = 0.9;
         }

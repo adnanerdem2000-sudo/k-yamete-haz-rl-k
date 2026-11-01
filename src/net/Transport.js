@@ -52,11 +52,17 @@ export class LocalTransport extends Base {
       else if (m.k === 'hb' && this.peers.has(m.from)) this.peers.set(m.from, performance.now());
       else if (m.k === 'close' && this.peers.has(m.from)) { this.peers.delete(m.from); this.onPeerClose(m.from); }
     };
+    this._htick = performance.now();
     this._hb = setInterval(() => {
       this.post({ k: 'hb', from: this.id });
       const now = performance.now();
-      // yüklenirken ana iş parçacığı uzun süre meşgul olabilir: cömert zaman aşımı
-      for (const [pid, t] of this.peers) if (now - t > TIMEOUT) { this.peers.delete(pid); this.onPeerClose(pid); }
+      // bu sekme uzun süre takıldıysa (uzun kare, gölgelendirici derlemesi) eşlerin sessizliği ölçülemez: süreleri
+      // sıfırla (aksi hâlde kuyrukta bekleyen kalp atışları işlenmeden eşler düşürülürdü)
+      if (now - this._htick > 10000) for (const pid of this.peers.keys()) this.peers.set(pid, now);
+      this._htick = now;
+      // yüklenirken ana iş parçacığı uzun süre meşgul olabilir: cömert zaman aşımı; dünyasını kuran (hoş geldin almış,
+      // henüz 'joined' göndermemiş) eşe Net daha uzun süre tanır (timeoutFor)
+      for (const [pid, t] of this.peers) if (now - t > (this.timeoutFor ? this.timeoutFor(pid) : TIMEOUT)) { this.peers.delete(pid); this.onPeerClose(pid); }
     }, 1500);
   }
 

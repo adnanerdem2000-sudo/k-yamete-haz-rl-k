@@ -300,10 +300,12 @@ export class Avatar {
   }
 
   /** Bir eylem animasyonu başlat */
-  play(type, dur = 0.6, kind = null) {
-    // ağ eşitlemesi: yerel eylemler sıra numarasıyla anim durumuna yazılır, uzak avatar aynısını oynar
-    if (REPLICATED.has(type)) this.lastAct = [((this.lastAct && this.lastAct[0]) || 0) + 1, type, Math.round(dur * 100) / 100, kind];
-    if (this.motion && this.playMotion(type, dur, kind)) return;
+  play(type, dur = 0.6, kind = null, off = 0) {
+    // ağ eşitlemesi: yerel eylemler sıra numarasıyla anim durumuna yazılır, uzak avatar aynısını oynar;
+    // başlangıç zamanı (actT: geçen süre) da gider → uzak avatar klibi ağ gecikmesi kadar ileriden başlatır
+    if (REPLICATED.has(type)) { this.lastAct = [((this.lastAct && this.lastAct[0]) || 0) + 1, type, Math.round(dur * 100) / 100, kind]; this.lastActAt = performance.now(); }
+    if (off > 0 && type !== 'stop' && off > dur + 0.25) return; // uzak eylem çoktan bitmiş
+    if (this.motion && this.playMotion(type, dur, kind, off)) return;
     if (type === 'bandage') type = 'search';
     else if (type === 'drink') type = 'consume';
     switch (type) {
@@ -318,7 +320,7 @@ export class Avatar {
       case 'jump': case 'land': case 'vault': case 'shoot': return; // fizik/duruşla yönetilir
       default: break;
     }
-    this.action = { type, t: 0, dur, kind };
+    this.action = { type, t: Math.max(0, Math.min(off, dur * 0.9)), dur, kind };
   }
 
   flinch(dir = 1) {
@@ -330,13 +332,18 @@ export class Avatar {
    * Eylemi aktarılmış klip olarak oynat (Motion). false: bu eylemin klibi yok → prosedürel/eski yol.
    * Etkileşim/onarım gibi süreli eylemler this.action'da izlenir (dış sistemler action'ı null yaparak bitirir).
    */
-  playMotion(type, dur, kind) {
+  playMotion(type, dur, kind, off = 0) {
     const M = this.motion;
+    // uzak eylem: klibi geçen süre kadar ileriden başlat (giriş sönümü atlanır)
+    const adv = (shot) => {
+      if (shot && off > 0) { const a = Math.min(off, ((shot.to - shot.from) / Math.max(1e-3, shot.rate)) * 0.9); shot.t = Math.min(shot.to - 1e-3, shot.t + a * shot.rate); shot.age = Math.max(shot.age || 0, Math.min(a, shot.fadeIn)); }
+      return shot;
+    };
     if (type === 'melee') {
       const o = { mask: 'upper', group: 'attack', fadeIn: 0.05, fadeOut: 0.16 };
-      if (!this.heldId) { this.punchSide = !this.punchSide; return !!M.play(this.punchSide ? 'Punch_Jab' : 'Punch_Cross', { ...o, dur: dur * 1.25 }); }
+      if (!this.heldId) { this.punchSide = !this.punchSide; return !!adv(M.play(this.punchSide ? 'Punch_Jab' : 'Punch_Cross', { ...o, dur: dur * 1.25 })); }
       this.swingN = ((this.swingN || 0) + 1) % 2;
-      return !!M.play(this.swingN ? 'Sword_Regular_A' : 'Sword_Regular_B', { ...o, dur: dur * 1.15, from: 0.02 });
+      return !!adv(M.play(this.swingN ? 'Sword_Regular_A' : 'Sword_Regular_B', { ...o, dur: dur * 1.15, from: 0.02 }));
     }
     let key = type;
     if (type === 'stop') { if (this.action && this.action.motion) { M.stopShot(this.action.shot); if (this.action.next) M.stopShot(this.action.next); } this.action = null; this._mAct = null; return true; }
@@ -349,10 +356,10 @@ export class Avatar {
     const o = { mask: def.mask, from: def.from, to: def.to, fadeIn: def.fadeIn, fadeOut: def.fadeOut, loop: !!def.loop, group: d.emote ? 'emote' : 'act', rate: def.rate };
     const total = d.fixed ?? Math.max(dur, d.minDur || 0);
     if (!def.loop) { o.dur = total; delete o.rate; }
-    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!M.play(def.clip, o); }
-    const shot = M.play(def.clip, o);
+    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!adv(M.play(def.clip, o)); }
+    const shot = adv(M.play(def.clip, o));
     if (!shot) return false;
-    this.action = { type, t: 0, dur: total, kind, shot, motion: true, then: def.then || d.then || null, loop: false, loopish: !!def.loop };
+    this.action = { type, t: off > 0 ? Math.min(off, total * 0.9) : 0, dur: total, kind, shot, motion: true, then: def.then || d.then || null, loop: false, loopish: !!def.loop };
     this._mAct = this.action;
     return true;
   }
@@ -373,10 +380,14 @@ export class Avatar {
     // uzak oyuncu taklası (ağ durumundan yükselen kenar)
     if (a.roll && !this._rolling && !this.overlays.some((o) => o.name === 'roll') && !(this.motion && this.motion.playing('Roll'))) this.play('roll', 0.72);
     this._rolling = !!a.roll;
-    // uzak oyuncunun eylemi (sıra numarası değişince bir kez); ilk görüşte eski eylem oynatılmaz
+    // uzak oyuncunun eylemi (sıra numarası değişince bir kez). İlk görüşte: başlangıç zamanı (actT) biliniyorsa ve eylem
+    // hâlâ sürüyorsa kaldığı yerden oynatılır; bitmiş (eski) eylem oynatılmaz
     if (a.act && a.act !== this.lastAct) {
-      if (this._ractN === undefined) this._ractN = a.act[0];
-      else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3]); }
+      if (this._ractN === undefined) {
+        this._ractN = a.act[0];
+        const off = (a.actT || 0) + (a._lat || 0);
+        if (a.actT !== undefined && a.act[1] !== 'stop' && off < (a.act[2] || 0)) this.play(a.act[1], a.act[2], a.act[3], Math.max(0, off));
+      } else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3], Math.max(0, (a.actT || 0) + (a._lat || 0))); }
     }
     if (this.motion) { this.updateMotion(dt, a, mode, s, dead); return; }
     // ---- prosedürel tam gövde modları

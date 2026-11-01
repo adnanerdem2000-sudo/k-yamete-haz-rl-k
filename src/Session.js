@@ -229,7 +229,7 @@ export class Session {
     this.onEvt('rel', (e) => { this.relations[e.faction] = clamp((this.relations[e.faction] || 0) + e.delta, -100, 100); this.quests.onFlag('rel:' + e.faction); });
     this.onEvt('toast', (e) => this.ui.toast(e.text, e.kind || 'info', e.dur));
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); if (e.r > 25 && this.living) this.living.birds.scare(e.x, e.z, e.r); });
-    this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
+    this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (Array.isArray(e.push) && !this.localStats.downed && this.local.mode !== 'drive') { this.local.vel.x += e.push[0]; this.local.vel.z += e.push[1]; this.local.vel.y = Math.max(this.local.vel.y, e.push[2] || 0); } if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
     this.onEvt('revived', (e) => {
       if (e.target === this.localId) { this.audio.play('revive', { vol: 0.7 }); this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
       if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
@@ -786,6 +786,7 @@ export class Session {
       if (!v.seats[0] || v.seats[0] === this.localId) { v.netTarget = null; v.setRemote(false); }
     }
     if (this.doorPhys) for (const r of this.doorPhys.doors) r.cmdT = 0;
+    if (this.npcs && this.npcs.promoteAnimals) this.npcs.promoteAnimals();
   }
 
   addRemotePlayer(info) {
@@ -900,6 +901,7 @@ export class Session {
   /** İstemci: host'tan gelen tam durum */
   applyWelcome(w) {
     this.seed = w.seed;
+    this._trade = w.trade || {};
     this.time.set(w.time.total);
     this.time.dayMinutes = w.time.dayMinutes;
     this.flags = w.flags || {};

@@ -8,15 +8,8 @@ import { CHARACTERS } from '../entities/CharacterFactory.js';
 import { UPGRADES } from '../systems/Vehicles.js';
 import { SaveSystem, SLOT_NAMES } from '../systems/SaveSystem.js';
 import { toolName } from '../systems/Build.js';
-import { RNG, dist, formatKg } from '../core/util.js';
+import { dist, formatKg } from '../core/util.js';
 import { HOTBAR } from '../systems/Inventory.js';
-
-const TRADE_STOCK = {
-  hasan: ['canned_food', 'bread', 'water_bottle', 'bandage', 'nails', 'plank', 'seeds', 'rope', 'cloth', 'painkiller', 'hammer', 'tea'],
-  riza: ['ammo_9mm', 'shells', 'pistol', 'jerrycan', 'engine_part', 'car_battery', 'tire', 'repair_kit', 'antibiotics', 'first_aid', 'electronics', 'metal_sheet', 'screws', 'duct_tape', 'mre', 'energy_drink', 'backpack_large', 'flashlight', 'battery'],
-  // Dağ köyü (köy kurtarılınca): kiler, kaynak suyu, yün ve av malzemesi
-  omer: ['bread', 'honey', 'cheese', 'apple', 'corn', 'water_bottle', 'warm_jacket', 'leather', 'rope', 'seeds', 'bow', 'arrow', 'lighter', 'sleeping_bag'],
-};
 
 export class GamePanels {
   constructor(ui) {
@@ -114,18 +107,7 @@ export class GamePanels {
   }
 
   // ======================================================================= takas
-  stock(n) {
-    const S = this.S;
-    S._trade = S._trade || {};
-    const key = n.id + ':' + S.time.day;
-    if (!S._trade[key]) {
-      const rng = new RNG(S.seed + key);
-      const pool = (TRADE_STOCK[n.id] || TRADE_STOCK.hasan).filter((id) => ITEMS[id]);
-      const items = rng.shuffle([...pool]).slice(0, 8).map((id) => ({ id, qty: ITEMS[id].stack > 1 ? rng.int(2, Math.min(ITEMS[id].stack, 12)) : 1 }));
-      S._trade[key] = items;
-    }
-    return S._trade[key];
-  }
+  stock(n) { return this.S.npcs.tradeStock(n.id); }
 
   openTrade(n) {
     const S = this.S;
@@ -136,13 +118,21 @@ export class GamePanels {
       const money = S.inventory.count('money');
       const rel = S.relations.traders || 0;
       const disc = rel >= 40 ? 0.85 : rel <= -20 ? 1.3 : 1;
-      const stock = this.stock(n);
+      const day = S.time.day; // panelde gösterilen stok bu güne ait; istek de bu günle gider
+      const stock = S.npcs.tradeStock(n.id, day);
       const buy = h('div.trade-list');
       for (const it of stock) {
         if (it.qty <= 0) continue;
         const price = Math.ceil(S.npcs.priceOf(it.id) * disc);
         buy.append(h('div.trade-row', this.ui.icon(it.id), h('div.trade-name', h('b', ITEMS[it.id].name), h('small', `Stok: ${it.qty}`)), h('span.price', `💰 ${price}`),
-          button('Satın Al', () => { if (S.inventory.count('money') < price) { S.ui.toast('Yeterli paran yok.', 'warn'); return; } S.inventory.remove('money', price); S.giveLocal(it.id, 1); it.qty--; this.game.audio.play('pickup', { vol: 0.6 }); render(); }, money >= price ? 'small green' : 'small disabled')));
+          // satın alma host üzerinden: stok herkeste aynı kalır; para/eşya 'trade_stock' olayıyla
+          button('Satın Al', () => {
+            if (S.inventory.count('money') < price) { S.ui.toast('Yeterli paran yok.', 'warn'); return; }
+            if (this.tradePending) return; // yanıt gelmeden ikinci istek yok (çift tıklama)
+            this.tradePending = true;
+            setTimeout(() => { this.tradePending = false; }, 3000);
+            S.act('trade_buy', { npc: n.id, day, id: it.id, price });
+          }, money >= price ? 'small green' : 'small disabled')));
       }
       const sell = h('div.trade-list');
       S.inventory.slots.forEach((s, i) => {
@@ -155,6 +145,7 @@ export class GamePanels {
         h('div.trade-body', h('div.trade-col', h('h3', 'Satılık'), buy), h('div.trade-col', h('h3', 'Senin Eşyaların (Sat)'), sell)),
         h('div.hint', rel >= 40 ? 'Tüccarlarla iyi ilişkin sayesinde %15 indirim!' : 'Fiyatlar tüccarlarla ilişkine göre değişir.'));
     };
+    this.tradeRender = render;
     render();
   }
 
