@@ -7,6 +7,7 @@ import { MeshoptDecoder } from '../../vendor/meshopt/meshopt_decoder.module.js';
 import { unpackBytes, packToClips } from '../entities/AnimPack.js';
 import { loadSurfaces } from '../world/Surfaces.js';
 import { mergeParts, burntParts } from './PartMerge.js';
+import { repairTree } from './NormalRepair.js';
 
 const KITS = ['vehicles', 'buildings', 'furniture', 'kitchen', 'props', 'items', 'city'];
 // iskeletli modeller (ayrı dosyalar; animasyonlarıyla birlikte): modüler insan tabanları ve hayvanlar
@@ -28,6 +29,8 @@ export class Assets {
     this.nature = null; // doğa kiti glTF
     this.loader = new GLTFLoader();
     this.loader.setMeshoptDecoder(MeshoptDecoder);
+    this.normalFixes = { meshes: 0, vertices: 0 }; // yüklemede onarılan sıfır/NaN normaller
+    this._normalSeen = new WeakSet();
   }
 
   async loadAll(onProgress = () => {}) {
@@ -37,6 +40,7 @@ export class Assets {
     const kitJobs = KITS.map(async (k) => {
       const gltf = await this.loader.loadAsync(`${this.base}assets/models/${k}.glb`);
       const root = gltf.scene;
+      repairTree(root, this._normalSeen, this.normalFixes);
       this.kits[k] = root;
       for (const child of root.children) {
         this.index[`${k}/${child.name}`] = child;
@@ -60,6 +64,7 @@ export class Assets {
     });
     const rigJobs = RIGGED.map(async (r) => {
       const gltf = await this.loader.loadAsync(`${this.base}assets/models/rigged/${r}.glb`);
+      repairTree(gltf.scene, this._normalSeen, this.normalFixes);
       gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; const mats = Array.isArray(o.material) ? o.material : [o.material]; for (const m of mats) { m.metalness = 0; m.roughness = Math.max(m.roughness ?? 0.8, 0.7); } } });
       this.rigged[r] = gltf;
       tick(`Karakter: ${r}`);
@@ -75,6 +80,7 @@ export class Assets {
     // doğa kiti (Stylized Nature MegaKit: ağaç, çalı, kaya, çim…; tools/pack-nature.mjs)
     const natureJob = (async () => {
       this.nature = await this.loader.loadAsync(`${this.base}assets/models/nature.glb`);
+      repairTree(this.nature.scene, this._normalSeen, this.normalFixes);
       tick('Doğa');
     })();
     const surfJob = loadSurfaces(this.base).then(() => tick('Yüzey dokuları'));

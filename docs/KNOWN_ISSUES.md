@@ -47,7 +47,8 @@
 - Şehir merkezinde kare başına ~400 çizim çağrısı (varsayılan ayarlar, gölgeler açık; önceki sürümde ~1.100), 2,5–3 milyon üçgen çizilir. Zayıf
   dizüstü GPU'larda **Ayarlar → Grafik → Kalite: Orta/Düşük** ve **Otomatik çözünürlük** önerilir
   (otomatik çözünürlük varsayılan olarak açıktır).
-- Kalite (gölge haritası çözünürlüğü, kenar yumuşatma) değişikliği tam etki için sayfanın yenilenmesini ister.
+- Kalite seviyesinin gölge haritası çözünürlüğü, kenar yumuşatma ve zombi sınırı kısmı tam etki için sayfanın
+  yenilenmesini ister (gölge, parlama, çimen, AO, su yansıması, görüş mesafesi, çözünürlük ölçeği anında değişir).
 - Tarayıcı Esc tuşunu işaretçi kilidinden çıkmak için yutar; Esc'ye basınca duraklatma menüsü açılır
   (oyuna dönmek için ekrana tıkla).
 - Karakter kıyafetlerinde kumaş dokusu/normal haritası yoktur (modüler taban UV'siz; renk ve pürüzlülük köşe
@@ -64,3 +65,28 @@
   modellerinde kapı parçası yok); kabin tüm araçlarda aynı prosedürel koltuk/gösterge setidir.
 - Eşya simgeleri ilk görüldüklerinde bir kare sonra belirir (karede en fazla bir simge GPU'da çizilir); o ana dek
   yuva saydam görünür.
+
+## Grafik kalitesi ve performans ölçümü (Aşama 8)
+- **Gerçek ekran kartında ölçüm yapılamadı.** Geliştirme ortamında yalnız yazılım GPU'su (SwiftShader) var; oradaki
+  kare hızları gerçek donanımı temsil etmez ve öyle sunulmaz. 1080p/60 FPS hedefi doğrulanmadı. Gerçek donanım raporu
+  için oyuncu **Duraklat → Ayarlar → Grafik → Performans testini başlat** ile dört sahneyi ölçer, sonucu JSON olarak
+  kopyalar. Yazılım GPU'su algılanırsa sonuç tablosunda uyarı çıkar.
+- **Ultra pahalıdır:** AO (GTAO) ve gerçek su yansıması sahneyi bir kez daha çizer; çizim çağrısı Yüksek'e göre
+  yaklaşık iki katıdır. Orta sınıf ekran kartında Yüksek önerilir.
+- AO ekran uzayında hesaplanır: ekran kenarında ve ince nesnelerin çevresinde hafif hale görülebilir; saydam ve alfa
+  kesimli yüzeyler (yapraklar, cam, su, parçacıklar) AO almaz ve vermez. Oyuncu bir binanın içindeyken (çatı kesit
+  görünümü) çevredeki çatılar da AO hesabından çıkarılır.
+- Su yansıması yalnız kameraya en yakın su yüzeyinde (göl ya da deniz kıyısı) ve üçte bir çözünürlükte çizilir;
+  diğer su yüzeyleri gökyüzü ortam haritasını yansıtır.
+- GPU kare süresi yalnız `EXT_disjoint_timer_query_webgl2` uzantısı olan tarayıcılarda ölçülür (çoğu masaüstü
+  Chrome/Edge); Firefox ve Safari'de sütun "—" görünür. Uzantı kesinti (disjoint) bildirirse o kare ölçülmez.
+- Performans testi yalnız tek oyunculu oyunda ve araç dışında çalışır. Test boyunca oyuncu ve yapay zekâ arkadaşlar
+  hasar almaz, otomatik kayıt sona ertelenir, dinamik çözünürlük dondurulur; sürü sahnesinin zombileri sonunda
+  kaldırılır ve oyuncu eski yerine döner. Duraklatılırsa ölçüm devam edince baştan alınır.
+- Görsel regresyon tabanları (`tests/visual/baseline/`) yazılım GPU'suna özgüdür; başka bir GPU'da
+  `VISUAL_BASELINE=1 node tools/e2e.mjs visual` ile yeniden taban alınmalıdır.
+- Hasarlı araçların göçük geometrisinde yeniden hesaplanan normallerin bir kısmı sıfır uzunlukta kalıyor ve belirli
+  açılardan bakınca bütün ekranı karartıyordu; artık onarılıyor (yüklenen modeller de taranıyor). Parlama geçişi ayrıca
+  NaN/sonsuz pikselleri süzüyor: ileride benzer bir bozuk geometri gelirse ekran kararmaz, yalnız birkaç piksel koyu
+  görünebilir.
+

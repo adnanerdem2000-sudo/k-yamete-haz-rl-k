@@ -383,6 +383,9 @@ export class Menus {
     return h('div.bench',
       h('h3', 'Performans testi sonucu'),
       h('p.muted', `${res.gpu || 'GPU bilinmiyor'} · ${res.resolution[0]}×${res.resolution[1]} · kalite: ${res.quality} · sahne başına ${res.seconds} sn`),
+      // yazılım GPU'su (donanım hızlandırması kapalı) sonuçları gerçek ekran kartı performansı olarak sunulmaz
+      /swiftshader|llvmpipe|softpipe|software|basic render/i.test(res.gpu || '') ? h('p.bench-warn', 'Yazılım GPU\'su algılandı (tarayıcıda donanım hızlandırması kapalı): bu değerler gerçek ekran kartı performansı değildir.') : null,
+      res.settingsChanged ? h('p.bench-warn', 'Test sırasında grafik ayarları değişti: sonuç karışık ölçümdür, testi yeniden çalıştır.') : null,
       h('table.bench-table', h('thead', h('tr', ['Sahne', 'FPS', 'ms', '%1 low', 'CPU ms', 'GPU ms', 'Çizim', 'Üçgen', 'Zombi', 'Fizik (uyanık/toplam)'].map((t) => h('th', t)))), h('tbody', rows)),
       button('Sonucu kopyala (JSON)', () => { const t = JSON.stringify(res, null, 2); if (navigator.clipboard) navigator.clipboard.writeText(t).then(() => this.ui.toast('Sonuç panoya kopyalandı.', 'good'), () => this.ui.toast('Kopyalanamadı.', 'warn')); }, 'small'));
   }

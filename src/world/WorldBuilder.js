@@ -198,6 +198,9 @@ export class World {
       mesh.castShadow = g.cast; mesh.receiveShadow = true;
       mesh.customDepthMaterial = depth;
       mesh.name = 'roofs';
+      // AO (GTAO) normal/derinlik geçişi tek bir ortak malzemeyle çizer, köşe kırpması orada yoktur: gizli çatı AO
+      // tamponuna girip gökyüzünde hayalet üçgen bırakırdı. Graphics bu işaretle çatı gizliyken bu ağları AO'dan çıkarır.
+      mesh.userData.roofHide = this.roofHide;
       if (g.mat.transparent) mesh.renderOrder = 2;
       this.root.add(mesh);
       for (const gg of g.geos) gg.dispose();

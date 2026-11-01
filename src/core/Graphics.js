@@ -67,6 +67,16 @@ export class Graphics {
     this.composer = new EffectComposer(this.renderer);
     this.renderPass = new RenderPass(this.scene, this.camera);
     this.bloomPass = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.32, 0.55, 0.86);
+    // NaN koruması: sahnedeki tek bir NaN/sonsuz piksel (bozuk normal, sıfıra bölme) parlamanın bulanıklık zincirinde
+    // bütün kareye yayılıp ekranı karartıyordu; parlamaya giren pikseller süzülür
+    {
+      const hp = this.bloomPass.materialHighPassFilter;
+      const src = 'vec4 texel = texture2D( tDiffuse, vUv );';
+      if (hp && hp.fragmentShader.includes(src)) {
+        hp.fragmentShader = hp.fragmentShader.replace(src, src + '\n\t\t\tif ( any( isnan( texel ) ) || any( isinf( texel ) ) ) texel = vec4( 0.0 );');
+        hp.needsUpdate = true;
+      } else console.warn('Parlama NaN koruması uygulanamadı (gölgelendirici değişmiş)');
+    }
     this.gradePass = new ShaderPass(GradeShader);
     this.outputPass = new OutputPass();
     this.composer.addPass(this.renderPass);
@@ -101,7 +111,8 @@ export class Graphics {
     this.pixelRatio = this.basePixelRatio * (this.dynScale || 1);
     this.resize();
     // gölge aç/kapa malzemeleri yeniden derletir: yalnız gerçekten değiştiğinde (her ayar değişiminde değil)
-    if (shadowChanged) this.scene.traverse((o) => { if (o.material && o.material.needsUpdate !== undefined && o.castShadow) o.material.needsUpdate = true; });
+    // gölge alan (yalnız receiveShadow) zemin/yol malzemeleri de yeniden derlenmeli
+    if (shadowChanged) this.scene.traverse((o) => { if (!o.material) return; for (const m of Array.isArray(o.material) ? o.material : [o.material]) if (m && m.needsUpdate !== undefined) m.needsUpdate = true; });
   }
 
   /** Ortam kapanması (GTAO): ilk açılışta kurulur, sonra yalnız etkinleştirilir/kapatılır */
@@ -113,15 +124,24 @@ export class Graphics {
       p.updateGtaoMaterial({ radius: 0.7, distanceExponent: 1.6, thickness: 1.2, scale: 1, samples: 12, distanceFallOff: 1 });
       p.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
       // saydam yüzeyler (su, cam, parçacık), alfa kesimli yapraklar (normal tamponunda dolu dörtgen olurdu), gökyüzü ve
-      // işaretli nesneler AO tamponuna girmez
+      // işaretli nesneler AO tamponuna girmez. Oyuncu bir binadayken çatısı köşe gölgelendiricisinde kırpılır; AO geçişinin
+      // ortak malzemesinde bu kırpma olmadığından o sırada birleşik çatı ağları AO'dan çıkarılır (yoksa gizli çatı AO'da
+      // görünür)
       p._overrideVisibility = function () {
         const cache = this._visibilityCache;
         this.scene.traverse((o) => {
           if (!o.visible) return;
-          const m = o.material;
+          const m = o.material, rh = o.userData.roofHide;
           const tr = m && (Array.isArray(m) ? m.some((x) => x && (x.transparent || x.alphaTest > 0)) : m.transparent || m.alphaTest > 0);
-          if (o.isPoints || o.isLine || o.isLine2 || o.isSprite || tr || o.userData.noAO) { o.visible = false; cache.push(o); }
+          if (o.isPoints || o.isLine || o.isLine2 || o.isSprite || tr || o.userData.noAO || (rh && rh.value > 0)) { o.visible = false; cache.push(o); }
         });
+      };
+      // normal/derinlik tamponu çizilirken gölge haritaları yeniden hesaplanmasın (hem maliyet hem yapraksız gölge)
+      const render0 = p.render.bind(p);
+      p.render = (renderer, writeBuffer, readBuffer, dt, mask) => {
+        const au = renderer.shadowMap.autoUpdate;
+        renderer.shadowMap.autoUpdate = false;
+        try { render0(renderer, writeBuffer, readBuffer, dt, mask); } finally { renderer.shadowMap.autoUpdate = au; }
       };
       this.composer.insertPass(p, 1);
       this.gtaoPass = p;
@@ -155,9 +175,27 @@ export class Graphics {
     this.autoScale(dt);
   }
 
+  /**
+   * Performans testi için: dinamik çözünürlüğü dondur ve ayarlanan çözünürlüğe dön (on), sonra eski ölçeğe geri dön (off).
+   * Böylece sahneler aynı çözünürlükte ölçülür ve sonuç kalite ön ayarının gerçek maliyetini gösterir.
+   */
+  holdScale(on) {
+    if (on) {
+      if (this.scaleHeld) return;
+      this.scaleHeld = true;
+      this._heldScale = this.dynScale || 1;
+      if (this._heldScale !== 1) { this.dynScale = 1; this.pixelRatio = this.basePixelRatio; this.resize(); }
+    } else if (this.scaleHeld) {
+      this.scaleHeld = false;
+      const s = Settings.get('graphics.autoScale') ? this._heldScale || 1 : 1;
+      if (s !== (this.dynScale || 1)) { this.dynScale = s; this.pixelRatio = this.basePixelRatio * s; this.resize(); }
+      this._asT = 0;
+    }
+  }
+
   /** Dinamik çözünürlük: kare hızı düşükse iç çözünürlüğü azalt, yüksekse geri artır */
   autoScale(dt) {
-    if (!Settings.get('graphics.autoScale')) return;
+    if (this.scaleHeld || !Settings.get('graphics.autoScale')) return;
     this._asT = (this._asT || 0) + dt;
     if (this._asT < 2) return;
     this._asT = 0;

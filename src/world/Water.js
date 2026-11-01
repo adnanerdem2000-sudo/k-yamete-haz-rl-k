@@ -121,7 +121,7 @@ export class Water {
     if (!best && cam.y > WORLD.sea + 0.3) {
       // kıyı: kameranın çevresinde (60/140 m) arazi deniz seviyesinin altına iniyorsa deniz görünür
       const T = this.terrain;
-      let sea = T.heightAt(cam.x, cam.z) < WORLD.sea + 6;
+      let sea = T.heightAt(cam.x, cam.z) < WORLD.sea + 0.5;
       for (let k = 0; k < 8 && !sea; k++) {
         const a = (k / 8) * Math.PI * 2;
         for (const r of [60, 140]) if (T.heightAt(cam.x + Math.cos(a) * r, cam.z + Math.sin(a) * r) < WORLD.sea) { sea = true; break; }

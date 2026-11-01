@@ -1,8 +1,10 @@
 // Performans ölçümü (Aşama 8): kare süresi (ort., %1 en kötü → "1% low" FPS), CPU kare süresi (oyun döngüsünün
 // JS süresi: güncelleme + çizim komutlarının gönderimi), GPU kare süresi (EXT_disjoint_timer_query_webgl2 varsa;
 // yazılım GPU'sunda ve bazı tarayıcılarda yoktur → null), çizim çağrısı, üçgen, bellek (JS yığını, GPU kaynakları),
-// aktif zombi ve fizik nesnesi sayısı. Pencere: son 600 kare. Gösterge (FPS sayacı) ve kıyaslama (Benchmark) kullanır.
-const N = 600;
+// aktif zombi ve fizik nesnesi sayısı. Pencere: son 8192 kare (144 Hz'de ~57 sn: performans testinin 8 sn'lik ölçümü
+// yüksek kare hızında da tamamen pencereye sığar). Gösterge (FPS sayacı) ve kıyaslama (Benchmark) kullanır.
+const N = 8192;
+export const PERF_WINDOW = N;
 
 export class PerfMonitor {
   constructor(renderer) {
@@ -46,10 +48,12 @@ export class PerfMonitor {
     if (this.pending.length) {
       const gl = this.gl;
       const disjoint = this.ext && gl.getParameter(this.ext.GPU_DISJOINT_EXT);
+      // kesinti (disjoint: GPU saat/güç durumu değişti) bildirildiyse bekleyen sorguların hiçbiri güvenilir değil
+      if (disjoint) { for (const q of this.pending.splice(0)) gl.deleteQuery(q); return; }
       while (this.pending.length) {
         const q = this.pending[0];
         if (!gl.getQueryParameter(q, gl.QUERY_RESULT_AVAILABLE)) break;
-        if (!disjoint) { this.gpu[this.gn % N] = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; this.gn++; }
+        this.gpu[this.gn % N] = gl.getQueryParameter(q, gl.QUERY_RESULT) / 1e6; this.gn++;
         gl.deleteQuery(q);
         this.pending.shift();
       }

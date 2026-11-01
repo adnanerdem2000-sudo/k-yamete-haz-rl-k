@@ -150,6 +150,27 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   check(crash.dents >= 1 && crash.paintDark > 0.005, 'göçük ve boya koyulaşması', crash);
   check(crash.heavy && crash.heavy.cracked && crash.heavy.brokenHead === 1 && crash.heavy.dents >= 3, 'ağır hasar: çatlak cam, bozuk far, göçükler', crash);
   check(crash.repaired && crash.repaired.dents === 0 && !crash.repaired.cracked, 'onarım görselleri sıfırlar', crash);
+  // 4b) göçük normalleri: her araç modeline üç göçük → sıfır uzunluklu/NaN köşe normali kalmamalı (yeniden hesaplanan
+  // normaller alanı sıfır üçgenlerde sıfır kalıyor, gölgelendiricide NaN olup parlamayla bütün ekranı karartıyordu);
+  // onarım özgün normalleri geri yükler
+  const nrm = await evalJS(page, () => {
+    const S = window.__game.session, out = { models: [], verts: 0, bad: 0, where: null, restored: 0, notRestored: 0 };
+    const scan = (v) => { let bad = 0; v.model.traverse((o) => { if (!o.isMesh || !o.geometry.attributes.normal) return; const n = o.geometry.attributes.normal; for (let i = 0; i < n.count; i++) { const x = n.getX(i), y = n.getY(i), z = n.getZ(i); out.verts++; if (!(x * x + y * y + z * z > 1e-12)) { bad++; out.where = v.def.model + ':' + o.name; } } }); return bad; };
+    const seen = new Set();
+    for (const v of S.vehicles.list) {
+      if (seen.has(v.def.model) || !v.visuals) continue;
+      seen.add(v.def.model);
+      for (let k = 0; k < 3; k++) v.visuals.dent();
+      out.models.push(v.def.model);
+      out.bad += scan(v);
+      v.visuals.resetBody();
+      v.model.traverse((o) => { if (o.isMesh && o.userData.nrm0) { const a = o.geometry.attributes.normal.array, b = o.userData.nrm0; let same = a.length === b.length; for (let i = 0; same && i < a.length; i++) if (a[i] !== b[i]) same = false; if (same) out.restored++; else out.notRestored++; } });
+    }
+    return out;
+  });
+  log('göçük normalleri', nrm);
+  check(nrm && nrm.models.length >= 3 && nrm.bad === 0, 'göçükten sonra sıfır/NaN normal kalmamalı', nrm);
+  check(nrm && nrm.restored >= 1 && nrm.notRestored === 0, 'onarımda özgün normaller geri yüklenmeli', nrm);
   // 5) araçla kapıya çarpma: evin dış kapısı önünden 9 m geri, içeri sür
   const ram = await evalJS(page, () => {
     const S = window.__game.session, v = window.__car('pickup') || window.__car('sedan');

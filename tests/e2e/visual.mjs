@@ -6,11 +6,13 @@
 // tests/visual/baseline/<ad>.png ile sayfa içinde karşılaştırılır (kanal farkı > 40/255
 // olan piksel oranı); eşik %2,5 (3B animasyonlu menü sahnelerinde %4). Yazılım GPU'sunda deterministik; başka GPU'da
 // yeniden taban alınmalı. Taban almak: VISUAL_BASELINE=1 node tools/e2e.mjs visual · çıktı: /tmp/visual/<ad>.png
-// VISUAL_QUALITY=ultra|high|medium|low: o kalite seviyesinde (oyun açılmadan ayarlanır) görüntü alınır, karşılaştırılmaz
-// (çıktı /tmp/visual-<kalite>/) — kalite seviyelerinin görsel farkı için.
+// VISUAL_QUALITY=ultra|high|medium|low: o kalite seviyesinde görüntü alınır, karşılaştırılmaz (çıktı /tmp/visual-<kalite>/) —
+// kalite seviyelerinin görsel farkı için. Oyunun kendi ön ayarı (QUALITY_PRESETS) oyun açılmadan yazılır: gölge haritası
+// boyutu, kenar yumuşatma gibi yalnız açılışta okunan ayarlar da etkili olur.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { QUALITY_PRESETS } from '../../src/core/Settings.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const BASE = path.join(ROOT, 'tests/visual/baseline');
 const OUT = '/tmp/visual';
@@ -22,13 +24,14 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
   const results = {};
   fs.mkdirSync(OUTD, { recursive: true });
   if (VQ) {
-    await page.addInitScript((q) => {
+    if (!QUALITY_PRESETS[VQ]) throw new Error('VISUAL_QUALITY bilinmiyor: ' + VQ + ' (low|medium|high|ultra)');
+    await page.addInitScript(([q, preset]) => {
       try {
         const k = 'kiyamet_settings_v1', s = JSON.parse(localStorage.getItem(k) || '{}');
-        s.graphics = { ...(s.graphics || {}), quality: q, shadows: q !== 'low', bloom: q !== 'low', grass: q !== 'low', ao: q === 'ultra', waterRefl: q === 'ultra', renderScale: 1, autoScale: false, viewDistance: q === 'ultra' ? 700 : q === 'high' ? 540 : 420 };
+        s.graphics = { ...(s.graphics || {}), quality: q, ...preset, autoScale: false };
         localStorage.setItem(k, JSON.stringify(s));
       } catch { /* yoksay */ }
-    }, VQ);
+    }, [VQ, QUALITY_PRESETS[VQ]]);
   }
   await page.addInitScript(() => {
     // tohumlanabilir rastgelelik: her sahne kurulumundan önce __seed(n)
@@ -47,7 +50,8 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     const { windUniforms } = await import('/src/world/Vegetation.js');
     window.__wind = windUniforms;
     window.__loop0 = g.loop;
-    window.__freeze = () => { cancelAnimationFrame(g.raf); g.loop = () => {}; g.gfx.autoScale = () => {}; g.gfx.dynScale = 1; g.gfx.basePixelRatio = 1; g.gfx.pixelRatio = 1; g.gfx.resize(); };
+    // dinamik çözünürlük kapalı; kalite seviyesinin çözünürlük ölçeği (Düşük: %85) korunur
+    window.__freeze = () => { cancelAnimationFrame(g.raf); g.loop = () => {}; g.gfx.autoScale = () => {}; g.gfx.dynScale = 1; g.gfx.pixelRatio = g.gfx.basePixelRatio; g.gfx.resize(); };
     window.__resume = () => { g.loop = window.__loop0; g.last = performance.now(); g.raf = requestAnimationFrame(() => g.loop()); };
     window.__clear = { type: 'clear', rain: 0, cloud: 0.35, fog: 0, wind: 1, snow: 0, storm: 0 };
     window.__draw = (hour, cam) => {
@@ -126,8 +130,9 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       g.world.setRoofHidden && g.world.setRoofHidden(b);
     }
     cam.updateMatrixWorld();
-    g.world.vegetation.update(cam.position, 420, true, 1, g.settings.get('graphics.quality'));
-    g.world.cullInteriors(cam.position, 1); g.world.instancer.cull(cam.position, 420);
+    const vd = g.settings.get('graphics.viewDistance');
+    g.world.vegetation.update(cam.position, vd, g.settings.get('graphics.grass'), 1, g.settings.get('graphics.quality'));
+    g.world.cullInteriors(cam.position, 1); g.world.instancer.cull(cam.position, vd);
     window.__draw(hour, cam);
     return true;
   };

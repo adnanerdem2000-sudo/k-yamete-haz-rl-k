@@ -91,7 +91,49 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
   sabit (önce 2,6 → 5,6 GB ve 2,2–3,3 GB); tek sekmede render süreci 2,4 GB → ~0,8 GB.
 
 ## 4. Değiştirilen dosyalar ve eklenen sistemler
-_(aşamalar ilerledikçe doldurulur)_
+Tur başı `bf132f4` ile son commit arasındaki fark `git diff --stat bf132f4..HEAD` ile görülebilir (kaynak, test,
+araç ve CI dosyaları; sayılar §8'de).
+
+**Yeni modüller (eklenen sistemler)**
+| Dosya | Sistem | Aşama |
+|---|---|---|
+| `src/physics/DoorPhysics.js` | Menteşeli kapı kanadı + dönel eklem, itme algılama, kilit/barikat, kırılma | 3 |
+| `src/physics/Drawers.js` | Kayar eklemli çekmeceler (aranırken açılır, itilince kapanır) | 3 |
+| `src/physics/Buoyancy.js` | Yoğunluğa göre kaldırma kuvveti, su direnci, dalga ve doğrultma | 3 |
+| `src/physics/ContactSounds.js` | Temas kuvvetine ve malzemeye göre çarpışma sesleri | 3 |
+| `src/world/Facade.js` | Cephe ayrıntıları: subasman, korniş, köşe taşı, oluk, panjur, tente, yangın merdiveni | 4 |
+| `src/world/InteriorDress.js` | İç mekân dekoru, bina durumları (yaşanır/yağmalanmış/barikatlı), pencere durumları | 4 |
+| `src/world/BiomeScatter.js` | Bölge temasına göre bitki/kaya serpiştirme | 4 |
+| `src/world/StreetLife.js` | Kuş sürüleri, uçuşan kâğıtlar, asma tabelalar | 4 |
+| `src/systems/VehicleVisuals.js` | Araç kabini, kapı/bagaj kanatları, hasar görselleri, far ışıması | 5 |
+| `src/core/PerfMonitor.js` | FPS, kare süresi, %1 low, CPU/GPU süresi, çizim, üçgen, bellek, zombi, fizik ölçümü | 8 |
+| `src/systems/Benchmark.js` | Oyun içi performans testi (şehir merkezi, orman, üs, zombi sürüsü) | 8 |
+| `src/core/NormalRepair.js` | Model yüklemede sıfır/NaN köşe normali onarımı | 8 |
+
+**Değişen başlıca dosyalar**
+- Çok oyunculu (Aşama 7): `src/net/Net.js`, `src/net/Transport.js`, `src/net/Voice.js`, `src/Session.js`,
+  `src/systems/NPCs.js` — TURN ayarı, ping/kayıp göstergesi, yeniden bağlanma, host göçü, hayvan ve tüccar senkronu,
+  eylem ofseti, 3B ses.
+- Karakter ve animasyon (Aşama 2, 7): `src/entities/Avatar.js`, `Player.js`, `Animations.js`, `CharacterFactory.js`,
+  `ItemModels.js` — yüz, kıyafet koleksiyonları, kişilik hareketleri, etkileşim hizası, eylem ofseti.
+- Araçlar (Aşama 5): `src/systems/Vehicles.js`, `src/world/Terrain.js` (`surfaceAt`) — yüzeye göre sürüş, hasar,
+  uyuyan şasi ve yedek lastik düzeltmeleri.
+- Zombi ve botlar (Aşama 6): `src/systems/Zombies.js`, `Bots.js`, `Combat.js` — ayrışma, yol bulma bütçesi, dikkat
+  dağıtma, bot emirleri.
+- Grafik ve performans (Aşama 4, 8): `src/core/Graphics.js`, `Settings.js`, `Assets.js`, `src/world/Water.js`,
+  `src/systems/Environment.js`, `src/world/Vegetation.js`, `src/systems/Effects.js` — AO, su yansıması, kalite
+  seviyeleri, gölge haritası boyutu, bitki bantları, efekt yoğunluğu, parlama NaN koruması.
+- Dünya (Aşama 3, 4, 8): `src/world/BuildingGen.js`, `Dressing.js`, `Geo.js`, `LivingWorld.js`, `WorldBuilder.js`,
+  `src/physics/PhysicsWorld.js`, `src/systems/PhysProps.js`, `Interact.js` — cephe/iç mekân, kapı ve çekmece
+  bağlantısı, etkileşim adayı düzeltmesi, gizli çatının AO'dan çıkarılması.
+- Ses (Aşama 3, 8): `src/systems/AudioManager.js` — sentez çarpışma, kapı, barikat ve lastik sesleri.
+- Arayüz: `src/ui/MenuScreens.js`, `GameScreens.js`, `HUD.js`, `UIManager.js`, `dom.js`, `style.css` — kalite
+  seçimi, performans testi ve sonuç tablosu, ağ göstergesi, TURN ayarı, tüccar stoğu.
+- Test ve CI: `.github/workflows/ci.yml` (yeni), `pages.yml`, `package.json` (Playwright), `tools/scenario.mjs`
+  (işaretçi kilidi, denetim hataları); 9 yeni uçtan uca senaryo (`interact`, `physics2`, `vehicles2`, `ai2`,
+  `multiplayer-6`, `host-migration`, `host-migration3`, `visual`, `benchmark`) ve güncellenen `motion`, `story`;
+  3 yeni birim test dosyası (`facade`, `net`, `quality`), 14 görsel regresyon tabanı (`tests/visual/baseline/`),
+  geliştirme sondaları (`tools/dev/`).
 
 ## 5. Aşama raporları
 ### Aşama 1 — Test ve güvenlik

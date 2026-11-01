@@ -2,6 +2,7 @@
 // kanatları (binince/inince ve bagaj açılınca sallanır), far/stop ışıma yüzeyleri, hasar görselleri (göçükler,
 // çizik/is koyulaşması, çatlak cam, bozuk far). Hepsi araç kökü (root) altında; fizik ya da ağ durumunu değiştirmez.
 import * as THREE from 'three';
+import { repairNormals } from '../core/NormalRepair.js';
 import { clamp, damp } from '../core/util.js';
 
 const DOOR_OPEN = 1.05; // rad
@@ -193,7 +194,11 @@ export class VehicleVisuals {
     let body = null;
     m.traverse((o) => { if (!body && o.isMesh && /body/i.test(o.name) && o.geometry.attributes.position) body = o; });
     if (!body) return;
-    if (!body.userData.dentGeo) { body.geometry = body.geometry.clone(); body.userData.dentGeo = true; body.userData.pos0 = body.geometry.attributes.position.array.slice(); }
+    if (!body.userData.dentGeo) {
+      body.geometry = body.geometry.clone(); body.userData.dentGeo = true;
+      body.userData.pos0 = body.geometry.attributes.position.array.slice();
+      if (body.geometry.attributes.normal) body.userData.nrm0 = body.geometry.attributes.normal.array.slice();
+    }
     const g = body.geometry, P = g.attributes.position, N = g.attributes.normal;
     g.computeBoundingBox();
     const bb = g.boundingBox, size = bb.getSize(new THREE.Vector3());
@@ -209,14 +214,22 @@ export class VehicleVisuals {
       P.setXYZ(i, P.getX(i) - dir[0] * k, P.getY(i) - k * 0.3, P.getZ(i) - dir[2] * k);
     }
     P.needsUpdate = true;
-    if (N) g.computeVertexNormals();
+    // yeniden hesaplanan normaller alanı sıfır üçgenlerin köşelerinde sıfır uzunlukta kalır → gölgelendiricide NaN,
+    // parlama bulanıklığıyla bütün ekran kararıyordu (hasarlı doğan araçlar): onarılır
+    if (N) { g.computeVertexNormals(); repairNormals(g); }
     g.computeBoundingSphere();
   }
 
   resetBody() {
     const v = this.v;
     v.model.traverse((o) => {
-      if (o.isMesh && o.userData.dentGeo && o.userData.pos0) { o.geometry.attributes.position.array.set(o.userData.pos0); o.geometry.attributes.position.needsUpdate = true; o.geometry.computeVertexNormals(); }
+      if (o.isMesh && o.userData.dentGeo && o.userData.pos0) {
+        const g = o.geometry;
+        g.attributes.position.array.set(o.userData.pos0); g.attributes.position.needsUpdate = true;
+        // özgün (modeldeki) normaller geri yüklenir; yeniden hesaplama hem görünümü değiştirir hem sıfır normal üretebilir
+        if (o.userData.nrm0 && g.attributes.normal) { g.attributes.normal.array.set(o.userData.nrm0); g.attributes.normal.needsUpdate = true; } else { g.computeVertexNormals(); repairNormals(g); }
+        g.computeBoundingSphere();
+      }
     });
     this.dents = 0; this.cracked = false;
     for (const h of this.headGlows) { h.broken = false; h.mesh.material.color.set(0xfff6dc); }

@@ -646,6 +646,7 @@ input[type=range] { width: 200px; accent-color: var(--orange); }
 /* performans testi sonucu (Ayarlar → Grafik) ve genişletilmiş performans göstergesi */
 .bench { margin-top: 10px; }
 .bench h3 { margin: 6px 0; }
+.bench-warn { margin: 4px 0; padding: 4px 8px; border-left: 3px solid var(--gold); background: rgba(241,196,15,0.12); font-size: 12px; }
 .bench-table { width: 100%; border-collapse: collapse; font: 600 12px monospace; margin: 6px 0 8px; }
 .bench-table th, .bench-table td { border: 1px solid rgba(255,255,255,0.18); padding: 3px 6px; text-align: right; }
 .bench-table th:first-child, .bench-table td:first-child { text-align: left; }

@@ -27,7 +27,10 @@ export const DEFAULTS = {
 };
 
 function deepMerge(base, over) {
-  const out = Array.isArray(base) ? [...base] : { ...base };
+  // taban da derin kopyalanır: aksi hâlde kayıtta olmayan bölümler (ör. graphics) DEFAULTS nesnesinin kendisi olur,
+  // set/setMany varsayılanları değiştirir ve "Tüm Ayarları Sıfırla" eski değerlere dönmezdi
+  const out = Array.isArray(base) ? [...base] : {};
+  if (!Array.isArray(base)) for (const k of Object.keys(base || {})) { const v = base[k]; out[k] = v && typeof v === 'object' ? deepMerge(v, null) : v; }
   if (!over || typeof over !== 'object') return out;
   for (const k of Object.keys(over)) {
     if (base && typeof base[k] === 'object' && base[k] !== null && !Array.isArray(base[k])) out[k] = deepMerge(base[k], over[k]);
