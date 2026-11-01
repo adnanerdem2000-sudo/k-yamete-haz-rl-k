@@ -242,7 +242,11 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   tırmanma gibi hareket klipleri öne geçmez). Protokol sürümü 4.
 - **Bağlantı sağlamlığı:** ping duvar saatiyle 2 sn'de bir; gösterge = max(son ölçüm, cevapsız en eski ping). Yerel
   taşıyıcıda host tarafı takılma koruması (kendi zamanlayıcısı 10 sn gecikirse eş süreleri sıfırlanır) ve
-  `Net.peerTimeout`: hoş geldin almış ama dünyasını kurmakta olan eşe 4 dk, diğerlerine 45 sn.
+  `Net.peerTimeout`: hoş geldin almış ama oturumunu kurmakta olan ve katıldıktan sonraki ilk 2 dk içindeki eşe 4 dk,
+  diğerlerine 45 sn. Kapanışını duyuran host (`beforeunload`) 4 sn yeni bağlantı ve yoklama yanıtı vermez: kopan
+  istemci ölmekte olan host'a yeniden katılmaz (iki taşıyıcıda da `Base.closing`).
+- **Göçte zombiler:** `Session.becomeHost` istemcinin gördüğü zombileri (tür, konum, yön) gerçek zombiye çevirir; bölge
+  nüfusu ve öldürülen sayıları `pdata`/hoş geldin paketiyle paylaşılır (`zoneState`) ve geri yüklenir.
 
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),

@@ -292,6 +292,7 @@ export class Net {
     const p = this.room.players.find((q) => q.id === peer.id);
     if (!p) return;
     peer.inGame = true;
+    peer.joinedAt = performance.now();
     const sp = S.world.spawn;
     const info = { id: p.id, name: p.name, charId: p.charId, look: p.look, token: p.token, x: sp.x, y: sp.y, z: sp.z };
     const rec = S.addRemotePlayer(info);
@@ -467,10 +468,15 @@ export class Net {
     }
   }
 
-  /** Yerel taşıyıcı zaman aşımı: hoş geldin almış ama dünyasını kurmakta olan eş (henüz 'joined' yok) 4 dk, diğerleri 45 sn */
+  /**
+   * Yerel taşıyıcı zaman aşımı: hoş geldin almış ama oturumunu kurmakta olan eş (henüz 'joined' yok) ve katıldıktan
+   * sonraki ilk 2 dk içindeki eş 4 dk, diğerleri 45 sn. Katılımdan hemen sonraki ilk kareler zayıf makinede (gölgelendirici
+   * derlemesi) uzun sürebilir: iz sondası, yeni katılan istemcinin 45 sn susup düşürüldüğünü ve yeniden bağlandığını gösterdi.
+   */
   peerTimeout(pid) {
     const p = this.peers.get(pid);
-    return p && p.welcomed && !p.inGame ? 240000 : 45000;
+    if (!p || !p.welcomed) return 45000;
+    return !p.inGame || performance.now() - (p.joinedAt || 0) < 120000 ? 240000 : 45000;
   }
 
   /** Göç adayı: oda listesinde host olmayan, çevrimiçi oyuncular arasında kimliği en küçük olan */

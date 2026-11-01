@@ -47,6 +47,15 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
 - **Aynı jetonla yeniden katılım**: kopan oyuncu geri gelince eski eş kaydı silinmeden ikinci kayıt açılıyordu
   (çift avatar). Aşama 7.
 - **`Net.leave()` erken dönüşü**: yeniden bağlanırken çağrılan `leave` taşıyıcıyı kapatmıyordu. Aşama 7.
+- **Ölmekte olan host'a yeniden katılma**: host sekmesi kapanırken "kapanıyorum" iletisini yolluyor ama sayfası
+  kapanana dek bağlantı kabul etmeye devam ediyordu; hızlı istemcinin ilk yeniden bağlanma denemesi ona ulaşıp yeniden
+  katılıyor, host sessizce kaybolunca göç 90 sn'lik "sessizlik" yoluna düşüyor (B'nin host olması 148 sn, envanter ve
+  zombi durumu eski kopyadan). İşaretçi kilidi düzeltilip sayfalar hızlanınca ortaya çıktı. Aşama 7.
+- **Yeni katılan oyuncunun 45 sn'de düşürülmesi**: göç sonrası katılan istemcinin ilk kareleri (zayıf makinede
+  gölgelendirici derlemesi) 45 sn'yi aşınca host onu düşürüyor, istemci ~70 sn sonra kendiliğinden yeniden bağlanıyordu
+  (iz sondası `tools/dev/late-join-probe.mjs`). Aşama 7.
+- **Göçte zombi durumunun sıfırlanması**: yeni host gördüğü zombileri silip bölgeleri sıfırdan kuruyordu (ölenler geri
+  geliyordu). Aşama 7.
 - **Araç sürücü değişiminde `onRoad` TDZ hatası** (yüzey bloğu değişkenden önce okunuyordu); Aşama 5 inceleme.
 - **Başsız tarayıcıda işaretçi kilidi döngüsü (test ortamı)**: çok oyunculu senaryolarda iki sekme çöküyordu
   (`carry-mp`, `multiplayer-local`, `host-migration`'ın son adımı). Ölçüm: tarayıcı ana süreci oyun sırasında
@@ -74,6 +83,9 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
   sıra sayaçları oturum başında/çıkışta sıfırlanır.
 - `sanitizeIce`: yalnız `stun:`/`turn:`/`turns:` şemaları, TURN için kullanıcı adı + kimlik bilgisi zorunlu;
   ayarlar ekranında JSON ve depolama hataları ayrı iletilerle.
+- Taşıyıcılar: `beforeunload` sonrası 4 sn yeni bağlantı/yoklama yanıtı yok (kapanış iptal edilirse sonra normal);
+  `Net.peerTimeout`: dünyasını kuran ve katıldıktan sonraki ilk 2 dk içindeki eşe 4 dk, diğerlerine 45 sn;
+  `Session.becomeHost`: görülen zombiler gerçek zombiye çevrilir, bölge nüfusu/öldürülen sayıları `pdata` ile.
 - Test koşucusu (`tools/scenario.mjs`) sayfalara `requestPointerLock`'u reddeden bir başlangıç betiği ekler
   (`PW_POINTERLOCK=1` ile eski davranış). İki sekmede tarayıcı süreci 94 MB'ta, render süreçleri 750–800 MB'ta
   sabit (önce 2,6 → 5,6 GB ve 2,2–3,3 GB); tek sekmede render süreci 2,4 GB → ~0,8 GB.
