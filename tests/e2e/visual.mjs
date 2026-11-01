@@ -1,8 +1,9 @@
 // Görsel regresyon (Aşama 8): istemdeki 12 sahne — ana menü, altı karakterin seçim ekranı, karakter yakın plan,
 // başlangıç mahallesi, şehir merkezi, orman, bina içi, araç dışı + içi, zombi yakın plan, gece üs savunması, envanter,
-// çok oyunculu lobi (13 görüntü). Oyun döngüsü durdurulur; saat, hava, rüzgâr/su zamanı ve rastgelelik (Math.random
+// çok oyunculu lobi (14 görüntü: karakter yakın plan = özelleştirme vitrini + oyun içi yüz; araç = dışı + içi). Oyun döngüsü durdurulur; saat, hava, rüzgâr/su zamanı ve rastgelelik (Math.random
 // sahne başında tohumlanır) sabitlenir; CSS animasyonları kapatılır. Arayüzlü sahneler tam sayfa (DOM + tuval), dünya
-// sahneleri tuval görüntüsü. tests/visual/baseline/<ad>.png ile sayfa içinde karşılaştırılır (kanal farkı > 40/255
+// sahneleri arayüz gizli tam sayfa (WebGL tamponu korunmadığından tuval ayrı çağrıda okunamaz: boş görüntü verir).
+// tests/visual/baseline/<ad>.png ile sayfa içinde karşılaştırılır (kanal farkı > 40/255
 // olan piksel oranı); eşik %2,5 (3B animasyonlu menü sahnelerinde %4). Yazılım GPU'sunda deterministik; başka GPU'da
 // yeniden taban alınmalı. Taban almak: VISUAL_BASELINE=1 node tools/e2e.mjs visual · çıktı: /tmp/visual/<ad>.png
 // VISUAL_QUALITY=ultra|high|medium|low: o kalite seviyesinde (oyun açılmadan ayarlanır) görüntü alınır, karşılaştırılmaz
@@ -79,13 +80,12 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     results[name] = +(d.ratio * 100).toFixed(2) + '%' + (d.why ? ' ' + d.why : '');
     if (d.ratio > tol) errors.push(`[assert] görsel fark ${name}: %${(d.ratio * 100).toFixed(2)} (> %${(tol * 100).toFixed(1)}) → ${OUTD}/${name}.png`);
   };
-  const canvasShot = async () => { const u = await evalJS(page, () => window.__game.gfx.renderer.domElement.toDataURL('image/png')); return u ? Buffer.from(u.split(',')[1], 'base64') : null; };
   const pageShot = async () => { try { return await page.screenshot({ type: 'png', timeout: 120000 }); } catch (e) { errors.push('[assert] ekran görüntüsü alınamadı: ' + e.message.split('\n')[0]); return null; } };
   const run = async (name, fn, arg, kind, tol) => {
     const ok = await evalJS(page, fn, arg);
     if (ok === false || ok === undefined) { errors.push(`[assert] sahne kurulamadı: ${name}`); results[name] = 'kurulamadı'; return; }
-    if (kind === 'page') await wait(400); // <img> çözümleme
-    const buf = kind === 'page' ? await pageShot() : await canvasShot();
+    await wait(kind === 'page' ? 400 : 150); // <img> çözümleme / sunum
+    const buf = await pageShot();
     if (buf) await compare(name, buf, tol);
   };
   // ------------------------------------------------------------------ menü sahneleri (arayüz + 3B menü dünyası)
@@ -103,8 +103,13 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     return true;
   };
   await run('01-ana-menu', menuSetup, ['main'], 'page', 0.04);
+  // altı karakter kartının hepsi görünsün: geniş görüntü alanı
+  await page.setViewportSize({ width: 1600, height: 900 });
+  await wait(400);
   await run('02-karakter-secimi', menuSetup, ['chars'], 'page', 0.04);
-  await run('03-karakter-yakin-plan', menuSetup, ['custom'], 'page', 0.04);
+  await page.setViewportSize({ width: 960, height: 540 });
+  await wait(400);
+  await run('03a-karakter-ozellestirme', menuSetup, ['custom'], 'page', 0.04);
   await run('12-cok-oyunculu-lobi', menuSetup, ['lobby'], 'page', 0.04);
   await evalJS(page, () => { const g = window.__game; g.net.leave(); g.ui.showMainMenu(); });
   // ------------------------------------------------------------------ dünya sahneleri (menü dünyası, arayüz gizli)
@@ -152,6 +157,15 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       window.__draw(12, cam);
       return true;
     }
+    if (what === 'face') {
+      // karakter yakın plan: oyuncunun yüzü, başın ~1 m önünden
+      const [fx, fz] = fwd(S.local.yaw);
+      const hy = P.y + 1.6;
+      cam.position.set(P.x + fx * 1.05, hy + 0.04, P.z + fz * 1.05); cam.lookAt(P.x, hy, P.z);
+      cam.updateMatrixWorld();
+      window.__draw(15, cam);
+      return true;
+    }
     if (what === 'zombie') {
       const [fx, fz] = fwd(S.local.yaw);
       const z = S.zombies.spawn('normal', P.x + fx * 4, P.z + fz * 4, {});
@@ -162,8 +176,7 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       cam.position.set(zx - fx * 2.2, zy + 1.65, zz - fz * 2.2); cam.lookAt(zx, zy + 1.45, zz);
       cam.updateMatrixWorld();
       window.__draw(16, cam);
-      S.zombies.removeZombie(z.id);
-      return true;
+      return true; // zombi görüntüden sonra kaldırılır
     }
     if (what === 'night-base') {
       const h = S.world.home.spec;
@@ -174,16 +187,19 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       cam.updateMatrixWorld();
       g.world.cullInteriors(cam.position, 1);
       window.__draw(22.5, cam);
-      for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id);
-      return true;
+      return true; // zombiler görüntüden sonra kaldırılır
     }
     return false;
   };
   await evalJS(page, async () => { window.__THREE = await import('three'); });
+  await run('03b-karakter-yuz-yakin-plan', gameSetup, ['face'], 'canvas', 0.025);
   await run('08a-arac-disi', gameSetup, ['car-out'], 'canvas', 0.025);
   await run('08b-arac-ici', gameSetup, ['car-in'], 'canvas', 0.025);
+  const clearZ = () => evalJS(page, () => { const S = window.__game.session; for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id); });
   await run('09-zombi-yakin-plan', gameSetup, ['zombie'], 'canvas', 0.025);
+  await clearZ();
   await run('10-gece-us-savunmasi', gameSetup, ['night-base'], 'canvas', 0.025);
+  await clearZ();
   // envanter: HUD + envanter paneli (simgeler eşzamanlı çizilir)
   await run('11-envanter', async () => {
     const g = window.__game, S = g.session, cam = g.gfx.camera;
@@ -199,5 +215,5 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
   }, null, 'page', 0.03);
   log(VQ ? `kalite ${VQ}` : baseline ? 'taban' : 'fark', results);
   const n = Object.keys(results).length;
-  if (n < 13) errors.push(`[assert] 13 görüntü bekleniyordu, ${n} alındı`);
+  if (n < 14) errors.push(`[assert] 14 görüntü bekleniyordu, ${n} alındı`);
 };
