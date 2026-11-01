@@ -143,6 +143,61 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
   check(park.uyuyan >= Math.floor(park.park * 0.8), 'park hâlindeki araçların çoğu uyumalı (her adım uyandırılmamalı)', park);
   check(park.uzak > 5 && park.uzakGizli === park.uzak, 'uzak boş araçta kabin/kanat/stop lambası gizlenmeli', park);
 
+  // 7b) boyut ve tekerlek: taksi boyu tanımına yakın (eskiden 1,3 kat büyüktü), karavanda 4 fizik tekerleği,
+  //     aile arabasının burnu garaj kapısına dönük
+  const dims = await evalJS(page, async () => {
+    const THREE = await import('three');
+    const S = window.__game.session, out = {};
+    for (const type of ['taxi', 'sedan', 'hatchback', 'suvlux', 'sports']) {
+      const v = S.vehicles.list.find((q) => q.type === type);
+      if (!v) continue;
+      v.root.updateMatrixWorld(true);
+      const inv = new THREE.Matrix4().copy(v.root.matrixWorld).invert(), box = new THREE.Box3();
+      v.model.traverse((o) => { if (o.isMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld))); } });
+      out[type] = +(box.max.z - box.min.z).toFixed(2) + '/' + v.def.len;
+    }
+    const rv = S.vehicles.byId('rv'), fam = S.vehicles.byId('family_car'), home = S.world.home;
+    const gdoor = home.doors.find((d) => d.kind === 'garage');
+    const toDoor = gdoor ? Math.atan2(gdoor.center.x - fam.pos.x, gdoor.center.z - fam.pos.z) : null;
+    return { boy: out, karavanTeker: rv.pw.length, aileYon: +fam.yaw.toFixed(2), garajYonu: toDoor != null ? +toDoor.toFixed(2) : null };
+  });
+  log('boyut/tekerlek', dims);
+  const lenOk = Object.values(dims.boy).every((s2) => { const [a, b] = s2.split('/').map(Number); return Math.abs(a - b) / b < 0.12; });
+  check(lenOk, 'binek araç modellerinin boyu tanımdaki boya yakın olmalı (taksi 1,3 kat büyük değil)', dims);
+  check(dims.karavanTeker === 4, 'karavanda 4 fizik tekerleği olmalı', dims);
+  check(dims.garajYonu != null && Math.abs(Math.atan2(Math.sin(dims.aileYon - dims.garajYonu), Math.cos(dims.aileYon - dims.garajYonu))) < 0.6, 'aile arabasının burnu garaj kapısına dönük olmalı', dims);
+
+  // 7c) yakıt verimi (≈190 m/L) ve zombi park hâlindeki aracın içinden geçemez
+  const econ = await evalJS(page, () => {
+    const S = window.__game.session, T = S.world.terrain;
+    // açık yolda duran terk edilmiş araba (aile arabası kapalı garajda: kapıya dayanır)
+    const v = S.vehicles.list.find((x) => x.abandoned && !x.broken && !x.wrecked && x.health / x.maxHealth > 0.5);
+    v.broken = false; v.fuel = v.maxFuel; S.applyAction('vehicle_set', { id: v.id, health: v.maxHealth, wrecked: false }, S.localId);
+    S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
+    window.__step(20);
+    const p0 = v.pos.clone(), f0 = v.fuel;
+    let dist = 0, last = v.pos.clone();
+    for (let i = 0; i < 40; i++) { window.__step(10, ['KeyW']); dist += v.pos.distanceTo(last); last.copy(v.pos); }
+    const used = f0 - v.fuel;
+    S.vehicles.exitLocal(); window.__step(10);
+    // zombi: park etmiş aracın tam ortasına koy, bir hareket adımı → kutunun dışında olmalı
+    const car = S.vehicles.list.find((x) => x.abandoned && !x.seats.some(Boolean));
+    const zb = S.zombies.spawn('normal', car.pos.x + 8, car.pos.z);
+    let inside = null;
+    if (zb) {
+      zb.x = car.pos.x; zb.z = car.pos.z; zb.y = T.heightAt(car.pos.x, car.pos.z);
+      S.zombies.moveBy(zb, 0.01, 0);
+      const dx = zb.x - car.pos.x, dz = zb.z - car.pos.z, c = Math.cos(car.yaw), s = Math.sin(car.yaw);
+      const lx = dx * c - dz * s, lz = dx * s + dz * c;
+      inside = Math.abs(lx) < car.def.wid / 2 && Math.abs(lz) < car.def.len / 2;
+      S.zombies.removeZombie(zb.id);
+    }
+    return { mesafe: +dist.toFixed(1), harcanan: +used.toFixed(3), mPerL: used > 0 ? Math.round(dist / used) : null, zombiAracIcinde: inside };
+  });
+  log('yakıt/zombi', econ);
+  check(econ.mPerL && econ.mPerL > 140, 'yakıt verimi en az ~140 m/L olmalı (eskiden ≈62)', econ);
+  check(econ.zombiAracIcinde === false, 'zombi park hâlindeki aracın içinden geçmemeli', econ);
+
   // 7) eski kayıt: terk edilmiş araçları içermeyen araç listesi yüklenince eksik doğum noktaları eklenir
   const mig = await evalJS(page, () => {
     const S = window.__game.session, V = S.vehicles;

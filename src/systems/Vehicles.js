@@ -33,7 +33,8 @@ export const VEHICLE_TYPES = {
   tractor: { name: 'Traktör', mass: 3400, drive: 'rwd', susp: 0.4, model: 'tractor', scale: 1.7, maxSpeed: 11, accel: 4.2, fuelCap: 50, trunk: 12, hp: 200, grip: 1.25, offroad: 1.0, seats: 1, len: 3.8, wid: 2.3 },
   // terk edilmiş şehir arabaları (eskiden sürülemez dekor): Kenney binek modelleri, aynı fizik/görsel boru hattı
   hatchback: { name: 'Hatchback', mass: 1100, drive: 'fwd', model: 'hatchback', scale: 1.7, maxSpeed: 27, accel: 8, fuelCap: 40, trunk: 12, hp: 90, grip: 1.0, offroad: 0.5, seats: 4, len: 4.6, wid: 2.0 },
-  taxi: { name: 'Taksi', mass: 1300, drive: 'fwd', model: 'taxi', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 14, hp: 100, grip: 1.0, offroad: 0.5, seats: 4, len: 4.5, wid: 2.2 },
+  // taksi modelinin kendisi diğer binek modellerinden 1,3 kat büyük: ölçek 1,7 yerine 1,3 (6,0 m yerine 4,6 m boy)
+  taxi: { name: 'Taksi', mass: 1300, drive: 'fwd', model: 'taxi', scale: 1.3, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 14, hp: 100, grip: 1.0, offroad: 0.5, seats: 4, len: 4.5, wid: 2.2 },
   sports: { name: 'Spor Sedan', mass: 1250, drive: 'rwd', model: 'sports-sedan', scale: 1.7, maxSpeed: 33, accel: 9.5, fuelCap: 45, trunk: 8, hp: 85, grip: 1.08, offroad: 0.35, seats: 2, len: 4.2, wid: 2.0 },
   suvlux: { name: 'Lüks SUV', mass: 1900, drive: 'awd', susp: 0.38, model: 'suv-luxury', scale: 1.7, maxSpeed: 27, accel: 7.8, fuelCap: 60, trunk: 20, hp: 130, grip: 1.0, offroad: 0.8, seats: 4, len: 4.7, wid: 2.25 },
   boat: { name: 'Martı Teknesi', mass: 1800, model: 'boat-large', scale: 3.4, maxSpeed: 15, accel: 4, fuelCap: 60, trunk: 20, hp: 100, grip: 0.6, offroad: 0, seats: 6, len: 6, wid: 3, water: true, needs: [['engine_part', 1], ['repair_kit', 1]] },
@@ -57,6 +58,8 @@ const UP = new THREE.Vector3(0, 1, 0);
 const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _ax = new THREE.Vector3(), _qq = new THREE.Quaternion();
 const _rt = new THREE.Vector3();
 const HEADLIGHT_POOL = 4;
+// yakıt tüketim çarpanı: eskiden 6 (≈62 m/L; %20 yakıtla doğan aile arabası 560 m gidebiliyordu), şimdi 2 (≈190 m/L)
+const FUEL_USE = 2;
 const VIS_LOD2 = 40 * 40; // boş aracın görsel ayrıntılarının (kabin, kapı/bagaj kanatları, far camları, stop lambaları) çizildiği en uzak mesafe²
 
 class Vehicle {
@@ -132,7 +135,7 @@ class Vehicle {
       pivot.add(spin);
       g.updateMatrixWorld(true);
       for (const w of gw.meshes) spin.attach(w);
-      this.wheels.push({ pivot, spin, front: wc.z > 0, mesh: gw.meshes[0], local: wc.clone(), radius: Math.max(0.2, (wb.max.y - wb.min.y) / 2), base: wc.y });
+      this.wheels.push({ pivot, spin, front: wc.z > 0, mesh: gw.meshes[0], local: wc.clone(), radius: Math.max(0.2, (wb.max.y - wb.min.y) / 2), base: wc.y, halfW: (wb.max.x - wb.min.x) / 2 });
     }
     this.modelH = box.max.y - box.min.y;
     m.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
@@ -229,6 +232,9 @@ class Vehicle {
     let ws = this.wheels.map((w) => ({ x: w.local.x, y: w.local.y, z: w.local.z, r: w.radius, front: w.front, vis: w }));
     if (ws.length < 2) ws = [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sz]) => ({ x: sx * d.wid * 0.4, y: 0.4, z: sz * d.len * 0.33, r: 0.4, front: sz > 0, vis: null }));
     if (d.bike) ws = ws.flatMap((w) => [{ ...w, x: -0.3 }, { ...w, x: 0.3, vis: null }]); // motosiklet: dengeleyici çift tekerlek
+    // orta hatta tek "tekerlek" görünen geniş aks (karavan modelinde iki teker tek düğüm): gerçek iz genişliğinde iki
+    // fizik tekerleği (yoksa araç iki noktada durup yana yatıyordu)
+    else ws = ws.flatMap((w) => (w.vis && w.vis.halfW > d.wid * 0.25 && Math.abs(w.x) < 0.3 ? [{ ...w, x: -(w.vis.halfW - 0.15) }, { ...w, x: w.vis.halfW - 0.15, vis: null }] : [w]));
     this.pw = [];
     for (const w of ws) {
       ctrl.addWheel({ x: w.x, y: w.y + lift * 0.75, z: w.z }, { x: 0, y: -1, z: 0 }, { x: -1, y: 0, z: 0 }, lift, w.r);
@@ -328,7 +334,9 @@ export class Vehicles {
       S.emit({ k: 'veh_seat', id: v.id, seat, player: from });
     });
     S.on('vehicle_exit', (p, from) => { const v = this.byId(p.id); if (v) { const seat = v.seats.indexOf(from); if (seat >= 0) S.emit({ k: 'veh_seat', id: v.id, seat, player: null }); } });
-    S.on('vehicle_state', (p, from) => { const v = this.byId(p.id); if (v && v.seats[0] === from) { this.applyState(v, p); S.net.active && S.net.broadcast({ t: 'evt', e: { k: 'veh_state', ...p } }, from); } });
+    // sürücü durumu: host kendi sürdüğü aracın durumunu da bu işleyiciden geçirir (S.act → applyAction); applyState
+    // gövdeyi kinematiğe (ağdan izlenen) çevirdiği için host kendi aracını süremiyordu → yalnız uzak sürücüde uygula
+    S.on('vehicle_state', (p, from) => { const v = this.byId(p.id); if (v && v.seats[0] === from) { if (from !== S.localId) this.applyState(v, p); S.net.active && S.net.broadcast({ t: 'evt', e: { k: 'veh_state', ...p } }, from); } });
     S.on('vehicle_damage', (p) => { const v = this.byId(p.id); if (v) S.emit({ k: 'veh_set', id: v.id, health: Math.max(0, v.health - p.dmg * (1 - (v.upgrades.armor ? 0.4 : 0) - (v.def.armor || 0))), dir: p.dir || null }); });
     // araçla yapıya/kapıya/pencereye çarpma: yerel sürücü tespit eder, host hasarı uygular
     S.on('vehicle_ram', (p, from) => {
@@ -720,7 +728,13 @@ export class Vehicles {
     if (inWater) { v.body.setLinearDamping(2.5); if (!v._sunk && local) { v._sunk = true; S.ui.toast('Araç suya battı! Motor stop etti.', 'danger'); S.act('vehicle_damage', { id: v.id, dmg: 40 }); } }
     else if (v._sunk) { v._sunk = false; v.body.setLinearDamping(0.04); }
     // yakıt
-    if (canRun && eng) v.fuel = Math.max(0, v.fuel - (Math.abs(speed) * 0.0025 + 0.004) * h * 6);
+    if (canRun && eng) {
+      v.fuel = Math.max(0, v.fuel - (Math.abs(speed) * 0.0025 + 0.004) * h * FUEL_USE);
+      if (v.fuel <= 0) S.ui.toast('Yakıt bitti! Bagajın arkasından bidonla doldurabilirsin.', 'warn', 5);
+    }
+    // gaza basılıyor ama motor çalışmıyor: nedenini bir kez söyle
+    if (local && thr && !canRun && !v._noRunT) { v._noRunT = 4; S.ui.toast(v.broken ? `${v.def.name} bozuk — önce onarılmalı.` : v.wrecked ? 'Araç hurda.' : inWater ? 'Motor su aldı.' : 'Depo boş — bidonla yakıt doldur.', 'warn', 3); }
+    if (v._noRunT > 0) v._noRunT = Math.max(0, v._noRunT - h);
     // zombilere çarpma (yerel sürücü tespit eder, host'a bildirir)
     if (local && Math.abs(speed) > 4) this.hitZombies(v, speed);
   }
@@ -796,7 +810,7 @@ export class Vehicles {
     _qq.setFromEuler(new THREE.Euler(Math.sin(S.t * 1.3) * 0.03, v.yaw, Math.sin(S.t * 1.1) * 0.04, 'YXZ'));
     v.body.setNextKinematicTranslation({ x: v.pos.x, y: v.pos.y, z: v.pos.z });
     v.body.setNextKinematicRotation({ x: _qq.x, y: _qq.y, z: _qq.z, w: _qq.w });
-    if (canRun && thr) v.fuel = Math.max(0, v.fuel - (Math.abs(v.speed) * 0.0025 + 0.004) * h * 6);
+    if (canRun && thr) v.fuel = Math.max(0, v.fuel - (Math.abs(v.speed) * 0.0025 + 0.004) * h * FUEL_USE);
   }
 
   /** Ters dönmüş aracı tekerlekleri üzerine geri koy */
@@ -861,9 +875,10 @@ export class Vehicles {
   }
 
   /** Araçların içinden geçmeyi önle (oyuncu itme) */
-  pushOut(x, z, r, y) {
+  pushOut(x, z, r, y, includeLocal = false) {
     for (const v of this.list) {
-      if (v === this.local) continue;
+      if (v === this.local && !includeLocal) continue;
+      if (v.water) continue;
       const dx = x - v.pos.x, dz = z - v.pos.z;
       if (Math.abs(dx) > 6 || Math.abs(dz) > 6) continue;
       if (y > v.pos.y + 1.7) continue;

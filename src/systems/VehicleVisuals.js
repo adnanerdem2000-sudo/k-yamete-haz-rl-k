@@ -58,6 +58,12 @@ export class VehicleVisuals {
     this.cracked = false;
     this.headGlows = [];
     this.seatMeshes = [];
+    // boya malzemesi bulunamayan (tek doku atlaslı: pikap, askerî kamyon, motosiklet) modellerde gövde kabuğunun
+    // malzemesi araç başına klonlanır: hasar koyulaşması ve boya bu araçlarda da çalışır
+    if (!v.bodyMats.length && !d.water) {
+      const sh = this.bodyShell();
+      if (sh && !Array.isArray(sh.material)) { sh.material = sh.material.clone(); sh.material.userData.vehShell = true; v.bodyMats.push(sh.material); }
+    }
     if (!d.water) {
       this.buildCabin(L, W, H);
       this.buildDoors(L, W, H);
@@ -154,7 +160,7 @@ export class VehicleVisuals {
   buildDoors(L, W, H) {
     const v = this.v, d = v.def;
     if (d.bike) return;
-    const paint = v.bodyMats[0] || new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const paint = v.bodyMats[0] && !v.bodyMats[0].map ? v.bodyMats[0] : new THREE.MeshStandardMaterial({ color: 0x888888 });
     const doorH = clamp(H * 0.55, 0.7, 1.25), doorW = clamp(L * 0.24, 0.8, 1.25), y0 = clamp(H * 0.2, 0.25, 0.6);
     const rows = Math.min(2, Math.max(1, Math.ceil(d.seats / 2)));
     for (let r = 0; r < rows; r++) {
@@ -177,7 +183,7 @@ export class VehicleVisuals {
   buildTrunk(L, W, H) {
     const v = this.v, d = v.def;
     if (d.bike || d.trunk <= 0) return;
-    const paint = v.bodyMats[0] || new THREE.MeshStandardMaterial({ color: 0x888888 });
+    const paint = v.bodyMats[0] && !v.bodyMats[0].map ? v.bodyMats[0] : new THREE.MeshStandardMaterial({ color: 0x888888 });
     const pivot = new THREE.Group();
     const lidH = clamp(H * 0.32, 0.3, 0.7), lidW = W * 0.8;
     pivot.position.set(0, clamp(H * 0.62, 0.7, 1.6), -L * 0.5 + 0.02);
@@ -279,7 +285,9 @@ export class VehicleVisuals {
     const v = this.v;
     const body = this.bodyShell();
     if (!body) return;
-    const parts = body.parent && body.parent !== v.model ? body.parent.children.filter((o) => o.isMesh && o.geometry && o.geometry.attributes.position) : [body];
+    // kardeş parçalar yalnız gövde bir alt grubun içindeyse (model kökü ya da araç kökü değil: oradaki stop lambası
+    // kutuları ezilmesin)
+    const parts = body !== v.model && body.parent && body.parent !== v.model && body.parent !== v.root ? body.parent.children.filter((o) => o.isMesh && o.geometry && o.geometry.attributes.position) : [body];
     v.root.updateMatrixWorld(true);
     const rootInv = new THREE.Matrix4().copy(v.root.matrixWorld).invert();
     // göçük merkezi ve büyüklüğü kabuğun araç çerçevesindeki kutusundan
@@ -360,6 +368,7 @@ export class VehicleVisuals {
   dispose() {
     this.group.traverse((o) => { if (o.isMesh && o.geometry) o.geometry.dispose(); });
     for (const h of this.headGlows) h.mesh.material.dispose(); // araç başına klonlanan far camı malzemesi
+    for (const m of this.v.bodyMats) if (m.userData.vehShell) m.dispose();
     if (this.v.model) this.v.model.traverse((o) => { if (o.isMesh && o.userData.dentGeo) { o.geometry.dispose(); o.userData.dentGeo = false; } if (o.isMesh) for (const m of [].concat(o.material)) if (m && m.userData.vehGlass && m.userData.owner === this.v.model) m.dispose(); });
     this.v.root.remove(this.group);
   }

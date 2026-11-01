@@ -103,6 +103,8 @@ export class World {
       // bölge temasına göre ek bitki örtüsü (dağ çamları/kayalar, kıyı çalıları, çiftlik çitleri, mahalle bahçeleri…)
       this.biomePlants = scatterBiomes(this.vegetation, this, new RNG('biomes'));
       this.vegetation.build(this.root);
+      for (const c of this._carFootprints || []) this.physics.remove(c); // terk edilmiş arabaların geçici ayak izleri
+      this._carFootprints = null;
     });
     await step('Su ve gökyüzü…', () => {
       this.water = new Water(this.terrain, this.root);
@@ -409,6 +411,10 @@ export class World {
       return;
     }
     this.reserveContainerId(); // eski "araç bagajı" konteynerinin kimliği atlanır: sonraki w: kimlikleri kaymaz
+    // geçici ayak izi: bitki/kaya/moloz saçılımı eskisi gibi bu noktayı boş bıraksın (araç ağacın içinde doğmasın);
+    // gerçek araç dinamik gövde olduğu için çarpıştırıcı saçılımdan sonra, yol ızgarasından önce kaldırılır
+    const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot)), hw = 1.0 * c + 2.2 * sn, hd = 1.0 * sn + 2.2 * c, by = this.terrain.heightAt(x, z);
+    (this._carFootprints = this._carFootprints || []).push(this.physics.addBoxC(x, z, hw, hd, by, by + 1.6, { kind: 'vehicle' }));
     const r2 = new RNG('abandoned:' + x.toFixed(1) + ':' + z.toFixed(1));
     const type = name === 'car_sedan' && r2.next() < 0.3 ? 'sports' : ABANDONED_TYPE[name] || 'sedan';
     const n = (this._abandonedN = (this._abandonedN || 0) + 1);
@@ -564,7 +570,8 @@ export class World {
     this.interactable('rain_spot', -272.5, T.heightAt(-272.5, 132) + 0.5, 132, { name: 'Yağmur Suyu Deposu Yeri' });
     // eve ait araç park yeri (garaj) ve eski pikap (tamir gerekli)
     const gp = home.frame.pt(21.5, 6.5);
-    this.vehicleSpawns.push({ id: 'family_car', type: 'sedan', x: gp.x, z: gp.z, rot: Math.PI, fuel: 0.45, health: 0.8, owned: true });
+    // burnu garaj kapısına dönük (eskiden arka duvara bakıyordu: kapalı garajdan geri geri çıkmak gerekiyordu)
+    this.vehicleSpawns.push({ id: 'family_car', type: 'sedan', x: gp.x, z: gp.z, rot: 0, fuel: 0.45, health: 0.8, owned: true });
     this.vehicleSpawns.push({ id: 'old_pickup', type: 'pickup', x: -243, z: 128, rot: 0.3, fuel: 0.1, health: 0.35, broken: true });
     // posta kutuları ve çöp kutuları ev önlerinde
     for (const b of this.buildings) {

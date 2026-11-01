@@ -650,6 +650,8 @@ export class Zombies {
     const r = S.world.physics.resolveCircle(zb.x + mx, zb.z + mz, zb.def.dog ? 0.3 : zb.def.hp > 300 ? 0.5 : 0.33, zb.y, zb.y + 1.7, 0.5, null, _res);
     // oyuncu/botların içinden geçme: 0,75 m içindeyse dışarı it (saldırı menzili 1 m+ olduğundan vuruş etkilenmez)
     for (const p of this._players || []) { const dx = r.x - p.x, dz = r.z - p.z, dd = dx * dx + dz * dz; if (dd < 0.5625 && dd > 1e-6 && Math.abs((p.y || zb.y) - zb.y) < 1.6) { const d = Math.sqrt(dd), k = (0.75 - d) / d; r.x += dx * k; r.z += dz * k; } }
+    // araçlar dinamik Rapier gövdesi (çarpışma dünyasında yok): park etmiş/sürülen aracın içinden geçme
+    if (S.vehicles) { const pv = S.vehicles.pushOut(r.x, r.z, zb.def.dog ? 0.3 : 0.33, zb.y, true); r.x = pv.x; r.z = pv.z; }
     const g = S.world.physics.groundHeight(r.x, r.z, zb.y, 0.55);
     if (g - zb.y > 0.6) return; // çok yüksek
     zb.x = r.x; zb.z = r.z;

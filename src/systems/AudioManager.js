@@ -10,6 +10,9 @@ const CHORDS = [[57, 60, 64], [53, 57, 60], [48, 55, 60], [55, 59, 62], [57, 60,
 const midi = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const SOUND_ALIAS = { jump: 'jump_a', craft: 'build', open: 'pickup', close: 'toggle' };
 
+// sentezlenen döngü türleri (örnek ses dosyası gerekmeyenler; diğerleri buffers[kind] ile)
+const LOOP_KINDS = new Set(['engine', 'engine-motorcycle', 'rain', 'wind', 'fire', 'static', 'gravel', 'generator']);
+
 export class AudioManager {
   constructor(game) {
     this.game = game;
@@ -345,6 +348,9 @@ export class AudioManager {
     if (!this.ctx) return null;
     let L = this.loops.get(id);
     if (!L) {
+      // bilinmeyen tür: düğüm kurmadan dön (eskiden kazanç/panner kurulup bağlanıyor, sonra null dönülüyordu → her
+      // karede sızıntı)
+      if (!LOOP_KINDS.has(kind) && !this.buffers[kind]) return null;
       const c = this.ctx;
       const g = c.createGain(); g.gain.value = 0;
       let pan = null, hp = null, lp = null;

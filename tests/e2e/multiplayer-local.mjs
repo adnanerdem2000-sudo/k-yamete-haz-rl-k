@@ -1,6 +1,7 @@
 // Çok oyunculu test: aynı tarayıcıda iki sekme (BroadcastChannel taşıyıcısı).
 // Oda kur → katıl → karakter seç/hazır → başlat → oyuncu eşitleme, istemci eylemi, zombi anlık görüntüsü.
-export default async ({ page, url, shot, wait, evalJS, log, newPage }) => {
+export default async ({ page, url, shot, wait, evalJS, log, newPage, errors }) => {
+  const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
   const A = page;
   await A.goto(url, { waitUntil: 'load' });
   await A.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 150000 });
@@ -39,6 +40,42 @@ export default async ({ page, url, shot, wait, evalJS, log, newPage }) => {
   await evalJS(A, () => { const S = window.__game.session; const r = [...S.players.values()].find((p) => !p.isLocal); S.zombies.spawn('normal', r.pos.x + 8, r.pos.z + 8, {}); });
   await wait(3000);
   log('istemci zombi görünümleri', await evalJS(B, () => window.__game.session.zombies.views.size), 'host zombi', await evalJS(A, () => window.__game.session.zombies.list.size));
+  // host kendi aracını sürer: eskiden kendi durum mesajı host işleyicisinden geçip aracı kinematiğe (ağdan izlenen)
+  // çeviriyordu ve host araç süremiyordu. İstemci de aracın hareketini görmeli.
+  const d0 = await evalJS(A, () => {
+    const g = window.__game, S = g.session, T = S.world.terrain;
+    g.ui.onLockChange = () => {};
+    for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel();
+    const v = S.vehicles.list.find((x) => x.abandoned && !x.broken && !x.wrecked && x.health / x.maxHealth > 0.5);
+    v.fuel = v.maxFuel;
+    const px = v.pos.x + Math.cos(v.yaw) * v.def.wid, pz = v.pos.z - Math.sin(v.yaw) * v.def.wid;
+    S.local.spawnAt(px, T.heightAt(px, pz) + 0.1, pz, 0);
+    S.act('vehicle_enter', { id: v.id, seat: 0 });
+    window.__hv = { id: v.id, p0: v.pos.toArray() };
+    return { id: v.id, p0: v.pos.toArray().map((x) => +x.toFixed(1)) };
+  });
+  await wait(1500);
+  const b0 = await evalJS(B, (id) => window.__game.session.vehicles.byId(id).pos.toArray(), d0.id);
+  await evalJS(A, () => { const g = window.__game; window.__gas = setInterval(() => g.input.down.add('KeyW'), 50); window.__t0 = g.session.t; });
+  // yazılım GPU'sunda iki sekmeyle kare hızı çok düşük: süre yerine oyun zamanı/yol bekle (en çok 60 sn)
+  for (let i = 0; i < 30; i++) {
+    await wait(2000);
+    const st = await evalJS(A, () => { const S = window.__game.session, v = S.vehicles.byId(window.__hv.id), [x, , z] = window.__hv.p0; return { yol: Math.hypot(v.pos.x - x, v.pos.z - z), t: S.t - window.__t0 }; });
+    if (st.yol > 12 || st.t > 12) break;
+  }
+  const d1 = await evalJS(A, () => {
+    const g = window.__game, S = g.session, v = S.vehicles.byId(window.__hv.id);
+    clearInterval(window.__gas); g.input.down.delete('KeyW');
+    const [x, y, z] = window.__hv.p0;
+    return { mode: S.local.mode, surucu: S.vehicles.local === v, kinematik: v.body.isKinematic(), yol: +Math.hypot(v.pos.x - x, v.pos.z - z).toFixed(1), oyunSn: +(S.t - window.__t0).toFixed(1), p: v.pos.toArray().map((q) => +q.toFixed(1)) };
+  });
+  await wait(3000);
+  const b1 = await evalJS(B, (id) => window.__game.session.vehicles.byId(id).pos.toArray(), d0.id);
+  const bMoved = +Math.hypot(b1[0] - b0[0], b1[2] - b0[2]).toFixed(1);
+  log('host sürüşü', d0, d1, 'istemcide yol', bMoved);
+  check(d1.surucu && !d1.kinematik && d1.yol > 8, 'host kendi aracını sürebilmeli (gövde dinamik kalmalı)', d1);
+  check(bMoved > 5, 'istemci host aracının hareketini görmeli', { bMoved, d1 });
+  await evalJS(A, () => { const S = window.__game.session; if (S.vehicles.local) S.vehicles.exitLocal(); });
   // sohbet
   await evalJS(B, () => window.__game.session.act('chat', { text: 'Merhaba takım!' }));
   await wait(1500);
