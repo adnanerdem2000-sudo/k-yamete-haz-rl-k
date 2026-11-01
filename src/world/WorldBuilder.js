@@ -22,6 +22,13 @@ import { buildExtraRegions } from './RegionsExtra.js';
 import { RNG } from '../core/util.js';
 
 const CAR_MODELS = ['car_sedan', 'car_hatchback', 'car_stationwagon', 'car_taxi'];
+// ilk dış mekân konteynerinin kimlik numarası (w:747): eski sürümde 69 binanın içindeki konteyner sayısı; kayıt uyumu
+// için sabit (bkz. container())
+const W_CONTAINER_BASE = 747;
+// terk edilmiş arabanın (eski dekor modeli adına göre) sürülebilir araç türü — Vehicles.VEHICLE_TYPES
+const ABANDONED_TYPE = { car_sedan: 'sedan', car_hatchback: 'hatchback', car_stationwagon: 'suvlux', car_taxi: 'taxi' };
+// tozlu, solmuş boyalar (terk edilmiş arabalar)
+const DUSTY_PAINTS = ['#7a2e2a', '#2f4f6f', '#4a5d3a', '#8a7a5a', '#5c5c5c', '#c8c2b0', '#6b3f5a', '#30363d', '#9a6a2a', '#3f6b6b'];
 
 export class World {
   constructor(assets, scene) {
@@ -359,9 +366,17 @@ export class World {
     return null;
   }
 
+  /**
+   * Dış mekân konteyneri. Kimlik 'w:N' kayıtlarda ve hoş geldin paketinde konteyner durumunun (arandı/boş/içerik
+   * tohumu) anahtarıdır. Eskiden N = paylaşılan dizinin uzunluğuydu (bina içi konteynerler de sayılıyordu): yeni bir
+   * bina ya da bina içi konteyner bütün w: kimliklerini kaydırıyor, eski kayıtta aranmış çöp konteynerinin durumu
+   * başka bir konteynere düşüyordu. Artık ayrı sayaç: ilk dış konteyner her zaman w:747 (eski sürümün özgün bina içi
+   * konteyner sayısı) ve sıra yalnız dış konteynerlerle ilerler. Kaldırılan eski bir dış konteynerin kimliği
+   * reserveContainerId() ile atlanır (ör. artık gerçek araç olan terk edilmiş arabanın bagajı).
+   */
   container(type, x, z, opts = {}) {
     const y = (opts.y ?? this.terrain.heightAt(x, z)) + (opts.h ?? 0.8);
-    const ct = { id: `w:${this.containers.length}`, type, label: opts.label, x, y, z, building: null, room: null, size: opts.size || 1, locked: opts.locked || 0, special: opts.special || null };
+    const ct = { id: opts.id || this.reserveContainerId(), type, label: opts.label, x, y, z, building: null, room: null, size: opts.size || 1, locked: opts.locked || 0, special: opts.special || null };
     const L = { dumpster: 'Çöp Konteyneri', car_trunk: 'Bagaj', trash_can: 'Çöp Kutusu', mailbox: 'Posta Kutusu', cooler: 'Soğutucu', military_crate: 'Askerî Sandık', fishing_box: 'Balıkçı Sandığı', container: 'Konteyner', backpack: 'Terk Edilmiş Çanta', tent: 'Çadır', barrel: 'Varil', crate: 'Sandık', pallet: 'Palet Yükü', tank: 'Yakıt Tankı', body: 'Ceset', cabin_chest: 'Ahşap Sandık', vending: 'Otomat' };
     ct.label = ct.label || L[type] || 'Konteyner';
     this.containers.push(ct);
@@ -374,14 +389,37 @@ export class World {
     return it;
   }
 
+  reserveContainerId() { return 'w:' + (W_CONTAINER_BASE + (this._wc = (this._wc || 0) + 1) - 1); }
+
   lamp(x, y, z, kind = 'street', color = 0xffd9a0) { this.lamps.push({ x, y, z, kind, color }); }
 
+  /**
+   * Terk edilmiş araba. Yanmış olanlar sürülemez enkaz (dekor + arama konteyneri). Diğerleri GERÇEK araçtır
+   * (Vehicles: binilir, sürülür, bagajı açılır): yakıtı az; kaza yapmışların sağlığı düşük ve bir kısmı küçük bir
+   * onarım ister (patlak lastik / bitik akü; İngiliz anahtarı her onarımda gerekir). Bagaj içeriği eski "araç bagajı"
+   * yağma tablosundan araç bagajına dolar. Ek rastgelelik ayrı tohumdan: dünya üreticisinin ortak rng akışı eskisi gibi
+   * tek çekiliş tüketir (başka yerleşimler kaymaz).
+   */
   abandonedCar(x, z, rot, rng, crashed = false, burnt = false) {
     const name = rng.pick(CAR_MODELS);
-    this.placeModel('vehicles', name, x, z, rot, 4.6, { collide: true, kind: 'vehicle', variant: burnt ? 'burnt' : null });
-    this.container('car_trunk', x - Math.sin(rot) * 1.8, z - Math.cos(rot) * 1.8, { h: 0.7, label: burnt ? 'Yanmış Araç Enkazı' : crashed ? 'Kaza Yapmış Araç' : 'Terk Edilmiş Araç Bagajı' });
-    // kaza yeri izleri (Dressing): yanık, cam kırığı, yağ, fren izi; yananların yanında moloz
     if (crashed) (this._crashSpots = this._crashSpots || []).push({ x, z, r: 3.2, kinds: burnt ? ['scorch', 'glass', 'oil', 'stain'] : ['glass', 'oil', 'skid'], rubble: burnt });
+    if (burnt) {
+      this.placeModel('vehicles', name, x, z, rot, 4.6, { collide: true, kind: 'vehicle', variant: 'burnt' });
+      this.container('car_trunk', x - Math.sin(rot) * 1.8, z - Math.cos(rot) * 1.8, { h: 0.7, label: 'Yanmış Araç Enkazı' });
+      return;
+    }
+    this.reserveContainerId(); // eski "araç bagajı" konteynerinin kimliği atlanır: sonraki w: kimlikleri kaymaz
+    const r2 = new RNG('abandoned:' + x.toFixed(1) + ':' + z.toFixed(1));
+    const type = name === 'car_sedan' && r2.next() < 0.3 ? 'sports' : ABANDONED_TYPE[name] || 'sedan';
+    const n = (this._abandonedN = (this._abandonedN || 0) + 1);
+    const spec = { id: 'ab' + n, type, x, z, rot, abandoned: true, loot: 'car_trunk', fuel: +(0.05 + r2.next() * 0.25).toFixed(2), health: +(crashed ? 0.25 + r2.next() * 0.25 : 0.55 + r2.next() * 0.35).toFixed(2) };
+    if (type !== 'taxi') spec.paint = r2.pick(DUSTY_PAINTS);
+    if (crashed) {
+      const f = r2.next();
+      if (f < 0.35) Object.assign(spec, { broken: true, needs: [['tire', 1]], fault: 'Patlak lastik' });
+      else if (f < 0.6) Object.assign(spec, { broken: true, needs: [['car_battery', 1]], fault: 'Bitik akü' });
+    }
+    this.vehicleSpawns.push(spec);
   }
 
   buildPanes() {

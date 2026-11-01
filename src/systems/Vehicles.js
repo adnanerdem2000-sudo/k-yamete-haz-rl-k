@@ -2,6 +2,7 @@
 // devrilme önleyici, çarpışma hasarı), yakıt, bagaj, tamir, geliştirme, farlar, korna, zombilere çarpma.
 // Sürücü istemci aracın fiziğinde otoritedir; diğerleri aracı ağdan kinematik olarak izler.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { VehicleVisuals, prepareWindowMaterials } from './VehicleVisuals.js';
 import { ITEMS } from '../data/items.js';
 import { clamp, damp, dampAngle, wrapAngle, dist, uid, lerp } from '../core/util.js';
@@ -30,6 +31,11 @@ export const VEHICLE_TYPES = {
   military: { name: 'Askerî Kamyon', mass: 6200, drive: 'awd', susp: 0.45, model: 'vehicle-truck-green', scale: 2.0, maxSpeed: 23, accel: 6.5, fuelCap: 90, trunk: 40, hp: 260, grip: 0.95, offroad: 1.0, seats: 6, len: 5.4, wid: 2.7, armor: 0.3 },
   armored: { name: 'Zırhlı Minibüs', mass: 5600, drive: 'awd', susp: 0.4, model: 'delivery-truck', scale: 1.85, maxSpeed: 20, accel: 5, fuelCap: 80, trunk: 30, hp: 320, grip: 0.9, offroad: 0.7, seats: 6, len: 5.8, wid: 2.7, armor: 0.5, needs: [['car_battery', 1], ['engine_part', 2]] },
   tractor: { name: 'Traktör', mass: 3400, drive: 'rwd', susp: 0.4, model: 'tractor', scale: 1.7, maxSpeed: 11, accel: 4.2, fuelCap: 50, trunk: 12, hp: 200, grip: 1.25, offroad: 1.0, seats: 1, len: 3.8, wid: 2.3 },
+  // terk edilmiş şehir arabaları (eskiden sürülemez dekor): Kenney binek modelleri, aynı fizik/görsel boru hattı
+  hatchback: { name: 'Hatchback', mass: 1100, drive: 'fwd', model: 'hatchback', scale: 1.7, maxSpeed: 27, accel: 8, fuelCap: 40, trunk: 12, hp: 90, grip: 1.0, offroad: 0.5, seats: 4, len: 4.6, wid: 2.0 },
+  taxi: { name: 'Taksi', mass: 1300, drive: 'fwd', model: 'taxi', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 14, hp: 100, grip: 1.0, offroad: 0.5, seats: 4, len: 4.5, wid: 2.2 },
+  sports: { name: 'Spor Sedan', mass: 1250, drive: 'rwd', model: 'sports-sedan', scale: 1.7, maxSpeed: 33, accel: 9.5, fuelCap: 45, trunk: 8, hp: 85, grip: 1.08, offroad: 0.35, seats: 2, len: 4.2, wid: 2.0 },
+  suvlux: { name: 'Lüks SUV', mass: 1900, drive: 'awd', susp: 0.38, model: 'suv-luxury', scale: 1.7, maxSpeed: 27, accel: 7.8, fuelCap: 60, trunk: 20, hp: 130, grip: 1.0, offroad: 0.8, seats: 4, len: 4.7, wid: 2.25 },
   boat: { name: 'Martı Teknesi', mass: 1800, model: 'boat-large', scale: 3.4, maxSpeed: 15, accel: 4, fuelCap: 60, trunk: 20, hp: 100, grip: 0.6, offroad: 0, seats: 6, len: 6, wid: 3, water: true, needs: [['engine_part', 1], ['repair_kit', 1]] },
 };
 
@@ -50,6 +56,8 @@ const _res = { x: 0, z: 0, hit: false, hits: [] };
 const UP = new THREE.Vector3(0, 1, 0);
 const _up = new THREE.Vector3(), _fw = new THREE.Vector3(), _ax = new THREE.Vector3(), _qq = new THREE.Quaternion();
 const _rt = new THREE.Vector3();
+const HEADLIGHT_POOL = 4;
+const VIS_LOD2 = 40 * 40; // boş aracın görsel ayrıntılarının (kabin, kapı/bagaj kanatları, far camları, stop lambaları) çizildiği en uzak mesafe²
 
 class Vehicle {
   constructor(session, spec) {
@@ -64,6 +72,10 @@ class Vehicle {
     this.health = (spec.health ?? 1) * this.def.hp;
     this.fuel = (spec.fuel ?? 0.5) * this.def.fuelCap;
     this.broken = !!spec.broken;
+    // araç başına arıza: tür varsayılanı yerine (ör. terk edilmiş arabada patlak lastik / bitik akü)
+    this.needs = spec.needs || null;
+    this.fault = spec.fault || null;
+    this.abandoned = !!spec.abandoned;
     this.upgrades = spec.upgrades || {};
     this.paint = spec.paint || null;
     this.trunk = spec.trunk || new Array(this.def.trunk).fill(null);
@@ -128,24 +140,26 @@ class Vehicle {
     this.bodyMats = [];
     m.traverse((o) => { if (o.isMesh && o.material && /paint|body|car/i.test(o.material.name)) { o.material = o.material.clone(); this.bodyMats.push(o.material); } });
     if (this.paint) this.applyPaint(this.paint);
-    // farlar
+    // farlar: araç başına gerçek SpotLight yerine "sanal far" (araç yerel konum/hedef, yoğunluk, menzil). Sahnede sabit
+    // sayıda havuz ışığı vardır; her kare kameraya en yakın, farı açık araçlara atanır (Vehicles.updateHeadlightPool).
+    // Eskiden araç başına iki SpotLight vardı (21 araç = 42 ışık): three.js kapalı (yoğunluk 0) ışıkları da her
+    // malzemenin gölgelendiricisinde döngüye katar; havuzla ışık sayısı 4'te sabit, far açıp kapamak derleme tetiklemez.
     this.headlights = [];
     for (const s of [-1, 1]) {
-      const sl = new THREE.SpotLight(0xfff4d6, 0, 40, 0.5, 0.5, 1.2);
-      sl.position.set(s * this.def.wid * 0.3, 0.9, this.def.len * 0.45);
-      const t = new THREE.Object3D(); t.position.set(s * 0.6, 0, this.def.len * 0.45 + 12);
-      g.add(sl); g.add(t); sl.target = t;
-      this.headlights.push(sl);
+      this.headlights.push({ intensity: 0, distance: 40, position: new THREE.Vector3(s * this.def.wid * 0.3, 0.9, this.def.len * 0.45), target: new THREE.Vector3(s * 0.6, 0, this.def.len * 0.45 + 12) });
     }
     // stop/fren ve geri vites lambaları: arka köşelerde ışıyan paneller (yayılım parlaklığı + bloom)
     this.tailMat = new THREE.MeshStandardMaterial({ color: 0x4a0606, emissive: 0xff0600, emissiveIntensity: 0.1, roughness: 0.4 });
     this.revMat = new THREE.MeshStandardMaterial({ color: 0x9a9a9a, emissive: 0xfff4e0, emissiveIntensity: 0, roughness: 0.4 });
     // grup uzayı: model merkezlenmiş (taban y=0), ön +Z → arka yüz min z
     const rearZ = box.min.z - c.z - 0.02, ly = (box.max.y - box.min.y) * 0.5, lx = (box.max.x - box.min.x) * 0.36;
-    for (const sx of [-1, 1]) {
-      const tl = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.12, 0.04), this.tailMat); tl.position.set(sx * lx, ly, rearZ); g.add(tl);
-      const rl = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.08, 0.04), this.revMat); rl.position.set(sx * (lx - 0.2), ly - 0.1, rearZ); g.add(rl);
-    }
+    // iki stop + iki geri vites lambası malzeme başına tek ağ (2 çizim); uzaktaki boş araçta gizlenir (Vehicles.update)
+    const tg = [-1, 1].map((sx) => new THREE.BoxGeometry(0.26, 0.12, 0.04).translate(sx * lx, ly, rearZ));
+    const rg = [-1, 1].map((sx) => new THREE.BoxGeometry(0.1, 0.08, 0.04).translate(sx * (lx - 0.2), ly - 0.1, rearZ));
+    const tl = new THREE.Mesh(mergeGeometries(tg, false), this.tailMat), rl = new THREE.Mesh(mergeGeometries(rg, false), this.revMat);
+    for (const q of [...tg, ...rg]) q.dispose();
+    g.add(tl, rl);
+    this.tailMeshes = [tl, rl];
     this.brakeGlow = 0;
     this.root = g;
     this.armorVis = null;
@@ -159,7 +173,9 @@ class Vehicle {
 
   applyPaint(col) {
     this.paint = col;
-    for (const m of this.bodyMats) m.color.set(col);
+    // hasar tonlaması temel rengi userData.base'te tutar: boya o tabanı da değiştirmeli, yoksa onarım eski renge döner
+    for (const m of this.bodyMats) { m.color.set(col); if (m.userData.base) m.userData.base.color.set(col); }
+    if (this.visuals) this.visuals.applyDamage(this.health / this.maxHealth); // mevcut hasar koyulaşması yeni renge uygulanır
   }
 
   updateUpgradeVisuals() {
@@ -280,6 +296,8 @@ class Vehicle {
 
   dispose() {
     if (this.visuals) { this.visuals.dispose(); this.visuals = null; }
+    for (const m of this.tailMeshes || []) m.geometry.dispose();
+    if (this.tailMat) { this.tailMat.dispose(); this.revMat.dispose(); }
     this.s.game.scene.remove(this.root);
     const pw = this.s.game.phys;
     if (pw && this.body) { try { pw.w.removeRigidBody(this.body); } catch { /* zaten silinmiş */ } if (pw.vehicleBodies) pw.vehicleBodies.delete(this.body); this.body = null; }
@@ -294,6 +312,14 @@ export class Vehicles {
     const S = session;
     const pw = S.game.phys;
     if (pw) { pw.addHook((h) => this.physicsStep(h)); pw.addAfter(() => this.afterStep()); }
+    // far ışığı havuzu: en yakın iki aracın iki farı (sayı sabit → gölgelendirici yeniden derlenmez)
+    this.lightPool = [];
+    for (let i = 0; i < HEADLIGHT_POOL; i++) {
+      const sl = new THREE.SpotLight(0xfff4d6, 0, 40, 0.5, 0.5, 1.2);
+      sl.castShadow = false; sl.name = 'headlight-pool-' + i;
+      S.game.scene.add(sl); S.game.scene.add(sl.target);
+      this.lightPool.push(sl);
+    }
     S.on('vehicle_enter', (p, from) => {
       const v = this.byId(p.id);
       if (!v) return;
@@ -346,6 +372,7 @@ export class Vehicles {
       }
       if (e.fuel !== undefined) v.fuel = e.fuel;
       if (e.broken !== undefined) v.broken = e.broken;
+      if (e.fault !== undefined) v.fault = e.fault;
       if (e.upgrades) { v.upgrades = e.upgrades; v.updateUpgradeVisuals(); }
       if (e.paint) v.applyPaint(e.paint);
       if (e.trunk) { v.trunk = e.trunk; S.ui.refreshStorage && S.ui.refreshStorage(v.id); }
@@ -355,9 +382,22 @@ export class Vehicles {
   }
 
   init() {
-    for (const sp of this.s.world.vehicleSpawns) this.list.push(new Vehicle(this.s, sp));
+    for (const sp of this.s.world.vehicleSpawns) this.list.push(this.spawn(sp));
     // karavan kamp alanında
     this.list.push(new Vehicle(this.s, { id: 'rv', type: 'rv', x: -224, z: -38, rot: 0.6, fuel: 0.25, health: 0.7 }));
+  }
+
+  /** Dünya doğum noktasından araç; terk edilmiş arabanın bagajı eski "araç bagajı" yağma tablosundan (tohumlu) dolar */
+  spawn(sp) {
+    const v = new Vehicle(this.s, sp);
+    if (sp.loot && !sp.trunk && this.s.loot) {
+      try {
+        const g = this.s.loot.generate({ id: 'trunk:' + sp.id, type: sp.loot, x: sp.x, z: sp.z });
+        const items = g.slots.filter(Boolean);
+        for (let i = 0; i < v.trunk.length && i < items.length; i++) v.trunk[i] = items[i];
+      } catch (e) { console.warn('Araç bagajı üretilemedi', sp.id, e); }
+    }
+    return v;
   }
 
   byId(id) { return this.list.find((v) => v.id === id); }
@@ -370,18 +410,20 @@ export class Vehicles {
     const backX = v.pos.x - Math.sin(v.yaw) * v.def.len * 0.55, backZ = v.pos.z - Math.cos(v.yaw) * v.def.len * 0.55;
     if (v.wrecked) { out.push({ act: 'repair', label: `${v.def.name}: Hurda (Tamir: 2 tamir seti)`, holdTime: 2, x: v.pos.x, z: v.pos.z, range: 3.5 }); return out; }
     if (v.broken) {
-      const need = (v.def.needs || []).map(([id, n]) => `${ITEMS[id].name} x${n}`).join(', ');
-      out.push({ act: 'fix', label: `${v.def.name} bozuk — Onar (${need})`, holdTime: 2, x: v.pos.x, z: v.pos.z, range: 3.6 });
+      const need = [...(v.needs || v.def.needs || []).map(([id, n]) => `${ITEMS[id].name} x${n}`), 'İngiliz anahtarı'].join(', ');
+      out.push({ act: 'fix', label: `${v.def.name}${v.fault ? ': ' + v.fault : ' bozuk'} — Onar (${need})`, holdTime: 2, x: v.pos.x, z: v.pos.z, range: 3.6 });
     } else if (!v.water || S.local.pos.distanceTo(v.pos) < 6) {
-      if (!v.seats[0]) out.push({ act: 'drive', label: `Sür: ${v.def.name} (Yakıt %${Math.round(v.fuel / v.maxFuel * 100)})`, x: sideX, z: sideZ, range: 2.6, bias: -0.3 });
-      else if (v.seats.some((s, i) => i > 0 && !s)) out.push({ act: 'ride', label: `Yolcu Ol: ${v.def.name}`, x: sideX, z: sideZ, range: 2.6 });
+      // binme seçeneği oyuncunun yaklaştığı yanda (eskiden yalnız sürücü yanında: öbür yandan yaklaşınca "Sür" çıkmıyordu)
+      const side = pl && pl.pos ? (((pl.pos.x - v.pos.x) * Math.cos(v.yaw) - (pl.pos.z - v.pos.z) * Math.sin(v.yaw)) >= 0 ? 1 : -1) : 1;
+      const sx = v.pos.x + Math.cos(v.yaw) * v.def.wid * 0.55 * side, sz = v.pos.z - Math.sin(v.yaw) * v.def.wid * 0.55 * side;
+      if (!v.seats[0]) out.push({ act: 'drive', label: `Sür: ${v.def.name} (Yakıt %${Math.round(v.fuel / v.maxFuel * 100)})`, x: sx, z: sz, range: 2.6, bias: -0.3 });
+      else if (v.seats.some((s, i) => i > 0 && !s)) out.push({ act: 'ride', label: `Yolcu Ol: ${v.def.name}`, x: sx, z: sz, range: 2.6 });
     }
     out.push({ act: 'trunk', label: `Bagaj: ${v.def.name}`, x: backX, z: backZ, range: 2.0 });
     const jc = S.inventory.slots.find((s) => s && s.id === 'jerrycan' && (s.fuel || 0) > 0);
     if (jc && v.fuel < v.maxFuel - 1) out.push({ act: 'refuel', label: `Yakıt Doldur (${Math.round(jc.fuel)} L)`, holdTime: 2, x: backX, z: backZ, range: 2.4 });
     if (v.health < v.maxHealth * 0.98 && S.inventory.has('repair_kit')) out.push({ act: 'repair', label: `Tamir Et (Sağlık %${Math.round(v.health / v.maxHealth * 100)})`, holdTime: 3, x: v.pos.x, z: v.pos.z, range: 3.2 });
     out.push({ act: 'upgrade', label: `Araç Geliştirme: ${v.def.name}`, x: v.pos.x + Math.sin(v.yaw) * v.def.len * 0.5, z: v.pos.z + Math.cos(v.yaw) * v.def.len * 0.5, range: 2.2, bias: 0.3 });
-    void pl;
     return out;
   }
 
@@ -418,7 +460,7 @@ export class Vehicles {
         break;
       }
       case 'fix': {
-        const needs = v.def.needs || [];
+        const needs = v.needs || v.def.needs || [];
         const miss = needs.filter(([id, n]) => !inv.has(id, n));
         if (miss.length) { S.ui.toast('Eksik: ' + miss.map(([id, n]) => `${ITEMS[id].name} (${inv.count(id)}/${n})`).join(', '), 'warn', 5); return; }
         if (!S.build.hasTool('wrench')) { S.ui.toast('İngiliz anahtarı gerekli.', 'warn'); return; }
@@ -426,7 +468,7 @@ export class Vehicles {
         const tm = S.interact.timed(20, mul);
         S.interact.startHold(`${v.def.name} onarılıyor…`, tm.real + 2, () => {
           for (const [id, n] of needs) inv.remove(id, n);
-          S.act('vehicle_set', { id: v.id, broken: false });
+          S.act('vehicle_set', { id: v.id, broken: false, fault: null });
           S.quests.onRepair('vehicle:' + v.id);
           if (tm.extra) S.time.advance(tm.extra);
           S.ui.toast(`${v.def.name} çalışıyor!`, 'good', 3);
@@ -586,6 +628,9 @@ export class Vehicles {
     const t = v.body.translation();
     const inWater = T.heightAt(t.x, t.z) < T.waterLevelAt(t.x, t.z) - 1.0 && t.y < T.waterLevelAt(t.x, t.z) - 0.2;
     const canRun = local && !v.broken && !v.wrecked && v.fuel > 0 && !inWater;
+    // park hâlinde uyuyan şasi: sürücü yok ve Rapier gövdeyi uyuttuysa denetleyici (tekerlek ışınları), tork ve hasar
+    // hesapları atlanır — uyuyan gövdeyi denetleyici zaten hareket ettirmez. Çarpan bir cisim gövdeyi Rapier'de uyandırır.
+    if (!local && v.body.isSleeping()) { v.speed = 0; v.skid = 0; const lvv = v.lastVel; lvv.x = 0; lvv.y = 0; lvv.z = 0; return; }
     const speed = ctrl.currentVehicleSpeed();
     v.speed = speed;
     const hpF = v.health / v.maxHealth;
@@ -640,7 +685,8 @@ export class Vehicles {
     _ax.crossVectors(_up, UP);
     const tilt = Math.asin(clamp(_ax.length(), 0, 1));
     const strength = d.bike ? 1 : tilt > 0.45 ? 0.35 : 0.08;
-    if (tilt > 0.02 && _up.y > 0) {
+    // park hâlinde yalnız devrilmek üzereyken (eğimde hafif yatık park etmiş araç her adım uyandırılıp hiç uyumuyordu)
+    if (tilt > 0.02 && _up.y > 0 && (local || tilt > 0.45)) {
       const av = v.body.angvel();
       const k = v.mass * strength * 9;
       v.body.applyTorqueImpulse({ x: (_ax.x * k - av.x * v.mass * 0.6 * strength) * h, y: 0, z: (_ax.z * k - av.z * v.mass * 0.6 * strength) * h }, true);
@@ -866,12 +912,20 @@ export class Vehicles {
   update(dt) {
     const S = this.s;
     const alpha = S.game.phys ? S.game.phys.alpha : 1;
+    const cam = S.game.gfx && S.game.gfx.camera ? S.game.gfx.camera.position : null;
     for (const v of this.list) {
       if (v === this.local) continue;
       this.syncVisual(v, alpha);
-      for (const h of v.headlights) h.intensity = v.lights ? (v.upgrades.lights ? 60 : 35) : 0;
+      for (const h of v.headlights) h.intensity = v.lights && v.seats[0] ? (v.upgrades.lights ? 60 : 35) : 0;
       this.updateTailLights(v, dt, false);
-      if (v.visuals) v.visuals.update(dt);
+      // görsel ayrıntı düzeyi: kabin içi, kapı/bagaj kanatları ve far camları ~60 m ötede gizlenir (boş araçlarda);
+      // terk edilmiş arabalar da gerçek araç olunca şehirde çizim çağrısı sayısı böyle sınırlanır
+      const near = !cam || v.seats.some(Boolean) || v.root.position.distanceToSquared(cam) < VIS_LOD2;
+      if (v.tailMeshes && v.tailMeshes[0].visible !== near) for (const m of v.tailMeshes) m.visible = near;
+      if (v.visuals) {
+        if (v.visuals.group.visible !== near) v.visuals.group.visible = near;
+        if (near) v.visuals.update(dt);
+      }
       if (v._trunkLocal && !(S.ui.panel && S.ui.panel.name === 'storage' && S.ui.panels.storage && S.ui.panels.storage.id === v.id)) { v._trunkLocal = false; S.act('vehicle_set', { id: v.id, trunkOpen: false }); }
       this.dustTrail(v, dt);
       if (v.seats[0]) S.audio.loop('engine_' + v.id, v.def.sound || 'engine', { at: v.pos, vol: 0.3 + Math.abs(v.speed) / v.def.maxSpeed * 0.4, rate: 0.6 + Math.abs(v.speed) / v.def.maxSpeed * 1.4, range: 60 });
@@ -887,20 +941,49 @@ export class Vehicles {
       this.dustTrail(v, dt);
       if (v.health < v.maxHealth * 0.3 && Math.random() < dt * 3) S.fx.smoke(v.pos.x + Math.sin(v.yaw) * v.def.len * 0.4, v.pos.y + 1.2, v.pos.z + Math.cos(v.yaw) * v.def.len * 0.4, 1, '#555555');
     }
+    this.updateHeadlightPool();
+  }
+
+  /** Sanal farları havuz ışıklarına ata: farı yanan araçlar kameraya uzaklığa göre sıralanır, en yakınlar ışık alır.
+   *  Uzak araçların far camı (ışıyan panel) yine parlar; yalnız sahneye ışık düşürmez. */
+  updateHeadlightPool() {
+    const pool = this.lightPool;
+    if (!pool || !pool.length) return;
+    const cam = this.s.game.gfx && this.s.game.gfx.camera ? this.s.game.gfx.camera.position : null;
+    const lit = [];
+    for (const v of this.list) if (v.root && v.headlights.some((h) => h.intensity > 0)) lit.push(v);
+    if (cam && lit.length > 1) lit.sort((a, b) => a.root.position.distanceToSquared(cam) - b.root.position.distanceToSquared(cam));
+    let k = 0;
+    for (const v of lit) {
+      for (const h of v.headlights) {
+        if (k >= pool.length || h.intensity <= 0) continue;
+        const sl = pool[k++];
+        sl.intensity = h.intensity; sl.distance = h.distance;
+        sl.position.copy(h.position).applyMatrix4(v.root.matrixWorld);
+        sl.target.position.copy(h.target).applyMatrix4(v.root.matrixWorld);
+        sl.updateMatrixWorld(); sl.target.updateMatrixWorld();
+      }
+    }
+    for (; k < pool.length; k++) pool[k].intensity = 0;
   }
 
   serialize() {
-    return this.list.map((v) => ({ id: v.id, type: v.type, x: v.pos.x, y: v.pos.y, z: v.pos.z, rot: v.yaw, q: [v.quat.x, v.quat.y, v.quat.z, v.quat.w], health: v.health / v.def.hp, fuel: v.fuel / v.def.fuelCap, broken: v.broken, upgrades: v.upgrades, paint: v.paint, trunk: v.trunk, wrecked: v.wrecked }));
+    return this.list.map((v) => ({ id: v.id, type: v.type, x: v.pos.x, y: v.pos.y, z: v.pos.z, rot: v.yaw, q: [v.quat.x, v.quat.y, v.quat.z, v.quat.w], health: v.health / v.def.hp, fuel: v.fuel / v.def.fuelCap, broken: v.broken, needs: v.needs, fault: v.fault, abandoned: v.abandoned, upgrades: v.upgrades, paint: v.paint, trunk: v.trunk, wrecked: v.wrecked }));
   }
   load(arr) {
     for (const v of this.list) v.dispose();
     this.list = [];
     if (!arr) { this.init(); return; }
-    for (const o of arr) { const v = new Vehicle(this.s, o); if (o.wrecked) v.wrecked = true; this.list.push(v); }
+    for (const o of arr) { if (!VEHICLE_TYPES[o.type]) continue; const v = new Vehicle(this.s, o); if (o.wrecked) v.wrecked = true; this.list.push(v); }
+    // eski kayıtlar: o sürümde olmayan doğum noktaları (ör. eskiden sürülemez dekor olan terk edilmiş arabalar) eklenir;
+    // araçlar oyunda hiç silinmediği için kayıtta olmayan kimlik = kayıttan sonra eklenmiş araç
+    for (const sp of this.s.world.vehicleSpawns) if (!this.byId(sp.id)) this.list.push(this.spawn(sp));
   }
   dispose() {
     for (const v of this.list) v.dispose();
     this.list = [];
+    for (const sl of this.lightPool || []) { this.s.game.scene.remove(sl); this.s.game.scene.remove(sl.target); sl.dispose(); }
+    this.lightPool = [];
     // oturum Game.endSession dışında kapanırsa da (yeniden bağlanma, host göçü) yerel araç döngüleri susar
     for (const k of ['engine_local', 'skid_local', 'tire_local']) this.s.audio.stopLoop(k);
   }

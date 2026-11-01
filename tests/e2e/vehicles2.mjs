@@ -46,10 +46,13 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     if (!v || !v.visuals) return null;
     let glass = 0, glassT = 0;
     v.model.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) if (m && /window|glass/i.test(m.name)) { glass++; if (m.transparent && m.opacity < 1) glassT++; } });
-    return { kapi: v.visuals.doors.length, bagaj: !!v.visuals.trunk, direksiyon: !!v.visuals.steer, koltuk: v.visuals.seatMeshes.length, farCam: v.visuals.headGlows.length, cam: glass, saydamCam: glassT };
+    let visMesh = 0; v.visuals.group.traverse((o) => { if (o.isMesh) visMesh++; });
+    return { kapi: v.visuals.doors.length, bagaj: !!v.visuals.trunk, direksiyon: !!v.visuals.steer, koltuk: v.visuals.seatCount, kabinAg: v.visuals.seatMeshes.length, gorselAg: visMesh, farCam: v.visuals.headGlows.length, cam: glass, saydamCam: glassT };
   });
   log('görseller', vis);
-  check(vis && vis.kapi >= 2 && vis.bagaj && vis.direksiyon && vis.koltuk >= 6 && vis.farCam === 2, 'kabin/kapı/bagaj/far görselleri', vis);
+  check(vis && vis.kapi >= 2 && vis.bagaj && vis.direksiyon && vis.koltuk >= 4 && vis.farCam === 2, 'kabin/kapı/bagaj/far görselleri', vis);
+  // sabit kabin parçaları malzemeye göre birleşik (koltuk, açık koltuk, panel/konsol/kolon): araç başına az çizim
+  check(vis && vis.kabinAg >= 2 && vis.kabinAg <= 3 && vis.gorselAg <= 14, 'kabin parçaları birleştirilmiş (az çizim çağrısı)', vis);
   check(vis && vis.cam > 0 && vis.saydamCam === vis.cam, 'araç camları yarı saydam', vis);
   // 2) binme → kapı sallanır; bagaj paneli → kapak açılır; farlar
   const doors = await evalJS(page, () => {

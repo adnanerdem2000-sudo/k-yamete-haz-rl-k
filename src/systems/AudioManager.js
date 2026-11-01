@@ -372,8 +372,10 @@ export class AudioManager {
       } else if (kind === 'generator') {
         src = c.createOscillator(); src.type = 'square'; src.frequency.value = 48;
         const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 260; src.connect(f); f.connect(g); src.start();
-      } else if (kind === 'ambience' && this.buffers.ambience) {
-        src = c.createBufferSource(); src.buffer = this.buffers.ambience; src.loop = true; src.connect(g); src.start();
+      } else if (this.buffers[kind]) {
+        // yüklenmiş örnek sesten döngü (ortam sesi, patinaj 'skid' …). Önce 'skid' türü tanınmadığı için null dönüyor,
+        // araç patinaj sesi hiç çalmıyordu
+        src = c.createBufferSource(); src.buffer = this.buffers[kind]; src.loop = true; src.connect(g); src.start();
       } else return null;
       L = L || { g, pan, src };
       L.pan = pan; L.hp = hp; L.lp = lp;

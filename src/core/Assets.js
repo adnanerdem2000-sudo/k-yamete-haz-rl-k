@@ -169,4 +169,8 @@ function prepareMaterial(m) {
   // Kenney "window" malzemeleri hafif yansıtıcı olsun
   if (/window|glass/i.test(m.name)) { m.roughness = 0.15; m.metalness = 0.1; }
   if (/light/i.test(m.name) && m.color) { m.emissive = m.color.clone(); m.emissiveIntensity = 0.25; }
+  // KHR_materials_transmission (araç kitinde 'lightFront', 'lightBlue'): three.js görüş alanında geçirgen bir malzeme
+  // varken BÜTÜN opak sahneyi ek bir geçirgenlik tamponuna bir kez daha çizer (çizim çağrısı ×2). Küçük far/tepe
+  // lambası camlarında görünür farkı yok: geçirgenlik kapatılır (renk ve ışıma kalır)
+  if (m.transmission > 0) { m.transmission = 0; m.thickness = 0; }
 }
