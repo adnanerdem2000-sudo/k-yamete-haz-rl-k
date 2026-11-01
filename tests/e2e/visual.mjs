@@ -98,6 +98,7 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     else if (screen === 'lobby') { await g.net.host({ local: true, settings: { aiFill: 0 } }); g.ui.menus.openLobby(); }
     g.menu.t = 40; g.time = 1000;
     for (let i = 0; i < 3; i++) g.menu.update(0.016);
+    if (g.icons && g.icons.flush) g.icons.flush(200); // eşya simgeleri döngüde karede bir çizilir: donmuş döngüde hepsini çiz
     window.__wind.uTime.value = 1000;
     for (let i = 0; i < 2; i++) g.gfx.render(0.016, 1000);
     return true;
@@ -146,12 +147,14 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     const P = S.local.pos;
     const fwd = (yaw) => [Math.sin(yaw), Math.cos(yaw)];
     if (what === 'car-out' || what === 'car-in') {
-      const v = S.vehicles.list.filter((q) => !q.wrecked && !q.water).sort((a, b) => Math.hypot(a.pos.x - P.x, a.pos.z - P.z) - Math.hypot(b.pos.x - P.x, b.pos.z - P.z))[0];
+      // bina (garaj) dışındaki en yakın otomobil; kamera araç dönüşümünden: ön sol 3/4 dış görünüş, sürücü gözü iç görünüş
+      const v = S.vehicles.list.filter((q) => !q.wrecked && !q.water && !q.def.bike && !(S.world.buildingAt && S.world.buildingAt(q.pos.x, q.pos.z))).sort((a, b) => Math.hypot(a.pos.x - P.x, a.pos.z - P.z) - Math.hypot(b.pos.x - P.x, b.pos.z - P.z))[0];
       if (!v) return false;
       v.root.updateMatrixWorld(true);
-      const [fx, fz] = fwd(v.yaw);
-      if (what === 'car-out') { cam.position.set(v.pos.x - fx * 5.2 + fz * 3.4, v.pos.y + 2.1, v.pos.z - fz * 5.2 - fx * 3.4); cam.lookAt(v.pos.x, v.pos.y + 0.7, v.pos.z); }
-      else { cam.position.set(v.pos.x + fz * 0.36 - fx * 0.15, v.pos.y + 1.2, v.pos.z - fx * 0.36 - fz * 0.15); cam.lookAt(v.pos.x + fx * 6 + fz * 0.36, v.pos.y + 1.0, v.pos.z + fz * 6 - fx * 0.36); }
+      const W = v.def.wid, Lh = v.def.len, sy = Math.min(0.85, Math.max(0.32, (v.modelH || 1.5) * 0.25));
+      const loc = (x, y, z) => v.root.localToWorld(new THREE.Vector3(x, y, z));
+      if (what === 'car-out') { cam.position.copy(loc(W * 1.5, 1.45, Lh * 1.25)); cam.lookAt(loc(0, 0.6, 0)); }
+      else { cam.position.copy(loc(W * 0.2, sy + 0.8, Lh * 0.06 - 0.08)); cam.lookAt(loc(W * 0.2, sy + 0.62, Lh * 0.06 + 8)); }
       cam.updateMatrixWorld();
       g.world.cullInteriors(cam.position, 1);
       window.__draw(12, cam);
@@ -173,7 +176,7 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       const zx = z.x, zz = z.z, zy = z.y; // nav ızgarasında en yakın boş hücreye taşınmış olabilir
       z.yaw = Math.atan2(-fx, -fz); z.state = 'idle'; z.speed = 0;
       for (let i = 0; i < 4; i++) S.zombies.updateViews(0.016);
-      cam.position.set(zx - fx * 2.2, zy + 1.65, zz - fz * 2.2); cam.lookAt(zx, zy + 1.45, zz);
+      cam.position.set(zx - fx * 1.35, zy + 1.6, zz - fz * 1.35); cam.lookAt(zx, zy + 1.4, zz);
       cam.updateMatrixWorld();
       window.__draw(16, cam);
       return true; // zombi görüntüden sonra kaldırılır
