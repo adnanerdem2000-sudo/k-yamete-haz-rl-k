@@ -44,9 +44,9 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
   const series = new Map(); // pid -> [ts, totals]
   for (const ev of events.sort((a, b) => a.ts - b.ts)) {
     const d = ev.args && ev.args.dumps; if (!d) continue;
-    const pt = d.process_totals; if (pt) { const arr = series.get(ev.pid) || []; series.set(ev.pid, arr); arr.push(`${Math.round((ev.ts || 0) / 1e6)}s:${Math.round(parseInt(pt.resident_set_bytes || '0', 16) / 1048576)}MB`); }
+    const pt = d.process_totals; if (pt) { const arr = series.get(ev.pid) || []; series.set(ev.pid, arr); const rsb = pt.resident_set_bytes || pt.private_footprint_bytes || '0'; arr.push(`${Math.round((ev.ts || 0) / 1e6)}s:${Math.round(parseInt(rsb, 16) / 1048576)}MB`); }
     const al = d.allocators; if (!al) continue;
-    const m = new Map(); byPid.set(ev.pid, m); // en son döküm kazanır
+    const m = byPid.get(ev.pid) || new Map(); byPid.set(ev.pid, m); // aynı pid'in dökümleri birleştirilir, aynı ad için en son değer
     for (const [name, a] of Object.entries(al)) {
       const sz = a.attrs && (a.attrs.effective_size || a.attrs.size); if (!sz) continue;
       const v = parseInt(sz.value, 16); if (!(v > 0)) continue;
@@ -60,5 +60,6 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
     lines.push(`pid ${pid}: ` + rows.map(([n, v]) => `${n}=${(v / 1048576).toFixed(0)}MB`).join(' '));
   }
   fs.writeFileSync(OUT, lines.join('\n') + '\n');
+  fs.writeFileSync(OUT.replace(/\.txt$/, '') + '.dumps.json', JSON.stringify(events));
   log(lines.join('\n'));
 };

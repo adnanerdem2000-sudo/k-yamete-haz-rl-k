@@ -82,6 +82,11 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
     write('B oyunda');
     await evalJS(A, (dis) => { const n = window.__game.net; if (dis.includes('snap')) n.sendSnapshots = () => {}; if (dis.includes('pdata')) n.pdataT = 1e9; if (dis.includes('ping')) n.pingT = 1e9; if (dis.includes('evt')) n.broadcast = () => {}; }, dis);
     await evalJS(B, (dis) => { const n = window.__game.net; if (dis.includes('state')) n.sendState = () => {}; if (dis.includes('ping')) n.pingT = 1e9; }, dis);
+    // NORENDER=A,B: ilgili sayfada WebGL çizimi kapatılır (oyun mantığı sürer) — tarayıcı süreci büyümesi çizime mi bağlı?
+    const nr = (process.env.NORENDER || '').split(',').filter(Boolean);
+    if (nr.includes('A')) await evalJS(A, () => { window.__game.gfx.render = () => {}; });
+    if (nr.includes('B')) await evalJS(B, () => { window.__game.gfx.render = () => {}; });
+    write('çizim kapalı: ' + nr.join(','));
   } else {
     await evalJS(A, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
     await A.waitForFunction(() => window.__game.state === 'playing', null, { timeout: 300000 });
