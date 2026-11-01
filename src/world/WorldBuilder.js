@@ -569,14 +569,16 @@ export class World {
     // posta kutuları ve çöp kutuları ev önlerinde
     for (const b of this.buildings) {
       if (b.spec.region !== 'mahalle' || !b.tpl.label.includes('Ev')) continue;
+      // sonradan eklenen evler: kendi tohumu ve bina adlı konteyner kimliği (ortak rng akışı ve w: sırası kaymasın)
+      const late = !!b.spec.localIds, r = late ? new RNG('mb:' + b.id) : rng;
       const fr = b.frame;
       const p = fr.pt(b.tpl.w - 1.0, b.tpl.d + 5.3);
       const n = fr.dir(0, 1);
-      P.mailbox(g, p.x, T.heightAt(p.x, p.z), p.z, Math.atan2(n.x, n.z), rng.pick(['#2c3e50', '#c0392b', '#27ae60', '#2980b9']));
-      this.container('mailbox', p.x, p.z, { h: 1.1 });
+      P.mailbox(g, p.x, T.heightAt(p.x, p.z), p.z, Math.atan2(n.x, n.z), r.pick(['#2c3e50', '#c0392b', '#27ae60', '#2980b9']));
+      this.container('mailbox', p.x, p.z, { h: 1.1, id: late ? b.id + ':mailbox' : undefined });
       const tb = fr.pt(b.tpl.w + 1.2, b.tpl.d - 1);
-      this.instancer.place('props', 'trash_A', tb.x, T.heightAt(tb.x, tb.z), tb.z, rng.next() * 6, 6);
-      this.container('trash_can', tb.x, tb.z, { h: 0.6 });
+      this.instancer.place('props', 'trash_A', tb.x, T.heightAt(tb.x, tb.z), tb.z, r.next() * 6, 6);
+      this.container('trash_can', tb.x, tb.z, { h: 0.6, id: late ? b.id + ':trash' : undefined });
     }
     // park
     const px = -194, pz = 212;

@@ -310,6 +310,24 @@ export const TEMPLATES = {
     extDoors: [{ side: 'F', at: 12, w: 4, kind: 'garage' }, { side: 'F', at: 3, w: 1.0, kind: 'metal' }],
     windowSpacing: 5,
   }),
+  // ---------------------------------------------------------------- DAĞ KÖYÜ CAMİSİ (eskiden içi dolu katı kutu)
+  mosque: () => ({
+    label: 'Köy Camisi', w: 12, d: 12, H: 6.0, noHip: true,
+    style: { ext: 'plaster', extColor: '#f2efe6', trimColor: '#d9d4c6', intColor: '#f6f1e4', roof: 'flat', floor: 'woodfloor', roofColor: '#d9d4c6' },
+    rooms: [R('hall', 'mosque_hall', 0, 0, 12, 12, { name: 'Harim' })],
+    extDoors: [{ side: 'F', at: 6, w: 1.6, kind: 'wood', name: 'Cami Kapısı' }],
+    windows: [
+      { side: 'F', at: 2.6, w: 1.3, h: 2.0, sill: 2.0 }, { side: 'F', at: 9.4, w: 1.3, h: 2.0, sill: 2.0 },
+      { side: 'L', at: 3.5, w: 1.3, h: 2.2, sill: 1.6 }, { side: 'L', at: 8.5, w: 1.3, h: 2.2, sill: 1.6 },
+      { side: 'R', at: 3.5, w: 1.3, h: 2.2, sill: 1.6 }, { side: 'R', at: 8.5, w: 1.3, h: 2.2, sill: 1.6 },
+    ],
+  }),
+  // ---------------------------------------------------------------- ŞEHİR KULELERİ (kit kabuğu + prosedürel zemin kat)
+  // Downtown City MegaKit modeli dış kabuk olarak kalır; içine zemin kat kurulur (BuildingGen.buildKitBuilding).
+  // w/d = modelin zemin kat iç odası (BuildingGen.KIT_SHELLS), ön cephe z = d; kapı modelin kendi boşluğunda.
+  kit_small: (spec) => kitTemplate(spec, 'Building_Small_1', 11.6, 11.6, 3.0, 'wood'),
+  kit_medium: (spec) => kitTemplate(spec, 'Building_Medium_2_001', 13.6, 11.56, 3.4, 'glass2'),
+  kit_large: (spec) => kitTemplate(spec, 'Building_Large_2', 19.6, 15.59, 3.4, 'glass2'),
   // ---------------------------------------------------------------- LAB
   lab: () => ({
     label: 'Araştırma Tesisi', w: 28, d: 18, H: 4,
@@ -323,3 +341,36 @@ export const TEMPLATES = {
     windowSpacing: 5,
   }),
 };
+
+// Şehir kulesi zemin katı düzenleri (spec.variant). Kapı ön cephede (z = d), x = kule kapısının şablondaki yeri:
+// küçük/orta 6,8, büyük 8,8 — ön oda o noktayı içerir.
+const KIT_LAYOUTS = {
+  Building_Small_1: {
+    cafe: { label: 'Kafe', floor: 'woodfloor', rooms: [R('hall', 'cafe_hall', 0, 4.6, 11.6, 11.6), R('kitchen', 'kitchen', 0, 0, 7.4, 4.6, { pro: true }), R('wc', 'bathroom', 7.4, 0, 11.6, 4.6)], links: [['hall', 'kitchen', 'wood', 3.5], ['hall', 'wc']] },
+    clothes: { label: 'Butik', rooms: [R('hall', 'shop_hall', 0, 4, 11.6, 11.6, { goods: 'clothes', name: 'Giyim Butiği' }), R('storage', 'shop_storage', 0, 0, 11.6, 4)], links: [['hall', 'storage']] },
+    // salon ön cephe boyunca tam genişlik: kapı (x 6,8) bir bölme duvarının köşesine yakın kalmasın (yan duvara dizilen
+    // eşya kapının arkasını kapatıyordu)
+    flat: { label: 'Apartman Dairesi', floor: 'woodfloor', rooms: [R('living', 'living', 0, 5.4, 11.6, 11.6), R('bed', 'bedroom', 0, 0, 5.8, 5.4, { beds: 1 }), R('kitchen', 'kitchen', 5.8, 0, 9.2, 5.4), R('bath', 'bathroom', 9.2, 0, 11.6, 5.4)], links: [['living', 'bed'], ['living', 'kitchen', 'arch'], ['living', 'bath']] },
+    electronics: { label: 'Elektronikçi', rooms: [R('hall', 'shop_hall', 0, 3.8, 11.6, 11.6, { goods: 'electronics', name: 'Elektronik Mağazası' }), R('storage', 'shop_storage', 0, 0, 11.6, 3.8)], links: [['hall', 'storage']] },
+  },
+  Building_Medium_2_001: {
+    market: { label: 'Şehir Marketi', rooms: [R('hall', 'shop_hall', 0, 4, 13.6, 11.56, { goods: 'food' }), R('storage', 'shop_storage', 0, 0, 9, 4), R('office', 'office', 9, 0, 13.6, 4)], links: [['hall', 'storage'], ['hall', 'office']] },
+    restaurant: { label: 'Izgara Salonu', rooms: [R('hall', 'restaurant_hall', 0, 4.5, 13.6, 11.56), R('kitchen', 'kitchen', 0, 0, 9, 4.5, { pro: true }), R('wc', 'bathroom', 9, 0, 13.6, 4.5)], links: [['hall', 'kitchen', 'wood', 4.5], ['hall', 'wc']] },
+    sports: { label: 'Spor Mağazası', rooms: [R('hall', 'shop_hall', 0, 4, 13.6, 11.56, { goods: 'sports', name: 'Spor & Kamp' }), R('storage', 'shop_storage', 0, 0, 13.6, 4)], links: [['hall', 'storage']] },
+    tools: { label: 'Hırdavatçı', floor: 'concrete', rooms: [R('hall', 'shop_hall', 0, 4, 13.6, 11.56, { goods: 'tools' }), R('storage', 'shop_storage', 0, 0, 13.6, 4, { goods: 'tools' })], links: [['hall', 'storage']] },
+  },
+  Building_Large_2: {
+    office: { label: 'İş Merkezi', floor: 'carpet', rooms: [R('lobby', 'lobby', 0, 7.6, 19.6, 15.59), R('o1', 'office', 0, 0, 9.8, 7.6), R('o2', 'office', 9.8, 0, 19.6, 7.6)], links: [['lobby', 'o1'], ['lobby', 'o2']] },
+    clinic: { label: 'Özel Klinik', rooms: [R('lobby', 'lobby_med', 0, 8, 19.6, 15.59, { name: 'Bekleme Salonu' }), R('ward', 'ward', 0, 0, 9.8, 8, { name: 'Muayene Odası' }), R('pharm', 'pharmacy_store', 9.8, 0, 19.6, 8, { name: 'İlaç Deposu' })], links: [['lobby', 'ward', 'double'], ['lobby', 'pharm']] },
+    shops: { label: 'Çarşı Pasajı', rooms: [R('hall', 'lobby', 0, 7.6, 19.6, 15.59, { name: 'Pasaj', mallHall: true }), R('s1', 'shop_hall', 0, 0, 9.8, 7.6, { goods: 'electronics', name: 'Telefoncu' }), R('s2', 'shop_hall', 9.8, 0, 19.6, 7.6, { goods: 'clothes', name: 'Ayakkabıcı' })], links: [['hall', 's1', 'double'], ['hall', 's2', 'double']] },
+  },
+};
+
+function kitTemplate(spec, kit, w, d, H, doorKind) {
+  const L = KIT_LAYOUTS[kit][spec.variant] || Object.values(KIT_LAYOUTS[kit])[0];
+  return {
+    label: spec.name || L.label, w, d, H, kit, doorKind, noHip: true,
+    style: { ext: 'concrete', extColor: '#bdb6aa', trimColor: '#5f5f5f', intColor: spec.intColor || '#ebe5da', ceilColor: '#d6d1c8', roof: 'flat', floor: L.floor || 'tiles' },
+    rooms: L.rooms.map((r) => ({ ...r })), links: L.links,
+  };
+}

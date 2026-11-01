@@ -21,7 +21,9 @@ let DOOR_ID = 1, WIN_ID = 1;
 export class Door {
   constructor(o) {
     Object.assign(this, o);
-    this.id = 'd' + (DOOR_ID++);
+    // kimlik: eski binalarda yapım sırasına bağlı genel sayaç (d1…, kayıtlarla uyumlu); sonradan eklenen binalarda
+    // (spec.localIds) bina adı + sıra: genel sayaç ilerlemez, eski kapı kimlikleri kaymaz
+    this.id = o.id || 'd' + (DOOR_ID++);
     this.open01 = 0; this.target = 0;
     this.maxHp = o.kind === 'metal' ? 320 : o.kind === 'garage' ? 400 : o.kind === 'glass2' ? 120 : 160;
     this.hp = this.maxHp;
@@ -33,7 +35,7 @@ export class Door {
 }
 
 export class WindowPane {
-  constructor(o) { Object.assign(this, o); this.id = 'w' + (WIN_ID++); this.maxHp = 40; this.hp = 40; this.broken = false; this.barricade = 0; }
+  constructor(o) { Object.assign(this, o); this.id = o.id || 'w' + (WIN_ID++); this.maxHp = 40; this.hp = 40; this.broken = false; this.barricade = 0; }
 }
 
 export class Building {
@@ -90,6 +92,7 @@ export function buildBuilding(spec, ctx) {
   if (!tplFn) throw new Error('Bilinmeyen bina şablonu: ' + spec.tpl);
   const rng = new RNG('bld:' + spec.id);
   const tpl = tplFn(spec, rng);
+  if (tpl.kit) return buildKitBuilding(spec, tpl, ctx, rng);
   const baseY = spec.y ?? ctx.terrain.heightAt(spec.x, spec.z);
   const fr = new Frame(spec, tpl, baseY);
   const B = new Building(spec, tpl);
@@ -140,7 +143,7 @@ export function buildBuilding(spec, ctx) {
       B.colliders.push(physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: box.y1 + F < 1.2 }));
     });
     for (const op of ops) {
-      if (op.door) createDoor(B, fr, side, op, tpl, ctx, true);
+      if (op.door) { createDoor(B, fr, side, op, tpl, ctx, true); addDoorstep(B, fr, side, op, tpl, geo, ctx, baseY, F); }
       if (op.win) createWindow(B, fr, side, op, ctx, geo, trimCol);
     }
   }
@@ -149,29 +152,7 @@ export function buildBuilding(spec, ctx) {
   B.facade = planFacade(spec, tpl, fr, openings, F, H, EXT_T);
 
   // ---------------------------------------------------------- iç duvarlar
-  const segs = interiorSegments(tpl);
-  const links = tpl.links || [];
-  for (const seg of segs) {
-    const ops = [];
-    for (const L of links) {
-      const ra = tpl.rooms.find((r) => r.id === L[0]), rb = tpl.rooms.find((r) => r.id === L[1]);
-      if (!ra || !rb) continue;
-      const sh = sharedEdge(ra, rb);
-      if (!sh || sh.axis !== seg.axis || Math.abs(sh.c - seg.c) > 0.01) continue;
-      if (sh.e < seg.s + 0.3 || sh.s > seg.e - 0.3) continue;
-      const kind = L[2] || 'wood';
-      const ow = kind === 'arch' ? Math.min(2.4, sh.e - sh.s - 0.4) : kind === 'double' ? 1.8 : 1.0;
-      const mid = L[3] !== undefined ? L[3] : (Math.max(sh.s, seg.s) + Math.min(sh.e, seg.e)) / 2;
-      ops.push({ s: mid - ow / 2, e: mid + ow / 2, y0: 0, y1: DOOR_H + (kind === 'arch' ? 0.3 : 0), door: kind === 'arch' ? null : { kind: kind === 'double' ? 'wood' : kind, locked: !!L[4], lockLevel: L[4] || 0, interior: true, w: ow } });
-    }
-    ops.sort((a, b) => a.s - b.s);
-    for (const op of ops) doorOps.push({ axis: seg.axis, c: seg.c, s: op.s, e: op.e, exterior: false });
-    buildInteriorWall(geo, seg, ops, { H, F, intCol, trimCol }, (box) => {
-      const wb = fr.box(box.x0, box.z0, box.x1, box.z1);
-      B.colliders.push(physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: false }));
-    });
-    for (const op of ops) if (op.door) createInteriorDoor(B, fr, seg, op, ctx);
-  }
+  interiorWalls(B, fr, tpl, geo, ctx, doorOps, { baseY, F, H, intCol, trimCol });
 
   // ---------------------------------------------------------- çatı
   // cephe/çatı seçimleri ayrı tohumlu: mobilya ve kasa sıralaması (kayıt kimlikleri) değişmesin
@@ -213,6 +194,170 @@ export function buildBuilding(spec, ctx) {
   B.shell.name = 'building:' + spec.id;
   B.roof.name = 'roof:' + spec.id;
   B.roofTopY = baseY + F + H + (tpl.roofRise || 0.3);
+  ctx.scene.add(B.shell);
+  ctx.scene.add(B.roof);
+  return B;
+}
+
+/** Oda bölme duvarları, aralarındaki kapı/kemer açıklıkları ve iç kapılar (prosedürel ve kit kabuklu binalar ortak) */
+function interiorWalls(B, fr, tpl, geo, ctx, doorOps, { baseY, F, H, intCol, trimCol }) {
+  const physics = ctx.physics;
+  const segs = interiorSegments(tpl);
+  const links = tpl.links || [];
+  for (const seg of segs) {
+    const ops = [];
+    for (const L of links) {
+      const ra = tpl.rooms.find((r) => r.id === L[0]), rb = tpl.rooms.find((r) => r.id === L[1]);
+      if (!ra || !rb) continue;
+      const sh = sharedEdge(ra, rb);
+      if (!sh || sh.axis !== seg.axis || Math.abs(sh.c - seg.c) > 0.01) continue;
+      if (sh.e < seg.s + 0.3 || sh.s > seg.e - 0.3) continue;
+      const kind = L[2] || 'wood';
+      const ow = kind === 'arch' ? Math.min(2.4, sh.e - sh.s - 0.4) : kind === 'double' ? 1.8 : 1.0;
+      const mid = L[3] !== undefined ? L[3] : (Math.max(sh.s, seg.s) + Math.min(sh.e, seg.e)) / 2;
+      ops.push({ s: mid - ow / 2, e: mid + ow / 2, y0: 0, y1: DOOR_H + (kind === 'arch' ? 0.3 : 0), door: kind === 'arch' ? null : { kind: kind === 'double' ? 'wood' : kind, locked: !!L[4], lockLevel: L[4] || 0, interior: true, w: ow } });
+    }
+    ops.sort((a, b) => a.s - b.s);
+    for (const op of ops) doorOps.push({ axis: seg.axis, c: seg.c, s: op.s, e: op.e, exterior: false });
+    buildInteriorWall(geo, seg, ops, { H, F, intCol, trimCol }, (box) => {
+      const wb = fr.box(box.x0, box.z0, box.x1, box.z1);
+      B.colliders.push(physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: false }));
+    });
+    for (const op of ops) if (op.door) createInteriorDoor(B, fr, seg, op, ctx);
+  }
+}
+
+// ======================================================================= kit kabuklu binalar (şehir kuleleri)
+
+/**
+ * Downtown City MegaKit kulelerinin model uzayı ölçüleri (assets/models/city.glb; ön yüz +Z; metre; tools/dev ile
+ * ışın taramasıyla ölçüldü). bb: xz sınır kutusu [x0, z0, x1, z1] (placeModel pivotu bu kutunun ortası), minY: model
+ * tabanı, h: yükseklik, int: zemin kat iç odası, ext: dış duvar yüzleri, floor: modelin iç zemini, door: ön cephedeki
+ * 1 m'lik kapı boşluğunun ortası (x), doorTop: boşluğun üstü (zeminden), steps: kapı önü basamakları [z0, z1, üst y],
+ * open: içeriden tahtayla kapatılan cam/vitrin açıklıkları [yüz, s, e, y0, y1] (F: x ekseninde, L: z ekseninde;
+ * y zeminden). Vitrinlerin 5 cm arkasındaki sahte iç mekân kartları içeriden görünmesin diye kapatılır.
+ */
+export const KIT_SHELLS = {
+  Building_Small_1: {
+    bb: [-7.23, -12.23, 5.23, 2.31], minY: -0.01, h: 17, int: [-6.8, -11.8, 4.8, -0.2], ext: [-6.97, -12.0, 4.97, -0.03], floor: 1.0, door: 0, doorTop: 2.2,
+    steps: [[-0.03, 0.47, 1.0], [0.47, 0.72, 0.82], [0.72, 1.22, 0.63], [1.22, 1.72, 0.42], [1.72, 2.1, 0.22]],
+    open: [['F', -0.95, -0.55, 0.1, 2.7], ['F', 0.55, 0.85, 0.1, 2.7]],
+  },
+  Building_Medium_2_001: {
+    bb: [-7.53, -12.49, 7.53, 0.57], minY: -0.01, h: 25, int: [-6.8, -11.76, 6.8, -0.2], ext: [-7.0, -11.96, 7.0, 0.01], floor: 0, door: 0, doorTop: 2.25,
+    open: [['F', -6.85, -5.15, 0.65, 3.6], ['F', -4.85, -3.15, 0.65, 3.6], ['F', -2.85, -1.15, 0.65, 3.6], ['F', 1.15, 2.85, 0.65, 3.6], ['F', 3.15, 4.85, 0.65, 3.6], ['F', 5.15, 6.8, 0.65, 3.6]],
+  },
+  Building_Large_2: {
+    bb: [-9.32, -16.32, 11.32, 0.32], minY: 0, h: 28, int: [-8.8, -15.8, 10.8, -0.21], ext: [-9.0, -16.0, 11.0, 0.02], floor: 0, door: 0, doorTop: 2.2,
+    open: [['F', -6.95, -3.05, 0.5, 3.45], ['F', -0.75, -0.55, 0.05, 2.5], ['F', 0.55, 0.75, 0.05, 2.5], ['F', 3.05, 6.95, 0.5, 3.45],
+      ['L', -13.85, -10.15, 0.5, 2.95], ['L', -5.85, -2.15, 0.5, 2.95]],
+  },
+};
+
+/**
+ * Kit kabuklu bina: model dış kabuk olarak yerinde kalır (örneklenmiş; silüet ve görünüm aynı), içine prosedürel
+ * zemin kat kurulur: zemin + çarpıştırıcı, tavan (kamerayı durduran 'wall' döşemesi), model duvarlarının iç/dış
+ * yüzleri arasında çevre çarpıştırıcıları (kapı boşluğu açık), kapı (Door, kayıt/ağ hattına kendiliğinden girer),
+ * küçük kulede kapı önü basamakları, oda bölmeleri, mobilya ve konteynerler (Furnish), iç dekor. Şablon koordinatı:
+ * x ∈ [0, w], z ∈ [0, d] = modelin iç odası; ön cephe z = d (modelin kapısı). spec.x/z = model sınır kutusunun ortası
+ * (eski dekor yerleşimiyle aynı), spec.rot çeyrek tur.
+ */
+function buildKitBuilding(spec, tpl, ctx, rng) {
+  const K = KIT_SHELLS[tpl.kit];
+  if (!K) throw new Error('Bilinmeyen kit kabuğu: ' + tpl.kit);
+  const physics = ctx.physics;
+  const theta = (spec.rot || 0) * Math.PI / 2, c = Math.round(Math.cos(theta)), sn = Math.round(Math.sin(theta));
+  const bcx = (K.bb[0] + K.bb[2]) / 2, bcz = (K.bb[1] + K.bb[3]) / 2;
+  const baseY = spec.y ?? ctx.terrain.heightAt(spec.x, spec.z); // model tabanı (placeModel ile aynı)
+  // iç odanın ortası (dünya): model uzayında kutu ortasından farkı döndürülüp eklenir
+  const icx = (K.int[0] + K.int[2]) / 2 - bcx, icz = (K.int[1] + K.int[3]) / 2 - bcz;
+  const fr = new Frame({ x: spec.x + icx * c + icz * sn, z: spec.z - icx * sn + icz * c, rot: spec.rot }, tpl, baseY);
+  const B = new Building(spec, tpl);
+  B.frame = fr; B.rng = rng; B.kit = tpl.kit;
+  const F = K.floor + 0.05; // modelin iç zemininin hemen üstü (aynı düzlemde z-çakışması olmasın)
+  const H = tpl.H, { w, d } = tpl;
+  B.floorY = baseY + F;
+  const st = tpl.style, intCol = st.intColor || '#ece6dc', trimCol = st.trimColor || '#6f6f6f';
+  const geo = new Geo();
+  // model uzayı (mx, mz) → şablon (tx, tz)
+  const T = (mx, mz) => [mx - K.int[0], mz - K.int[1]];
+  const wbox = (mx0, mz0, mx1, mz1) => { const a = T(mx0, mz0), b = T(mx1, mz1); return fr.box(a[0], a[1], b[0], b[1]); };
+
+  // ---------------------------------------------------------- dış kabuk: model (+ çatı klimaları), eskisiyle aynı yer
+  if (ctx.instancer) {
+    const ox = -(bcx * c + bcz * sn), oz = -(-bcx * sn + bcz * c);
+    ctx.instancer.place('city', tpl.kit, spec.x + ox, baseY - K.minY, spec.z + oz, theta, 1);
+    for (let i = 0; i < 3; i++) {
+      const ax = (i - 1) * 3.2, az = -2 + (i % 2) * 2.5;
+      ctx.instancer.place('city', 'Prop_ACUnit', spec.x + ax * c + az * sn, baseY + K.h - 0.05, spec.z - ax * sn + az * c, theta + Math.PI, 2.2, {});
+    }
+  }
+
+  // ---------------------------------------------------------- zemin, odalar, tavan
+  for (const r of tpl.rooms) {
+    const fk = r.floor || floorFor(r.type, st.floor);
+    geo.box(fk, r.x0, F - 0.02, r.z0, r.x1, F, r.z1, r.floorColor || floorColor(fk, r.type), 4);
+    B.rooms.push({ ...r, ...fr.box(r.x0, r.z0, r.x1, r.z1), label: r.name || roomLabel(r.type) });
+  }
+  const ib = fr.box(0, 0, w, d);
+  B.colliders.push(physics.addFloor(ib.minX, ib.minZ, ib.maxX, ib.maxZ, B.floorY, { owner: B }));
+  geo.box('interior', 0, F + H, 0, w, F + H + 0.1, d, st.ceilColor || '#d8d3ca', 4 | 8); // tavan (alt + üst yüz: kapı üstü camdan bakınca delik görünmesin)
+  // tavan döşemesi: üçüncü şahıs kamerası içerideyken kulenin boş üst katlarına çıkmasın (görüş ışınını keser)
+  B.colliders.push(physics.addBox(ib.minX, ib.minZ, ib.maxX, ib.maxZ, baseY + F + H, baseY + F + H + 0.3, { kind: 'wall', owner: B, walkable: false }));
+
+  // ---------------------------------------------------------- çevre çarpıştırıcıları (model duvarları; kapı boşluğu açık)
+  const [ix0, iz0, ix1, iz1] = K.int, [ex0, ez0, ex1, ez1] = K.ext;
+  const y0 = baseY - 0.5, yTop = baseY + K.h;
+  const wall = (b, lo = y0, hi = yTop) => B.colliders.push(physics.addBox(b.minX, b.minZ, b.maxX, b.maxZ, lo, hi, { kind: 'wall', owner: B, walkable: false }));
+  wall(wbox(ex0, ez0, ix0, ez1)); // sol
+  wall(wbox(ix1, ez0, ex1, ez1)); // sağ
+  wall(wbox(ix0, ez0, ix1, iz0)); // arka
+  const dx0 = K.door - 0.5, dx1 = K.door + 0.5;
+  wall(wbox(ix0, iz1, dx0, ez1)); // ön, kapının solu
+  wall(wbox(dx1, iz1, ix1, ez1)); // ön, kapının sağı
+  wall(wbox(dx0, iz1, dx1, ez1), baseY + K.floor + K.doorTop, yTop); // kapı üstü (lento)
+  // kapı önü basamakları (küçük kulede zemin 1 m yüksekte): yürünebilir, yol ızgarasını kapatmaz
+  for (const [z0, z1, top] of K.steps || []) {
+    const b = wbox(dx0 - 0.5, z0, dx1 + 0.5, z1);
+    B.colliders.push(physics.addBox(b.minX, b.minZ, b.maxX, b.maxZ, baseY - 0.3, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false }));
+  }
+
+  // ---------------------------------------------------------- kapı ve açıklıklar (mobilya yerleşimi için)
+  const dt = T(K.door, 0)[0];
+  const doorOp = { s: dt - 0.5, e: dt + 0.5, y0: 0, y1: Math.min(DOOR_H, K.doorTop), door: { kind: tpl.doorKind || 'wood', name: 'Giriş Kapısı' } };
+  const openings = { F: [doorOp], B: [], L: [], R: [] };
+  const doorOps = [{ axis: 'x', c: d, s: doorOp.s, e: doorOp.e, exterior: true }], winOps = [];
+  createDoor(B, fr, 'F', doorOp, tpl, ctx, true);
+  // vitrin/cam açıklıkları: içeriden tahta kaplama (sahte iç mekân kartı görünmez; kıyamet havası) + mobilya payı
+  for (const [face, s0, e0, oy0, oy1] of K.open || []) {
+    const a = face === 'F' ? T(s0, 0)[0] : T(0, s0)[1], b = face === 'F' ? T(e0, 0)[0] : T(0, e0)[1];
+    const s = Math.max(0, Math.min(a, b)), e = Math.min(face === 'F' ? w : d, Math.max(a, b));
+    if (e - s < 0.1) continue;
+    const top = Math.min(oy1, H - 0.05);
+    openings[face].push({ s, e, y0: oy0, y1: top, win: { boarded: true } });
+    winOps.push(face === 'F' ? { axis: 'x', c: d, s, e, exterior: true } : { axis: 'z', c: 0, s, e, exterior: true });
+    const n = Math.max(2, Math.round((top - oy0) / 0.32));
+    for (let k = 0; k < n; k++) {
+      const py0 = F + oy0 + (top - oy0) * k / n + 0.03, py1 = F + oy0 + (top - oy0) * (k + 1) / n - 0.03;
+      const col = k % 2 ? '#6e5236' : '#7d5f3f';
+      if (face === 'F') geo.box('wood', s - 0.08, py0, d - 0.06, e + 0.08, py1, d - 0.02, col, 1 | 2 | 4 | 8 | 32);
+      else geo.box('wood', 0.02, py0, s - 0.08, 0.06, py1, e + 0.08, col, 1 | 4 | 8 | 16 | 32);
+    }
+  }
+
+  // ---------------------------------------------------------- oda bölmeleri, mobilya, iç dekor
+  interiorWalls(B, fr, tpl, geo, ctx, doorOps, { baseY, F, H, intCol, trimCol });
+  const furnCtx = { geo, B, fr, ctx, rng, F, H, openings, baseY, doorOps, winOps, tpl };
+  for (const r of tpl.rooms) furnishRoom(r, furnCtx);
+  if (tpl.extra) tpl.extra(furnCtx);
+  try { B.clutter = dressInterior(B, tpl, st, geo, new RNG('int:' + spec.id)).clutter; } catch (e) { console.warn('İç dekor atlandı', spec.id, e); B.clutter = []; }
+
+  // ---------------------------------------------------------- ağlar ve sınırlar
+  for (const m of geo.toMeshes(fr.matrix)) B.shell.add(m);
+  B.shell.name = 'building:' + spec.id;
+  B.roof.name = 'roof:' + spec.id; // kit binasında gizlenecek çatı yok (üst katlar modelde, tavan kamerayı keser)
+  B.box = wbox(ex0, ez0, ex1, ez1);
+  B.roofTopY = baseY + K.h;
   ctx.scene.add(B.shell);
   ctx.scene.add(B.roof);
   return B;
@@ -409,6 +554,28 @@ function createDoor(B, fr, side, op, tpl, ctx, exterior) {
   makeDoorObject(B, ctx, { kind, width, height: op.y1, center, inward, along, exterior, locked: op.door.locked, lockLevel: op.door.lockLevel || (op.door.locked ? 1 : 0), name: op.door.name });
 }
 
+/**
+ * Dış kapı basamağı: zemin araziden FLOOR_LIFT (0,3 m) yukarıda; verandasız kapılarda karakter denetleyicisi bu tek
+ * eşik basamağını çıkamıyor, kenarı eğim sanıp önünde takılıyordu (yalnız zıplayarak girilebiliyordu). Kapının önüne
+ * zeminin 8 cm altında, 0,75 m derin beton basamak: 0,22 + 0,08 m'lik iki küçük rıht (veranda zemini de böyle).
+ * Veranda kapının önünü kaplıyorsa gerekmez.
+ */
+function addDoorstep(B, fr, side, op, tpl, geo, ctx, baseY, F) {
+  const { w, d } = tpl, D = 0.75, pad = op.door.kind === 'garage' ? 0.1 : 0.25;
+  const s = op.s - pad, e = op.e + pad;
+  let box;
+  if (side === 'F') box = [s, d + EXT_T / 2, e, d + EXT_T / 2 + D];
+  else if (side === 'B') box = [s, -EXT_T / 2 - D, e, -EXT_T / 2];
+  else if (side === 'L') box = [-EXT_T / 2 - D, s, -EXT_T / 2, e];
+  else box = [w + EXT_T / 2, s, w + EXT_T / 2 + D, e];
+  const p = tpl.porch;
+  if (p && box[0] < p.x1 && box[2] > p.x0 && box[1] < p.z1 && box[3] > p.z0) return;
+  const top = F - 0.08;
+  geo.box('concrete', box[0], -0.6, box[1], box[2], top, box[3], '#a39d92', 63 & ~8);
+  const wb = fr.box(box[0], box[1], box[2], box[3]);
+  B.colliders.push(ctx.physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY - 0.6, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false, blocksBullets: false }));
+}
+
 function createInteriorDoor(B, fr, seg, op, ctx) {
   const mid = (op.s + op.e) / 2;
   const tc = seg.axis === 'x' ? { x: mid, z: seg.c } : { x: seg.c, z: mid };
@@ -426,6 +593,7 @@ function makeDoorObject(B, ctx, o) {
   const baseRot = Math.atan2(o.along.x, o.along.z) - Math.PI / 2;
   const hinge = o.kind === 'garage' ? { x: o.center.x, z: o.center.z } : { x: o.center.x - o.along.x * hingeOff, z: o.center.z - o.along.z * hingeOff };
   const door = new Door({
+    id: B.spec.localIds ? `${B.id}.d${B.doors.length}` : undefined,
     building: B, kind: o.kind, width: o.width, height: o.height, center: o.center, inward: o.inward, along: o.along,
     exterior: o.exterior, locked: o.locked, lockLevel: o.lockLevel || 0, hinge, baseRot, y0, leafW: o.kind === 'glass2' || o.kind === 'garage' ? o.width : o.width - 0.04,
   });
@@ -543,7 +711,7 @@ function createWindow(B, fr, side, op, ctx, geo, trimCol) {
   );
   const paneIndex = ctx.panes.length;
   ctx.panes.push(m);
-  const win = new WindowPane({ building: B, center: { x: center.x, y: cy, z: center.z }, width, height, sill: op.y0, along, inward, paneIndex, y0: B.floorY + op.y0 });
+  const win = new WindowPane({ id: B.spec.localIds ? `${B.id}.w${B.windows.length}` : undefined, building: B, center: { x: center.x, y: cy, z: center.z }, width, height, sill: op.y0, along, inward, paneIndex, y0: B.floorY + op.y0 });
   const hw = width / 2, ht = 0.12, ax = Math.abs(along.x) > 0.5;
   win.collider = ctx.physics.addBox(ax ? center.x - hw : center.x - ht, ax ? center.z - ht : center.z - hw, ax ? center.x + hw : center.x + ht, ax ? center.z + ht : center.z + hw,
     B.floorY - 0.1, B.floorY + op.y0 + height, { kind: 'window', owner: win, walkable: false, blocksSight: false, navType: NAV.WINDOW });

@@ -190,28 +190,34 @@ export const BUILDINGS = [
   { id: 'powerplant', tpl: 'power_station', x: -466, z: -212, rot: 0, region: 'baraj', sign: 'HİDROELEKTRİK SANTRALİ' },
   // ---------------------------------------------------------------- KÖPRÜ BAŞI
   { id: 'bridge_post', tpl: 'booth', x: 520, z: -532, rot: 1, region: 'kopru' },
+  // ---------------------------------------------------------------- SONRADAN EKLENEN (girilebilir hâle getirilen) binalar
+  // Kayıt uyumu: yalnız listenin SONUNA eklenir ve localIds ile kapı/pencere kimlikleri bina adıyla (n3.d0, n3.w2)
+  // üretilir; eski binaların d…/w… kimlikleri ve konteyner kimlikleri değişmez.
+  // Mahalle: eskiden içi olmayan Kenney dekor evleri (aynı yer ve yön)
+  { id: 'n3', tpl: 'house_a', x: -186, z: 152, rot: 0, region: 'mahalle', paint: '#f2e2b8', roofCol: '#5b4636', localIds: true },
+  { id: 'w3', tpl: 'house_a', x: -300, z: 238, rot: 1, region: 'mahalle', paint: '#b9d3e0', roofCol: '#7a3226', localIds: true },
+  { id: 'e3', tpl: 'house_a', x: -58, z: 240, rot: 3, region: 'mahalle', paint: '#e8b6a0', roofCol: '#4c5a6a', localIds: true },
+  { id: 'w4', tpl: 'house_b', x: -180, z: 104, rot: 2, region: 'mahalle', paint: '#d7e8c4', roofCol: '#8c3b2a', localIds: true },
+  { id: 'e4', tpl: 'house_small', x: -60, z: 110, rot: 2, region: 'mahalle', paint: '#e6d2f0', roofCol: '#3f4b5c', localIds: true },
+  // Şehir: eskiden içi dolu dekor olan MegaKit kuleleri. Model kabuk olarak aynı yer ve yönde kalır (x/z = model sınır
+  // kutusunun ortası, rot = eski "ön cephe en yakın yola" hesabının çeyrek tur karşılığı), zemin katına girilir.
+  { id: 'kule1', tpl: 'kit_large', variant: 'office', x: 100, z: -80, rot: 2, region: 'sehir', localIds: true },
+  { id: 'kule2', tpl: 'kit_small', variant: 'cafe', x: 125, z: -82, rot: 1, region: 'sehir', localIds: true },
+  { id: 'kule3', tpl: 'kit_medium', variant: 'market', x: 192, z: -76, rot: 1, region: 'sehir', localIds: true },
+  { id: 'kule4', tpl: 'kit_medium', variant: 'restaurant', x: 22, z: -6, rot: 3, region: 'sehir', localIds: true },
+  { id: 'kule5', tpl: 'kit_small', variant: 'clothes', x: 52, z: -8, rot: 1, region: 'sehir', localIds: true },
+  { id: 'kule6', tpl: 'kit_large', variant: 'clinic', x: 182, z: -10, rot: 2, region: 'sehir', localIds: true },
+  { id: 'kule7', tpl: 'kit_large', variant: 'shops', x: 30, z: 75, rot: 0, region: 'sehir', localIds: true },
+  { id: 'kule8', tpl: 'kit_medium', variant: 'sports', x: 118, z: 70, rot: 1, region: 'sehir', localIds: true },
+  { id: 'kule9', tpl: 'kit_small', variant: 'flat', x: 160, z: 70, rot: 3, region: 'sehir', localIds: true },
+  { id: 'kule10', tpl: 'kit_medium', variant: 'tools', x: 192, z: 70, rot: 1, region: 'sehir', localIds: true },
+  { id: 'kule11', tpl: 'kit_small', variant: 'electronics', x: 52, z: 75, rot: 1, region: 'sehir', localIds: true },
+  // Dağ köyü camisi: eskiden sahte kapılı katı kutu (kubbe ve minare RegionsExtra.village'da)
+  { id: 'cami', tpl: 'mosque', x: -640, z: -528, rot: 0, region: 'dagkoy', name: 'Köy Camisi', localIds: true },
 ];
 
 // Dekoratif (girilemeyen) yapılar: kit modelleri, ölçek ve konumla
 export const DECOR_BUILDINGS = [
-  // Mahalle çevresi Kenney evleri
-  { model: 'house-3', x: -300, z: 238, rot: 1, s: 8.5 },
-  { model: 'house-5', x: -58, z: 240, rot: 3, s: 8.5 },
-  { model: 'house-6', x: -186, z: 152, rot: 0, s: 8.5 },
-  { model: 'house-4', x: -180, z: 104, rot: 2, s: 8.5 },
-  { model: 'house-7', x: -60, z: 110, rot: 2, s: 8.5 },
-  // Şehir silueti: Downtown City MegaKit tuğla binaları (ön cephe en yakın yola döndürülür: face: 'road')
-  { kit: 'city', model: 'Building_Large_2', x: 100, z: -80, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Small_1', x: 125, z: -82, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Medium_2_001', x: 192, z: -76, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Medium_2_001', x: 22, z: -6, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Small_1', x: 52, z: -8, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Large_2', x: 182, z: -10, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Large_2', x: 30, z: 75, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Medium_2_001', x: 118, z: 70, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Small_1', x: 160, z: 70, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Medium_2_001', x: 192, z: 70, face: 'road', s: 1 },
-  { kit: 'city', model: 'Building_Small_1', x: 52, z: 75, face: 'road', s: 1 },
   { model: 'watertower', x: 176, z: -340, rot: 0, s: 24 },
   { model: 'wind-turbine', x: 185, z: -240, rot: 0, s: 6.5 },
   { model: 'wind-turbine', x: 230, z: -330, rot: 0, s: 6.5 },

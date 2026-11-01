@@ -11,7 +11,7 @@ import { CHARACTERS, CHARACTER_IDS } from '../entities/CharacterFactory.js';
 import { LocalTransport, PeerTransport } from './Transport.js';
 import { Voice } from './Voice.js';
 
-export const PROTOCOL = 4; // 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
+export const PROTOCOL = 5; // 5: dünya yerleşimi değişti (girilebilir yeni binalar, gerçek araç olan terk edilmiş arabalar); 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
 export const MAX_PLAYERS = 6;
 const RECENT_KEY = 'kiyamet_recent_rooms';
 

@@ -257,15 +257,12 @@ function plane(W, x, z, a, wrecked) {
 // ----------------------------------------------------------------------------- DAĞ KÖYÜ
 function village(W, rng) {
   const g = W.geo, y = REGION_BY_ID.dagkoy.h;
-  // cami: harim, kubbe (kademeli), minare
-  const mx = -640, mz = -528;
-  P.rbox(g, 'plaster', mx, y, mz, 0, -6, 0, -6, 6, 6, 6, '#f2efe6');
-  P.rbox(g, 'plaster', mx, y, mz, 0, -6.2, 6, -6.2, 6.2, 6.4, 6.2, '#d9d4c6');
-  for (let i = 0; i < 6; i++) column(g, 'metal', mx, y + 6.4 + i * 0.75, mz, 5.2 * Math.cos(i / 6 * PI / 2) + 0.2, 0.75, '#6f8a9a', 20);
-  column(g, 'metal', mx, y + 10.9, mz, 0.15, 1.6, '#d4af37', 6);
-  for (let k = -1; k <= 1; k++) P.rbox(g, 'glass', mx, y, mz, 0, k * 3 - 0.7, 2.2, 6.01, k * 3 + 0.7, 4.4, 6.05, '#9fd4ef');
-  P.rbox(g, 'wood', mx, y, mz, 0, -0.9, 0, 6.01, 0.9, 2.6, 6.08, '#6e4a2e');
-  W.physics.addBoxC(mx, mz, 6.1, 6.1, y, y + 10, { kind: 'wall' });
+  // cami: harim artık girilebilir prosedürel bina (WorldLayout BUILDINGS 'cami', şablon 'mosque'); burada yalnız
+  // düz damın üstündeki kubbe kasnağı, kademeli kubbe ve alem (kat yüksekliği: zemin 0,3 + duvar 6 = 6,3)
+  const mx = -640, mz = -528, top = y + 6.3;
+  P.rbox(g, 'plaster', mx, top, mz, 0, -5.4, 0, -5.4, 5.4, 0.25, 5.4, '#d9d4c6');
+  for (let i = 0; i < 6; i++) column(g, 'metal', mx, top + 0.25 + i * 0.75, mz, 5.2 * Math.cos(i / 6 * PI / 2) + 0.2, 0.75, '#6f8a9a', 20);
+  column(g, 'metal', mx, top + 4.75, mz, 0.15, 1.6, '#d4af37', 6);
   const nx = mx + 7.6, nz = mz - 5;
   column(g, 'plaster', nx, y, nz, 0.95, 20, '#f2efe6', 12);
   column(g, 'plaster', nx, y + 15, nz, 1.35, 0.5, '#d9d4c6', 12);

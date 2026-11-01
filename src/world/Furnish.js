@@ -628,6 +628,32 @@ const ROOMS = {
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
     if (P.centerFree(cx - 0.5, cz - 0.5, cx + 0.5, cz + 0.5)) { model(c, 'furniture', 'table_small', cx, c.F, cz, 0, KK); model(c, 'furniture', 'chair_A_wood', cx, c.F, cz + 0.7, PI, KK); collide(c, cx, cz, 0.7, 0.7, 0, 0.7); }
   },
+  // cami harimi: saf saf halı, mihrap nişi, minber, rahle ve kitaplık, ayakkabılık
+  mosque_hall(r, c, P) {
+    const W = r.x1 - r.x0, D = r.z1 - r.z0;
+    for (let k = 0; k < 6; k++) {
+      const z0 = r.z0 + 1.0 + k * ((D - 2.6) / 6), z1 = z0 + (D - 2.6) / 6 - 0.08;
+      c.geo.box('decor', r.x0 + 0.5, c.F, z0, r.x1 - 0.5, c.F + 0.015, z1, k % 2 ? '#7b1e24' : '#8e2a2e', 4);
+    }
+    const mx = (r.x0 + r.x1) / 2;
+    c.geo.box('wood', mx - 0.9, c.F, r.z0 + 0.02, mx + 0.9, c.F + 2.4, r.z0 + 0.12, '#e8dcc2'); // mihrap nişi çerçevesi
+    c.geo.box('decor', mx - 0.65, c.F + 0.1, r.z0 + 0.12, mx + 0.65, c.F + 2.1, r.z0 + 0.14, '#2f6f5e', 32 | 16);
+    protoItem(c, P, 1.0, 2.2, 2.4, (x, z, rot) => { // minber (basamaklı ahşap kürsü)
+      for (let k = 0; k < 4; k++) pbox(c, x, z, rot, -0.5, 0, -1.1 + k * 0.5, 0.5, 0.45 + k * 0.45, 1.1, 'wood', '#6e4a2e');
+      pbox(c, x, z, rot, -0.55, 0, -1.15, -0.45, 2.4, 1.15, 'wood', '#5d3f26');
+      pbox(c, x, z, rot, 0.45, 0, -1.15, 0.55, 2.4, 1.15, 'wood', '#5d3f26');
+    }, { prefer: ['B'] });
+    for (let i = 0; i < 2; i++) {
+      protoItem(c, P, 1.2, 0.4, 1.6, (x, z, rot) => {
+        pbox(c, x, z, rot, -0.6, 0, -0.2, 0.6, 1.6, 0.2, 'wood', '#7a5532');
+        for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.55, 0.35 + k * 0.45, -0.15, 0.55, 0.62 + k * 0.45, 0.18, 'decor', ['#1f4e79', '#7b241c', '#145a32'][k]);
+      }, { container: 'bookshelf', label: 'Kitaplık', prefer: ['L', 'R'] });
+    }
+    protoItem(c, P, 1.8, 0.4, 1.1, (x, z, rot) => {
+      pbox(c, x, z, rot, -0.9, 0, -0.2, 0.9, 1.1, 0.2, 'wood', '#8b6a45');
+      for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.85, 0.1 + k * 0.33, 0.12, 0.85, 0.13 + k * 0.33, 0.21, 'wood', '#5d4630');
+    }, { container: 'locker', label: 'Ayakkabılık', prefer: ['F'] });
+  },
   corridor() {},
 };
 
