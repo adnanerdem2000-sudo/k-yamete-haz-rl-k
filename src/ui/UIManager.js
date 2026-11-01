@@ -10,7 +10,12 @@ import { MapView } from './MapView.js';
 import { ITEMS } from '../data/items.js';
 import { Settings } from '../core/Settings.js';
 
-const PHASE_TEXT = { Sabah: ['SABAH', 'Yeni bir gün. Keşfe çık, kaynak topla.'], Öğle: ['ÖĞLE', 'Uzak bölgelere gitmek için en iyi zaman.'], Akşam: ['AKŞAM', 'Hava kararıyor. Üsse dönmeyi düşün.'], Gece: ['GECE', 'Zombiler daha tehlikeli. Kapıları kapat.'] };
+const PHASE_TEXT = {
+  Sabah: ['SABAH', 'Zombiler toprağa döndü: yağma zamanı. Yağmacı devriyelerine ve aç köpeklere dikkat.'],
+  Öğle: ['ÖĞLE', 'Güneş tepede: açıkta uzun kalma, su iç. Binalar ve sığınaklar serin.'],
+  Akşam: ['AKŞAM', 'Hava kararıyor. 20.30\'da ölüler topraktan çıkacak — üsse ya da bir sığınağa dön.'],
+  Gece: ['GECE', 'Zombiler yerden çıktı. Kapıları kapat, ışığını gizle; yer altı sığınakları en güvenli yer.'],
+};
 
 export class UIManager {
   constructor(game, root) {

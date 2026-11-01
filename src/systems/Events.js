@@ -6,6 +6,8 @@ import { ITEMS } from '../data/items.js';
 import { RNG, dist } from '../core/util.js';
 import { Avatar } from '../entities/Avatar.js';
 import { REGION_BY_ID } from '../world/WorldLayout.js';
+import { ZOMBIE_TYPES } from '../data/zombies.js';
+import { DUSK } from './TimeSystem.js';
 
 export class Events {
   constructor(session) {
@@ -146,9 +148,32 @@ export class Events {
     void day;
     if (!S.isHost) return;
     // akşam uyarısı
-    if (hour === 19) S.emit({ k: 'toast', text: 'Akşam oluyor. Geceleri zombiler daha tehlikeli — üsse dönmeyi düşün.', kind: 'info', dur: 4 });
+    if (hour === 19) S.emit({ k: 'toast', text: 'Akşam oluyor. 20.30\'da ölüler topraktan çıkacak — üsse ya da bir sığınağa dönmeyi düşün.', kind: 'info', dur: 4 });
     // Kanlı Ay şafakta biter
     if (hour === 6 && S.zombies.frenzy) { S.emit({ k: 'bloodmoon', on: false }); S.emit({ k: 'toast', text: 'Şafak söktü. Kanlı Ay geçti.', kind: 'good', dur: 4 }); }
+  }
+
+  /** Bu gecenin alacakaranlığı (mutlak oyun dakikası): gece zaten başladıysa şimdi */
+  tonight() { const S = this.s; return S.time.isNight ? S.time.total : (S.time.day - 1) * 1440 + DUSK + 5; }
+  /** Gündüz zombi doğmaz: olay zombisi şimdi gündüzse bu gece alacakaranlıkta aynı yerde topraktan çıkar. İnsanlar
+   *  (yağmacı) hemen gelir. Gece, Kanlı Ay ve final gecesinde doğrudan doğar. */
+  zSpawn(type, x, z, opts = {}) {
+    const S = this.s;
+    if ((ZOMBIE_TYPES[type] && ZOMBIE_TYPES[type].human) || S.time.isNight || S.zombies.frenzy || (S.endings && S.endings.active)) return S.zombies.spawn(type, x, z, opts);
+    const at = this.tonight();
+    const e = this.schedule.find((q) => q.kind === 'zspawn' && q.at === at);
+    const item = [type, x, z, opts.horde ? { horde: opts.horde } : {}];
+    if (e) e.list.push(item); else this.schedule.push({ at, kind: 'zspawn', list: [item] });
+    if (!this._deferMsgDay || this._deferMsgDay !== S.time.day) { this._deferMsgDay = S.time.day; S.emit({ k: 'toast', text: 'Ölüler gün ışığında toprağın altında… ama bu gece buraya dönecekler.', kind: 'warn', dur: 5 }); }
+    return null;
+  }
+  /** Sürü: gündüzse bu geceye ertelenir */
+  zHorde(size, around = null, leader = false) {
+    const S = this.s;
+    if (S.time.isNight || S.zombies.frenzy || (S.endings && S.endings.active)) return S.zombies.spawnHorde(size, around, leader);
+    this.schedule.push({ at: this.tonight() + 20, kind: 'horde', size, leader, around });
+    S.emit({ k: 'toast', text: `⚠️ Bir sürü toplanıyor: bu gece ${around ? 'o bölgeye' : 'mahalleye'} gelecek!`, kind: 'danger', dur: 6 });
+    return 0;
   }
 
   update(dt) {
@@ -160,7 +185,8 @@ export class Events {
       if (now < e.at) continue;
       this.schedule.splice(i, 1);
       if (e.kind === 'event') this.trigger(e.id);
-      else if (e.kind === 'horde') { const n = S.zombies.spawnHorde(e.size, null, e.leader); S.timeline.onHorde(n); S.emit({ k: 'toast', text: `🧟 SÜRÜ GELİYOR! (${n}+ zombi)`, kind: 'danger', dur: 6 }); S.emit({ k: 'broadcast', day: S.time.day, title: 'ACİL', text: 'Sürü mahalleye ulaştı! Savunma pozisyonu alın!' }); }
+      else if (e.kind === 'zspawn') { for (const [type, x, z, o] of e.list) S.zombies.spawn(type, x, z, { ...o, emerge: true }); }
+      else if (e.kind === 'horde') { const n = S.zombies.spawnHorde(e.size, e.around || null, e.leader); S.timeline.onHorde(n); S.emit({ k: 'toast', text: `🧟 SÜRÜ GELİYOR! (${n}+ zombi)`, kind: 'danger', dur: 6 }); S.emit({ k: 'broadcast', day: S.time.day, title: 'ACİL', text: 'Sürü mahalleye ulaştı! Savunma pozisyonu alın!' }); }
       else if (e.kind === 'weather') S.weather.set(e.w, 240);
       else if (e.kind === 'raiders') this.raiderAttack();
       else if (e.kind === 'cleanup') this.cleanupTemp();
@@ -205,8 +231,8 @@ export class Events {
     if (f.rel) S.applyAction('rel', { faction: f.rel[0], delta: f.rel[1] }, null);
     if (f.reward) for (const p of S.players.values()) S.emit({ k: 'grant', to: p.id, items: f.reward.map(([it, n, extra]) => ({ id: it, qty: n, ...(it === 'note' ? { noteId: extra || 'random_diary2' } : {}) })) });
     if (f.note) for (const p of S.players.values()) S.emit({ k: 'grant', to: p.id, items: [{ id: 'note', qty: 1, noteId: f.note }] });
-    if (f.horde) S.zombies.spawnHorde(f.horde, null, false);
-    if (f.horde_at_player) { const p = S.players.get(from); if (p) S.zombies.spawnHorde(f.horde_at_player, { x: p.pos.x, z: p.pos.z }, false); }
+    if (f.horde) this.zHorde(f.horde, null, false);
+    if (f.horde_at_player) { const p = S.players.get(from); if (p) this.zHorde(f.horde_at_player, { x: p.pos.x, z: p.pos.z }, false); }
     if (f.raiders) this.spawnRaiders(S.world.home.spec.x + 18, S.world.home.spec.z + 4, f.raiders);
     if (f.weather) S.weather.set(f.weather, 240);
     if (f.fixGenerator) S.applyAction('gen', { on: true }, null);
@@ -231,7 +257,7 @@ export class Events {
     if (f.stealth) S.emit({ k: 'stealth', until: S.time.total + f.stealth });
     if (f.wolves) { const p = this.playerPos(from); S.npcs.spawnPack('wolf', p, f.wolves, from); }
     if (f.animals) { const h = S.world.home.spec; S.npcs.spawnPack(f.animals[0], { x: h.x + 10, z: h.z - 70 }, f.animals[1], null, 0); }
-    if (f.dogs) { const p = this.playerPos(from); for (let i = 0; i < f.dogs; i++) S.zombies.spawn('dog', p.x + 30 + i * 2, p.z + 24 - i * 3, { chase: from }); }
+    if (f.dogs) { const p = this.playerPos(from); for (let i = 0; i < f.dogs; i++) this.zSpawn('dog', p.x + 30 + i * 2, p.z + 24 - i * 3, { chase: from }); }
     if (f.raidersAtPlayer) { const p = this.playerPos(from); this.spawnRaiders(p.x + 26, p.z + 18, f.raidersAtPlayer); }
     if (f.raidersAt) this.spawnRaiders(f.raidersAt[0], f.raidersAt[1], f.raidersAt[2]);
     if (f.sickChance) { const ids = [...S.players.keys()]; const id = ids[Math.floor(this.rng.next() * ids.length)]; if (this.rng.next() < f.sickChance) S.emit({ k: 'infect', to: id, amount: 35 }); }
@@ -246,7 +272,7 @@ export class Events {
     if (f.tradeAt) { S.applyAction('flag', { flag: 'trader_here', value: 1 }, null); S.applyAction('npc_state', { id: 'riza', visible: true, x: f.tradeAt[0], z: f.tradeAt[1] }, null); S.emit({ k: 'marker', x: f.tradeAt[0], z: f.tradeAt[1], label: 'Kara Borsa (Rıza)', icon: 'shop' }); }
     if (f.allies) { S.applyAction('flag', { flag: 'allies', add: f.allies }, null); this.spawnAllies(f.allies); S.results.rescued += f.allies; }
     if (f.carDamage) { const v = S.vehicles.list.find((x) => x.seats[0]); if (v) S.applyAction('vehicle_damage', { id: v.id, dmg: v.maxHealth * f.carDamage }, null); }
-    if (f.spawnNear) S.zombies.spawnHorde(f.spawnNear, null, false);
+    if (f.spawnNear) this.zHorde(f.spawnNear, null, false);
     S.emit({ k: 'event_result', id, text: c.result, choiceText: c.text });
     if (id === 'injured_kid' && ci === 0) S.results.rescued += 2;
     this.schedule.push({ at: S.time.total + 120, kind: 'cleanup' });
@@ -340,7 +366,7 @@ export class Events {
   distressQuest() {
     const S = this.s;
     S.quests.addDynamic('q_distress', { kind: 'random', title: 'Benzinlikteki Mahsurlar', desc: 'Benzin istasyonu marketinde mahsur kalanları kurtar: çevredeki zombileri temizle.', objs: [{ t: 'goto', poi: 'gas', r: 25, label: 'Benzinliğe git' }, { t: 'kill', count: 8, label: 'Zombileri temizle (8)' }], reward: [['first_aid', 1], ['jerrycan', 1, { fuel: 20 }]], rel: ['neighbors', 15], morale: 10 });
-    S.zombies.spawnHorde(12, { x: 62, z: 302 }, false);
+    this.zHorde(12, { x: 62, z: 302 }, false);
     S.emit({ k: 'marker', x: 62, z: 302, label: 'Yardım Çağrısı', icon: 'quest' });
     S.results.rescued += 3;
   }
@@ -349,7 +375,7 @@ export class Events {
     const S = this.s;
     const x = -322, z = -296;
     S.quests.addDynamic('q_hiker', { kind: 'random', title: 'Dağdaki Yürüyüşçü', desc: 'Dağ kampının altındaki kayalıklarda ayağı kırık bir yürüyüşçü mahsur. Etrafını temizle ve çantasını kurtar.', objs: [{ t: 'goto', poi: 'mountain', r: 60, label: 'Dağ kampının altına git' }, { t: 'kill', count: 6, label: 'Etrafındaki zombileri temizle (6)' }], reward: [['first_aid', 1], ['binoculars', 1]], rel: ['neighbors', 10], morale: 8 });
-    for (let i = 0; i < 6; i++) S.zombies.spawn(i < 2 ? 'runner' : 'normal', x + (this.rng.next() - 0.5) * 18, z + (this.rng.next() - 0.5) * 18, {});
+    for (let i = 0; i < 6; i++) this.zSpawn(i < 2 ? 'runner' : 'normal', x + (this.rng.next() - 0.5) * 18, z + (this.rng.next() - 0.5) * 18, {});
     S.emit({ k: 'dyn_cont', ct: { id: 'dyn:hiker', type: 'backpack', label: 'Yürüyüşçünün Çantası', x, y: S.world.terrain.heightAt(x, z) + 0.4, z, special: 'hiker_pack' } });
     S.emit({ k: 'marker', x, z, label: 'Mahsur Yürüyüşçü', icon: 'quest' });
     S.results.rescued += 1;
@@ -362,8 +388,8 @@ export class Events {
     const a = this.rng.next() * Math.PI * 2;
     const x = p.x + Math.cos(a) * 45, z = p.z + Math.sin(a) * 45;
     if (this.rng.next() < 0.55) {
-      S.zombies.spawn('screamer', x, z, { chase: from });
-      for (let i = 0; i < 7; i++) S.zombies.spawn(i % 3 ? 'normal' : 'runner', x + (this.rng.next() - 0.5) * 14, z + (this.rng.next() - 0.5) * 14, { horde: p });
+      this.zSpawn('screamer', x, z, { chase: from });
+      for (let i = 0; i < 7; i++) this.zSpawn(i % 3 ? 'normal' : 'runner', x + (this.rng.next() - 0.5) * 14, z + (this.rng.next() - 0.5) * 14, { horde: p });
       S.emit({ k: 'toast', text: 'Ses bir çığlığa dönüştü… BU BİR TUZAKTI!', kind: 'danger', dur: 5 });
     } else {
       this.spawnTemp(NPCS.defne ? { ...NPCS.defne.look, top: { style: 'tshirt', color: '#7f8c8d' }, dirt: 0.8 } : NPCS.can.look, x, z, Math.PI, 'ground', 0.75);
@@ -378,7 +404,7 @@ export class Events {
     const S = this.s;
     if (S.flags.prison_riot) return;
     S.applyAction('flag', { flag: 'prison_riot', value: 1 }, null);
-    for (let i = 0; i < 6; i++) S.zombies.spawn('riot', 640 + this.rng.next() * 110, -110 + this.rng.next() * 100, {});
+    for (let i = 0; i < 6; i++) this.zSpawn('riot', 640 + this.rng.next() * 110, -110 + this.rng.next() * 100, {});
     this.spawnRaiders(600, -60, 3);
     S.emit({ k: 'marker', x: 700, z: -60, label: 'Cezaevi İsyanı', icon: 'danger' });
   }
@@ -394,7 +420,7 @@ export class Events {
       S.emit({ k: 'toast', text: 'Botta iki bitkin hayatta kalan vardı. Üsse katıldılar!', kind: 'good', dur: 5 });
       S.timeline.post('rescue', 'Kıyıdaki sağ kalanlar', 'Tatil köyü sahiline vuran bottan iki kişi kurtarıldı.');
     } else {
-      for (let i = 0; i < 7; i++) S.zombies.spawn(i % 2 ? 'normal2' : 'normal', x + (this.rng.next() - 0.5) * 16, z - this.rng.next() * 10, {});
+      for (let i = 0; i < 7; i++) this.zSpawn(i % 2 ? 'normal2' : 'normal', x + (this.rng.next() - 0.5) * 16, z - this.rng.next() * 10, {});
       S.emit({ k: 'toast', text: 'Bottakiler çoktan dönüşmüştü… Sahil enfekte dolu!', kind: 'danger', dur: 5 });
     }
   }
@@ -407,7 +433,7 @@ export class Events {
     S.later(40, () => {
       if (!n.alive) return;
       S.applyAction('npc_state', { id: 'hasan', alive: false }, null);
-      const zb = S.zombies.spawn('normal', n.pos.x, n.pos.z, {});
+      const zb = this.zSpawn('normal', n.pos.x, n.pos.z, {});
       if (zb) zb.boost = 1.1;
       S.emit({ k: 'toast', text: 'Hasan Amca\'nın evinden bir inilti… Artık o değil.', kind: 'danger', dur: 6 });
       S.timeline.post('danger', 'Hasan Amca dönüştü', 'İlaç bulunamadı. Kırk yıllık komşu artık sokakta yürüyor.');

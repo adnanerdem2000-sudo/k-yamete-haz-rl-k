@@ -7,6 +7,7 @@ import { ZombieView } from '../entities/ZombieView.js';
 import { NAV } from '../world/NavGrid.js';
 import { RNG, clamp, dist, wrapAngle } from '../core/util.js';
 import { Settings } from '../core/Settings.js';
+import { DUSK } from './TimeSystem.js';
 
 let ZID = 1;
 const _res = { x: 0, z: 0, hit: false, hits: [] };
@@ -90,6 +91,8 @@ export class Zombies {
     zb.zone = opts.zone || null;
     if (opts.horde) { zb.target = { kind: 'pos', x: opts.horde.x, z: opts.horde.z }; zb.state = 'investigate'; zb.alert = 1; zb.horde = true; }
     if (opts.chase) { zb.target = { kind: 'player', id: opts.chase }; zb.state = 'chase'; zb.alert = 1; }
+    // topraktan çıkış: 2,2 sn hareketsiz yükselir (görünüm kökü yerin altından çıkar, toz)
+    if (opts.emerge && !ZOMBIE_TYPES[type].human) { zb.state = 'emerge'; zb.emergeT = 2.2; zb.alert = 0.2; zb.target = null; }
     this.list.set(zb.id, zb);
     this.makeView(zb.id, type, zb.x, zb.y, zb.z);
     return zb;
@@ -132,6 +135,12 @@ export class Zombies {
     if (!players.length) return;
     const day = S.time.day;
     const night = S.time.isNight;
+    // GÜNDÜZ DOĞAL ZOMBİ YOK: ölüler alacakaranlıkta topraktan çıkar, şafakta toprağa döner (DayThreats gündüz
+    // tehditlerini yönetir). İstisna: Kanlı Ay çılgınlığı ve final gecesi. spawn() saatten bağımsız kalır (olaylar,
+    // testler, benchmark doğrudan çağırır; gündüz olay zombileri Events.zSpawn ile geceye ertelenir).
+    if (!night && !this.frenzy && !(S.endings && S.endings.active)) return;
+    // gecenin ilk saati: zombiler oyuncunun görebileceği yakınlıkta (25–60 m) topraktan çıkar
+    const md = S.time.minuteOfDay, early = night && md >= DUSK && md < DUSK + 60;
     for (const pl of players) {
       if (this.list.size >= this.cap) break;
       // oyuncunun bölgesindeki ve komşu bölgelerdeki nüfus
@@ -141,16 +150,17 @@ export class Zombies {
         if (dz > zn.r + 140) continue;
         const activeHere = [...this.list.values()].filter((z) => z.zone === zn && !z.dead).length;
         // bölgenin toplam nüfusu (sanal + aktif) güne göre artar; öldürülenler geri gelmez
-        const target = Math.round((zn.base + zn.perDay * day) * S.diff.zombies * (night ? 1.25 : 1));
+        const target = Math.round((zn.base + zn.perDay * day) * S.diff.zombies * (night ? 1.5 : 1));
         if (zn.pop + activeHere + zn.killed < target) zn.pop = Math.max(0, target - zn.killed - activeHere);
         // aynı anda etrafta dolaşan sayısı: bölge yoğunluğu, gün ve gece ile ölçeklenir (1. gün sakin başlar)
         const dens = Math.min(2.2, 0.6 + (zn.base / 14) * 0.5);
-        const want = Math.round((4 + zn.r * 0.05) * (0.5 + day * 0.035) * (night ? 1.4 : 1) * (this.frenzy ? 1.5 : 1) * dens * S.diff.zombies);
+        // zombiler artık yalnız gece var: gece yoğunluğu eskiden ×1,4'tü, şimdi ×1,8 (günün kalanında hiç yoklar)
+        const want = Math.round((4 + zn.r * 0.05) * (0.5 + day * 0.035) * (night ? 1.8 : 1) * (this.frenzy ? 1.5 : 1) * dens * S.diff.zombies);
         if (activeHere >= want || zn.pop <= 0) continue;
-        // görüş dışında, 55-110 m mesafede bir nokta
+        // görüş dışında, 55-110 m mesafede bir nokta (gecenin ilk saatinde 25–60 m: topraktan çıkışı görülsün)
         for (let tries = 0; tries < 6; tries++) {
           const a = this.rng.next() * Math.PI * 2;
-          const r = 55 + this.rng.next() * 55;
+          const r = early ? 25 + this.rng.next() * 35 : 55 + this.rng.next() * 55;
           const x = pl.x + Math.cos(a) * r, z = pl.z + Math.sin(a) * r;
           if (dist(x, z, zn.cx, zn.cz) > zn.r) continue;
           if (S.isInBase({ x, z })) continue;
@@ -161,7 +171,8 @@ export class Zombies {
           if (day >= 13 && type === 'normal' && this.rng.chance(0.15)) type = 'runner';
           if (ZOMBIE_TYPES[type].nightOnly && !night) type = 'normal';
           if ((ZOMBIE_TYPES[type].minDay || 0) > day) type = 'normal';
-          if (this.spawn(type, x, z, { zone: zn })) { zn.pop--; break; }
+          if (S.world.under && S.world.under.zoneAt(x, S.world.terrain.heightAt(x, z), z)) continue;
+          if (this.spawn(type, x, z, { zone: zn, emerge: true })) { zn.pop--; break; }
         }
       }
     }
@@ -319,6 +330,10 @@ export class Zombies {
     let threat = 0;
     const lp = S.local.pos;
     this._players = players;
+    // şafak kenarı (gece → gündüz; zaman sıçramalarını da yakalar): yaşayan zombiler kademeli olarak toprağa döner
+    if (this._wasNight === undefined) this._wasNight = night;
+    if (this._wasNight && !night && !(S.endings && S.endings.active)) this.dawn();
+    this._wasNight = night;
     // yol bulma bütçesi en yakındakilere: zombiler oyunculara uzaklığa göre sıralanır (uzaktakiler seyrek düşünür)
     const order = [];
     for (const zb of this.list.values()) {
@@ -336,6 +351,8 @@ export class Zombies {
     for (const zb of order) {
       const nd = zb._nd, nearest = zb._nearest;
       void nearest;
+      if (zb.burrowAt && S.t >= zb.burrowAt && zb.state !== 'burrow' && zb.state !== 'emerge') { zb.state = 'burrow'; zb.burrowT = 2.6; zb.speed = 0; zb.target = null; }
+      if (zb.state === 'emerge' || zb.state === 'burrow') { this.act(zb, dt, players); continue; }
       // uzaklaşınca havuza geri dön
       if (nd > 170 && !zb.horde) { if (zb.zone) zb.zone.pop++; this.removeZombie(zb.id); continue; }
       zb.think -= dt;
@@ -438,6 +455,13 @@ export class Zombies {
   act(zb, dt, players) {
     const S = this.s;
     const def = zb.def;
+    if (zb.state === 'emerge') { zb.speed = 0; zb.emergeT -= dt; if (zb.emergeT <= 0) { zb.state = 'idle'; zb.alert = 0.3; } return; }
+    if (zb.state === 'burrow') {
+      zb.speed = 0; zb.burrowT -= dt;
+      // toprağa döndü: öldürülmüş sayılmaz (ganimet, ceset, sayaç, görev yok), bölge havuzuna geri döner
+      if (zb.burrowT <= 0) { if (zb.zone) zb.zone.pop++; this.removeZombie(zb.id); }
+      return;
+    }
     zb.attackCd -= dt;
     if (zb.stagger > 0) { zb.stagger -= dt; zb.speed = 0; this.moveBy(zb, (zb.kx || 0) * dt, (zb.kz || 0) * dt); zb.kx = (zb.kx || 0) * 0.85; zb.kz = (zb.kz || 0) * 0.85; return; }
     const night = S.time.isNight;
@@ -695,6 +719,14 @@ export class Zombies {
         if (v.state.dead && S.t - (v.deadAt || S.t) > 25) { v.dispose(); this.views.delete(id); continue; }
       }
       if (!v.corpse) v.root.position.copy(v.pos);
+      // topraktan çıkış / toprağa dönüş: kök yerin altından yükselir ya da batar (toz ve çıkış klibi)
+      const st = v.state.state;
+      if (st === 'emerge' || st === 'burrow' || v.sink) {
+        if (st === 'emerge') { if (v._ph !== 'e') { v._ph = 'e'; v.sink = -1.5; v.emerge && v.emerge(); S.fx && S.fx.dust(v.pos.x, v.pos.y + 0.1, v.pos.z, 6); } v.sink = Math.min(0, v.sink + dt * 0.95); }
+        else if (st === 'burrow') { if (v._ph !== 'b') { v._ph = 'b'; v.sink = v.sink || 0; S.fx && S.fx.dust(v.pos.x, v.pos.y + 0.1, v.pos.z, 6); } v.sink = Math.max(-2.2, v.sink - dt * 0.85); }
+        else { v._ph = null; v.sink = Math.min(0, v.sink + dt * 2); }
+        if (!v.corpse) v.root.position.y += v.sink;
+      }
       const d = Math.hypot(v.pos.x - cam.x, v.pos.z - cam.z);
       v.root.visible = d < 150;
       if (!v.root.visible) continue;
@@ -703,12 +735,28 @@ export class Zombies {
     }
   }
 
+  /**
+   * Şafak: yaşayan (insan olmayan, kalıcı işaretsiz) zombilere toprağa dönüş zamanı verilir. Kovalayanlar en son
+   * (40–90 sn), diğerleri 3–40 sn içinde; böylece şafak ani bir "silinme" değil, gözle görülen bir çekilmedir.
+   */
+  dawn() {
+    const S = this.s;
+    let n = 0;
+    for (const zb of this.list.values()) {
+      if (zb.dead || zb.def.human || zb.persist || zb.burrowAt) continue;
+      const busy = zb.state === 'chase' || zb.state === 'attack' || zb.state === 'bash';
+      zb.burrowAt = S.t + (busy ? 40 + this.rng.next() * 50 : 3 + this.rng.next() * 37);
+      n++;
+    }
+    this.lastDawn = { t: S.t, n };
+  }
+
   // ======================================================================= ağ
   snapshotFor(x, z) {
     const out = [];
     for (const zb of this.list.values()) {
       if (dist(zb.x, zb.z, x, z) > 150) continue;
-      out.push([zb.id, zb.type, Math.round(zb.x * 50) / 50, Math.round(zb.y * 50) / 50, Math.round(zb.z * 50) / 50, Math.round(zb.yaw * 100) / 100, zb.state === 'chase' || zb.state === 'attack' ? 1 : zb.state === 'bash' ? 2 : zb.state === 'scream' ? 3 : 0, Math.round(zb.speed * 10) / 10, zb.dead ? 1 : 0]);
+      out.push([zb.id, zb.type, Math.round(zb.x * 50) / 50, Math.round(zb.y * 50) / 50, Math.round(zb.z * 50) / 50, Math.round(zb.yaw * 100) / 100, zb.state === 'chase' || zb.state === 'attack' ? 1 : zb.state === 'bash' ? 2 : zb.state === 'scream' ? 3 : zb.state === 'emerge' ? 4 : zb.state === 'burrow' ? 5 : 0, Math.round(zb.speed * 10) / 10, zb.dead ? 1 : 0]);
     }
     return out;
   }
@@ -720,7 +768,7 @@ export class Zombies {
       let v = this.views.get(id);
       if (!v) v = this.makeView(id, type, x, y, z);
       v.target.set(x, y, z);
-      v.state.yaw = yaw; v.state.speed = speed; v.state.bashing = st === 2; v.state.state = st === 1 ? 'chase' : st === 3 ? 'scream' : 'idle';
+      v.state.yaw = yaw; v.state.speed = speed; v.state.bashing = st === 2; v.state.state = st === 1 ? 'chase' : st === 3 ? 'scream' : st === 4 ? 'emerge' : st === 5 ? 'burrow' : 'idle';
       if (dead && !v.state.dead) { v.state.dead = true; v.deadAt = this.s.t; }
     }
     for (const [id, v] of this.views) if (!seen.has(id) && !v.state.dead) { v.dispose(); this.views.delete(id); }

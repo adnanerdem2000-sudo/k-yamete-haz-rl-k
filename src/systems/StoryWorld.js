@@ -737,7 +737,8 @@ export class StoryWorld {
     const truck = special === 'supply_truck';
     S.emit({ k: 'dyn_cont', ct: { id: 'dyn:' + id, type: truck ? 'military_crate' : 'cabin_chest', label: truck ? 'İkmal Kamyonu Kasası' : 'Gizli Zula', x: site.x, y: gy + 0.7, z: site.z, special, prop: truck ? 'truck' : 'cache', a: site.a } });
     S.emit({ k: 'marker', x: site.x, z: site.z, label: truck ? 'İkmal Kamyonu' : 'Zula', icon: 'quest' });
-    for (let i = 0; i < guards; i++) S.zombies.spawn(this.rng.chance(0.3) ? 'runner' : 'normal', site.x + (this.rng.next() - 0.5) * 16, site.z + (this.rng.next() - 0.5) * 16, {});
+    // muhafızlar: gündüz yağmacı (silahlı zula bekçileri), gece zombi (gündüz zombi doğmaz)
+    for (let i = 0; i < guards; i++) { const night = S.time.isNight; S.zombies.spawn(night ? (this.rng.chance(0.3) ? 'runner' : 'normal') : 'raider', site.x + (this.rng.next() - 0.5) * 16, site.z + (this.rng.next() - 0.5) * 16, {}); }
   }
 
   /** Dinamik konteyner için görsel (kamyon / sandık) */

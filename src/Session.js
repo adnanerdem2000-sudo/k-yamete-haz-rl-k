@@ -18,6 +18,7 @@ import { PhysProps } from './systems/PhysProps.js';
 import { DoorPhysics } from './physics/DoorPhysics.js';
 import { Drawers } from './physics/Drawers.js';
 import { Fronts } from './systems/Fronts.js';
+import { DayThreats } from './systems/DayThreats.js';
 import { installBuoyancy } from './physics/Buoyancy.js';
 import { ContactSounds } from './physics/ContactSounds.js';
 import { Interact } from './systems/Interact.js';
@@ -124,6 +125,7 @@ export class Session {
     this.doorPhys = this.game.phys ? new DoorPhysics(this) : null;
     this.drawers = this.game.phys ? new Drawers(this) : null;
     this.fronts = new Fronts(this); // dolap kanatları, buzdolabı/fırın kapakları, sandık kapakları (görsel, eşitlenir)
+    this.dayThreats = new DayThreats(this); // gündüz: yağmacı devriyeleri, başıboş köpekler, alacakaranlık/şafak duyuruları
     this.build = new Build(this);
     this.zombies = new Zombies(this);
     this.vehicles = new Vehicles(this);
@@ -332,6 +334,7 @@ export class Session {
     pl.avatar.update(dt, pl.animState());
     // dünya sistemleri
     this.zombies.update(dt);
+    this.dayThreats.update(dt);
     this.vehicles.update(dt);
     this.npcs.update(dt);
     this.bots.update(dt);
@@ -436,14 +439,21 @@ export class Session {
     const inside = !!pl.inside;
     const nearFire = this.build.nearFire(pl.pos);
     const raincoat = this.equipment.body2 === 'raincoat';
+    // öğle güneşi: açıkta (bina/sığınak/araç dışı), açık havada, 10.30–17.30 arası, sıcaklık 23 °C üstünde
+    const md = this.time.minuteOfDay, sunUp = !this.time.isNight && md > 630 && md < 1050;
+    const sun = sunUp && !inside && pl.mode !== 'drive' && pl.mode !== 'seat' && W.rain < 0.15 && (W.cloud || 0) < 0.7
+      ? Math.max(0, Math.min(1, (this.weather.temperature - 23) / 8)) * Math.sin(((md - 630) / 420) * Math.PI) : 0;
+    this.sunExposure = sun;
     const env = {
-      ambient: this.weather.temperature, wet: inside || raincoat ? 0 : W.rain, sheltered: inside, nearFire,
+      ambient: this.weather.temperature, wet: inside || raincoat ? 0 : W.rain, sheltered: inside, nearFire, sun,
       sleeping: pl.mode === 'sleep', comfort: this.isInBase(pl.pos) ? this.build.comfort01() : 0, inBase: this.isInBase(pl.pos),
       night: this.time.isNight, alone: this.players.size + this.bots.count() <= 1 && !this.flags.dog_found,
       warmth: (this.equipment.body2 === 'warm_jacket' ? 6 : 0) + (raincoat ? 2 : 0),
     };
     const ev = st.tick(mins, env);
     if (ev.includes('sick')) this.ui.toast('Hastalandın! Antibiyotik bul.', 'danger');
+    if (ev.includes('heat')) this.ui.toast('☀️ Güneş çarpması riski! Gölgeye ya da bir binaya gir, su iç.', 'warn', 5);
+    if (ev.includes('heatstroke')) this.ui.toast('🥵 Güneş çarptı: can kaybediyorsun! Hemen içeri gir ve su iç.', 'danger', 5);
     // akşam uyarısı
     if (st.hunger < 15 && !this._warnHunger) { this._warnHunger = true; this.ui.toast('Çok açsın!', 'warn'); }
     if (st.hunger > 30) this._warnHunger = false;
@@ -693,7 +703,20 @@ export class Session {
     const humans = [...this.players.values()].filter((p) => !p.isBot).length;
     const need = Math.ceil(humans / 2 + 0.01);
     const ok = this.sleepVotes.size >= need;
-    this.emit({ k: 'sleep', ff: ok ? 40 : 1, votes: this.sleepVotes.size, need });
+    // gece yalnız güvenli yerde (yer altı sığınağı ya da savunması güçlü üs) hızlı geçer; açıkta uyuyanlar için gece
+    // yavaş akar (zombiler gelebilir: hasar uyandırır). Gündüz şekerlemesi her yerde hızlıdır.
+    let ff = ok ? 40 : 1;
+    if (ok && this.time.isNight) {
+      const safe = [...this.sleepVotes].every((id) => {
+        const p = id === this.localId ? this.local : this.players.get(id);
+        if (!p || !p.pos) return true;
+        if (this.world.under && this.world.under.zoneAt(p.pos.x, p.pos.y, p.pos.z)) return true;
+        return this.isInBase(p.pos) && this.build.defenseScore() >= 20;
+      });
+      if (!safe) ff = 8;
+      if (!safe && this.sleepState && this.sleepState.ff !== 8) this.emit({ k: 'toast', text: 'Açıkta uyuyorsunuz: gece yavaş geçecek, zombiler gelebilir. Sığınakta ya da korunaklı üste uyuyun.', kind: 'warn', dur: 6 });
+    }
+    this.emit({ k: 'sleep', ff, votes: this.sleepVotes.size, need });
   }
 
   // ======================================================================= ayak sesleri

@@ -27,6 +27,9 @@ const ANIMALS = {
   boar: { name: 'Yaban Domuzu', hp: 90, speed: 5.5, size: [0.55, 0.75, 1.2], color: '#5b4636', aggro: 6, dmg: 14, drops: [['raw_meat', 3], ['leather', 1]], leg: 0.35, tusks: true },
   wolf: { name: 'Kurt', hp: 70, speed: 7.8, size: [0.38, 0.7, 1.15], color: '#7d7d7d', aggro: 22, dmg: 10, drops: [['raw_meat', 2], ['leather', 1]], leg: 0.5, pack: true },
   bear: { name: 'Ayı', hp: 320, speed: 6, size: [0.9, 1.3, 1.9], color: '#4a3020', aggro: 10, dmg: 30, drops: [['raw_meat', 6], ['leather', 3]], leg: 0.55 },
+  // başıboş aç köpekler (gündüz tehdidi, DayThreats doğurur): kurtla aynı sürü yapay zekâsı, kasaba ve şehirde
+  husky: { name: 'Başıboş Köpek', hp: 50, speed: 7.4, size: [0.35, 0.65, 1.0], color: '#8a8580', aggro: 18, dmg: 8, drops: [['raw_meat', 1]], leg: 0.45, pack: true, stray: true },
+  shiba: { name: 'Başıboş Köpek', hp: 36, speed: 7.0, size: [0.3, 0.5, 0.8], color: '#c47a3a', aggro: 14, dmg: 6, drops: [['raw_meat', 1]], leg: 0.35, pack: true, stray: true },
 };
 const FISH = { lake: ['Alabalık', 'Sazan', 'Levrek', 'Turna'], sea: ['Lüfer', 'Kefal', 'Somon', 'Levrek'] };
 

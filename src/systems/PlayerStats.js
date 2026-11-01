@@ -56,16 +56,20 @@ export class PlayerStats {
     if (this.downed) return ev;
     // açlık/susuzluk
     this.hunger = clamp(this.hunger - RATES.hunger * h * (sleeping ? 0.6 : 1) * diff, 0, 100);
-    const heat = env.ambient !== undefined && env.ambient > 30 ? 1.5 : 1;
+    const heat = (env.ambient !== undefined && env.ambient > 30 ? 1.5 : 1) * (1 + (env.sun || 0) * 0.6); // güneş altında daha çok susar
     this.thirst = clamp(this.thirst - RATES.thirst * h * (sleeping ? 0.6 : 1) * heat * diff, 0, 100);
     // enerji
     if (sleeping) this.energy = clamp(this.energy + RATES.energySleep * h * (env.comfort ? 1 + env.comfort * 0.4 : 1), 0, 100);
     else this.energy = clamp(this.energy - RATES.energyAwake * h * (this.hunger < 20 ? 1.3 : 1), 0, 100);
     // vücut sıcaklığı
     const amb = env.ambient ?? 18;
-    let target = 37 + (amb - 18) * 0.06 + (env.warmth || 0) * 0.08 - (env.wet || 0) * 1.4 + (env.nearFire ? 1.2 : 0) + (env.sheltered ? 0.5 : 0);
-    target = clamp(target, 33, 40);
-    this.temp += (target - this.temp) * Math.min(1, h * 0.8);
+    // öğle güneşinde açıkta kalmak vücudu ısıtır (sıcak havada 39,5 °C üstü: güneş çarpması hasarı); gölge/bina serin
+    let target = 37 + (amb - 18) * 0.06 + (env.warmth || 0) * 0.08 - (env.wet || 0) * 1.4 + (env.nearFire ? 1.2 : 0) + (env.sheltered ? (amb > 26 ? -0.3 : 0.5) : 0) + (env.sun || 0) * 2.8;
+    target = clamp(target, 33, 40.5);
+    const prevT = this.temp;
+    this.temp += (target - this.temp) * Math.min(1, h * (env.sun ? 1.2 : 0.8));
+    if (prevT <= 38.6 && this.temp > 38.6) ev.push('heat');
+    if (prevT <= 39.5 && this.temp > 39.5) ev.push('heatstroke');
     // moral
     let mTarget = 55 + (env.comfort || 0) * 30 + (env.inBase ? 6 : 0) - (env.alone ? 8 : 0) - (env.night && !env.inBase ? 6 : 0);
     if (this.hunger < 25) mTarget -= 12;

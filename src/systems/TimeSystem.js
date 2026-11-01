@@ -3,6 +3,9 @@
 export const FINAL_DAY = 30;
 export const FINAL_MINUTE = 22 * 60; // 30. gün 22:00 — "Son Işık"
 export const DAY_START = 6 * 60, NOON = 12 * 60, EVENING = 17 * 60, NIGHT = 21 * 60;
+// zombi saatleri: alacakaranlıkta (20:30) topraktan çıkarlar, şafakta (06:00) toprağa dönerler (isNight ile aynı aralık).
+// Gündüz yağma zamanıdır; gündüz tehditleri yağmacılar, başıboş köpekler ve öğle sıcağıdır (DayThreats, PlayerStats).
+export const DUSK = NIGHT - 30, DAWN = DAY_START;
 
 export function phaseOf(minuteOfDay) {
   if (minuteOfDay >= DAY_START && minuteOfDay < NOON) return 'Sabah';
@@ -30,7 +33,7 @@ export class TimeSystem {
   get minute() { return Math.floor(this.minuteOfDay % 60); }
   get hourIndex() { return Math.floor(this.total / 60); }
   get phase() { return phaseOf(this.minuteOfDay); }
-  get isNight() { const m = this.minuteOfDay; return m >= NIGHT - 30 || m < DAY_START; }
+  get isNight() { const m = this.minuteOfDay; return m >= DUSK || m < DAWN; }
   get daysLeft() { return Math.max(0, FINAL_DAY - this.day); }
   /** Son Işık'a kalan oyun dakikası */
   get countdown() { return Math.max(0, (FINAL_DAY - 1) * 1440 + FINAL_MINUTE - this.total); }
