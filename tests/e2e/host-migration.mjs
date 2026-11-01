@@ -59,7 +59,11 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   const cState = await evalJS(C, () => { const g = window.__game, S = g.session; return { mode: g.net.mode, reconnecting: g.net.reconnecting, state: g.state, players: S ? [...S.players.values()].map((p) => p.name) : null, inv: S ? S.inventory.items().map((s) => s.id + 'x' + s.qty) : null, hostName: g.net.room && (g.net.room.players.find((p) => p.isHost) || {}).name, doorTarget: S ? (S.world.doors.find((q) => q.id === window.__doorId) || {}).target : null }; });
   log('C sonra', cState);
   check(jc && jc.ok && cState.mode === 'client' && cState.state === 'playing', 'C yeni host\'a katılmalı', cState);
+  // geç katılan yeni host'un oyuncu listesinde olmalı ve kapıyı açık görmeli
+  const bListHasC = await B.waitForFunction(() => window.__game.session.players.size >= 2, null, { timeout: 120000 }).then(() => true).catch(() => false);
   log('B oyuncular', await evalJS(B, () => [...window.__game.session.players.values()].map((p) => p.name)));
+  check(bListHasC, 'yeni host geç katılanı oyuncu listesinde görmeli');
+  check(cState && cState.doorTarget === 1, 'geç katılan açılmış kapıyı açık görmeli', cState && cState.doorTarget);
   // yeni host zombi simülasyonu
   await evalJS(B, () => { const S = window.__game.session; S.zombies.spawn('normal', S.local.pos.x + 8, S.local.pos.z + 8, {}); });
   await wait(3000);

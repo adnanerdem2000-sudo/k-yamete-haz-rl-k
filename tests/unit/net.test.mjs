@@ -97,3 +97,27 @@ test('LocalTransport: zaman aşımı eşe göre (dünyasını kuran eş düşür
   assert.deepEqual(dropped, [opened[1]], 'yalnız sıradan eş düşürülmeli');
   host.close(); slow.close(); fast.close();
 });
+
+test('LocalTransport: kapanışını duyuran host yeni bağlantı kabul etmez (ölmekte olan host\'a yeniden katılma yok)', async () => {
+  const code = 'C' + Math.random().toString(36).slice(2, 8);
+  const host = new LocalTransport();
+  await host.startHost(code);
+  const old = new LocalTransport();
+  let reason = null;
+  old.onHostClose = (r) => { reason = r; };
+  await old.connect(code);
+  host._unload(); // sekme kapanıyor (beforeunload)
+  await tick(60);
+  assert.equal(reason, 'closed', 'bağlı istemci kesin kayıp almalı');
+  const late = new LocalTransport();
+  const p = late.connect(code).then(() => 'kabul', () => 'red');
+  await tick(400);
+  assert.equal(late.hostId, null, 'kapanış süresinde yeni istemci kabul edilmemeli');
+  // yeni host aynı kodu alabilmeli (kapanan host yoklamaya "buradayım" demez)
+  const next = new LocalTransport();
+  await next.startHost(code);
+  assert.ok(next.isHost);
+  host.close(); old.close(); next.close();
+  late.close();
+  void p;
+});

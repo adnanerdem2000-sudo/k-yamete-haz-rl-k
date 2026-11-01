@@ -12,7 +12,16 @@ class Base {
     this.onPeerOpen = () => {}; this.onPeerData = () => {}; this.onPeerClose = () => {};
     this.onHostData = () => {}; this.onHostClose = () => {}; this.onCall = null;
     this.closed = false;
+    this.closingUntil = 0;
   }
+
+  /**
+   * Sekme kapanıyor (beforeunload): kapanış duyurulduktan sonra 4 sn yeni bağlantı/yoklama kabul edilmez. Aksi hâlde
+   * kopan istemcinin ilk yeniden bağlanma denemesi, sayfası henüz kapanmamış (ölmekte olan) host'a ulaşıp ona yeniden
+   * katılıyor, host sonra sessizce kaybolunca göç 90 sn'lik "sessizlik" yoluna düşüyordu. Kapanış iptal edilirse
+   * (sayfa açık kaldıysa) süre dolunca normal kabul sürer; istemciler aynı host'a yeniden bağlanır.
+   */
+  get closing() { return this.closingUntil > performance.now(); }
 }
 
 // ============================================================================ BroadcastChannel
@@ -25,7 +34,7 @@ export class LocalTransport extends Base {
     this.hostId = null;
     this.ch = null;
     this._hb = null;
-    this._unload = () => this.post({ k: 'close', from: this.id });
+    this._unload = () => { this.closingUntil = performance.now() + 4000; this.post({ k: 'close', from: this.id }); };
     window.addEventListener('beforeunload', this._unload);
   }
 
@@ -45,8 +54,8 @@ export class LocalTransport extends Base {
     this.ch.onmessage = (ev) => {
       const m = ev.data;
       if (m.to && m.to !== this.id) return;
-      if (m.k === 'probe') this.post({ k: 'host_here', to: m.from, from: this.id });
-      else if (m.k === 'connect') { this.peers.set(m.from, performance.now()); this.post({ k: 'accept', to: m.from, from: this.id }); this.onPeerOpen(m.from); }
+      if (m.k === 'probe') { if (!this.closing) this.post({ k: 'host_here', to: m.from, from: this.id }); }
+      else if (m.k === 'connect') { if (this.closing) return; this.peers.set(m.from, performance.now()); this.post({ k: 'accept', to: m.from, from: this.id }); this.onPeerOpen(m.from); }
       else if (m.k === 'data' && this.peers.has(m.from)) { this.peers.set(m.from, performance.now()); this.onPeerData(m.from, m.d); }
       else if (m.k === 'data' && m.to === this.id) this.post({ k: 'close', from: this.id, to: m.from }); // düşürülmüş eş: yeniden bağlansın
       else if (m.k === 'hb' && this.peers.has(m.from)) this.peers.set(m.from, performance.now());
@@ -165,7 +174,9 @@ export class PeerTransport extends Base {
         if (!opened) { clearTimeout(to); peer.destroy(); rej(e); return; }
         console.warn('PeerJS:', e.type, e.message);
       });
-      peer.on('connection', (conn) => this.accept(conn));
+      peer.on('connection', (conn) => { if (this.closing) { try { conn.close(); } catch { /* yoksay */ } return; } this.accept(conn); });
+      this._unload = () => { this.closingUntil = performance.now() + 4000; };
+      window.addEventListener('beforeunload', this._unload);
       peer.on('call', (call) => this.onCall && this.onCall(call));
       peer.on('disconnected', () => { if (!this.closed) try { peer.reconnect(); } catch { /* yoksay */ } });
     });
@@ -212,6 +223,7 @@ export class PeerTransport extends Base {
   close() {
     if (this.closed) return;
     this.closed = true;
+    if (this._unload) window.removeEventListener('beforeunload', this._unload);
     for (const c of this.conns.values()) try { c.close(); } catch { /* yoksay */ }
     if (this.hostConn) try { this.hostConn.close(); } catch { /* yoksay */ }
     if (this.peer) try { this.peer.destroy(); } catch { /* yoksay */ }

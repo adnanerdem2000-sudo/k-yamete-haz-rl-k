@@ -854,7 +854,9 @@ export class Session {
 
   serializeDoors() {
     const out = {};
-    for (const d of this.world.doors) if (d.open01 > 0 || d.broken || d.barricade || !d.locked !== !d.origLocked || d.hp < d.maxHp) out[d.id] = [d.target, d.broken ? 1 : 0, d.barricade, d.locked ? 1 : 0, Math.round(d.hp)];
+    // açılması komut edilmiş ama animasyonu henüz başlamamış kapı da (target > 0) gönderilir: yavaş host'tan katılan
+    // oyuncu onu kapalı görmesin
+    for (const d of this.world.doors) if (d.target > 0 || d.open01 > 0 || d.broken || d.barricade || !d.locked !== !d.origLocked || d.hp < d.maxHp) out[d.id] = [d.target, d.broken ? 1 : 0, d.barricade, d.locked ? 1 : 0, Math.round(d.hp)];
     const wins = {};
     for (const w of this.world.windows) if (w.broken || w.barricade || w.hp < w.maxHp || w.initBroken || w.initBarricade) wins[w.id] = [w.broken ? 1 : 0, w.barricade, Math.round(w.hp)];
     return { doors: out, windows: wins };
