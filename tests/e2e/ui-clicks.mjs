@@ -16,6 +16,12 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     }
     return out;
   }, sel);
+  // adım adlı gerçek tıklama: yazılım GPU'sunda (özellikle yeni gölgelendirici derlenen ilk karelerde) ana iş parçacığı
+  // saniyelerce meşgul olabilir; Playwright düğmenin iki karede sabit kalmasını bekler → cömert zaman aşımı. Başarısızsa
+  // hangi adım olduğu yazılır.
+  const click = async (what, loc, timeout = 60000) => {
+    try { await loc.click({ timeout }); return true; } catch (e) { errors.push(`[assert] tıklanamadı: ${what} — ${e.message.split('\n')[0]}`); return false; }
+  };
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 200000 });
   await wait(2000);
@@ -27,33 +33,35 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   const screens = [['ARKADAŞLARLA OYNA', 'multi'], ['KARAKTERLER', 'characters'], ['ÖZELLEŞTİRME', 'customize'], ['AYARLAR', 'settings'], ['NASIL OYNANIR?', 'howto'], ['KREDİLER', 'credits']];
   const visited = [];
   for (const [label, name] of screens) {
-    await page.locator('.main-menu button.plank', { hasText: label }).first().click({ timeout: 15000 });
+    await click('ana menü: ' + label, page.locator('.main-menu button.plank', { hasText: label }).first());
     await wait(700);
     const scr = await evalJS(page, () => window.__game.ui.menus.screen);
     let extra = null;
     if (name === 'settings') {
       const tabsSeen = [];
       for (const t of ['Ses', 'Kontroller', 'Oyun', 'Grafik']) {
-        await page.locator('.settings .tabs button.tab', { hasText: t }).first().click({ timeout: 10000 });
+        await click('ayarlar sekmesi: ' + t, page.locator('.settings .tabs button.tab', { hasText: t }).first());
         await wait(300);
         tabsSeen.push(await evalJS(page, () => { const a = document.querySelector('.settings .tabs button.tab.active'); return a ? a.textContent : null; }));
       }
-      await page.locator('.settings button.seg-btn', { hasText: /^Yüksek$/ }).first().click({ timeout: 10000 });
-      await wait(300);
-      const q1 = await evalJS(page, () => window.__game.settings.get('graphics.quality'));
-      await page.locator('.settings button.seg-btn', { hasText: /^Orta$/ }).first().click({ timeout: 10000 });
-      await wait(300);
-      const q2 = await evalJS(page, () => window.__game.settings.get('graphics.quality'));
-      extra = { tabsSeen, q1, q2 };
+      // kalite seçimi: "Düşük" tıklanınca ön ayarın değerleri yazılır (koşucunun test ayarı da Düşük ama %60 çözünürlük,
+      // 260 m). Gölge açan seviyeler yazılım GPU'sunda bütün malzemeleri yeniden derletip sonraki kareyi dakikalarca
+      // sürdürür; senaryonun geri kalanı da ağır ayarla koşardı. Sonra test ayarlarına dönülür.
+      const before = await evalJS(page, () => ({ ...window.__game.settings.get('graphics') }));
+      await click('kalite: Düşük', page.locator('.settings button.seg-btn', { hasText: /^Düşük$/ }).first());
+      await wait(400);
+      const after = await evalJS(page, () => { const gr = window.__game.settings.get('graphics'); const a = document.querySelector('.settings .seg button.seg-btn.active'); return { quality: gr.quality, renderScale: gr.renderScale, viewDistance: gr.viewDistance, active: a ? a.textContent : null }; });
+      await evalJS(page, (b) => window.__game.settings.setMany('graphics', b), before);
+      extra = { tabsSeen, before: { renderScale: before.renderScale, viewDistance: before.viewDistance }, after };
     }
-    await page.getByRole('button', { name: '← Geri' }).first().click({ timeout: 10000 });
+    await click('← Geri (' + label + ')', page.getByRole('button', { name: '← Geri' }).first());
     await wait(600);
     visited.push({ label, scr, back: await evalJS(page, () => window.__game.ui.menus.screen), extra });
   }
   log('ana menü ekranları', visited);
   check(visited.every((v, i) => v.scr === screens[i][1] && v.back === 'main'), 'her tabela kendi ekranını açmalı, ← Geri ana menüye döndürmeli', visited);
   const stv = visited.find((v) => v.extra);
-  check(stv && stv.extra.tabsSeen.join(',') === 'Ses,Kontroller,Oyun,Grafik' && stv.extra.q1 === 'high' && stv.extra.q2 === 'medium', 'ayar sekmeleri ve kalite seçimi tıklamayla çalışmalı', stv);
+  check(stv && stv.extra.tabsSeen.join(',') === 'Ses,Kontroller,Oyun,Grafik' && stv.extra.after.quality === 'low' && stv.extra.after.renderScale === 0.85 && stv.extra.after.viewDistance === 300 && stv.extra.after.active === 'Düşük', 'ayar sekmeleri ve kalite seçimi tıklamayla çalışmalı', stv);
   // Playwright tıklaması: düğmenin önünde başka öğe varsa (tıklamayı yakalayan katman) zaman aşımıyla hata verir
   await page.getByRole('button', { name: 'TEK OYNA' }).click({ timeout: 15000 });
   await wait(1200);
@@ -83,9 +91,9 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   await wait(900);
   const jt = [];
   for (const t of ['ÜRETİM', 'KARAKTER', 'GÖREVLER', 'ZAMAN ÇİZELGESİ', 'HARİTA', 'ENVANTER']) {
-    const ok = await page.locator('.journal .tabs button.tab', { hasText: t }).first().click({ timeout: 10000 }).then(() => true, (e) => e.message.split('\n')[0]);
+    const ok = await click('günlük sekmesi: ' + t, page.locator('.journal .tabs button.tab', { hasText: t }).first());
     await wait(400);
-    jt.push(ok === true ? await evalJS(page, () => window.__game.ui.journal.tab) : ok);
+    jt.push(ok ? await evalJS(page, () => window.__game.ui.journal.tab) : 'tıklanamadı');
   }
   log('günlük sekmeleri', jt);
   check(jt.join(',') === 'crafting,character,quests,timeline,map,inventory', 'günlük sekmeleri tıklamayla değişmeli', jt);
@@ -96,23 +104,23 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   for (let i = 0; i < 3 && (await panelName()) !== 'pause'; i++) { await page.keyboard.press('Escape'); await wait(1000); }
   const pz = { start: await panelName() };
   if (pz.start === 'pause') {
-    await page.getByRole('button', { name: 'Ayarlar', exact: true }).click({ timeout: 10000 });
+    await click('duraklat: Ayarlar', page.getByRole('button', { name: 'Ayarlar', exact: true }));
     await wait(700);
     pz.settings = await evalJS(page, () => window.__game.ui.panel && window.__game.ui.panel.name);
     pz.tabs = [];
     for (const t of ['Ses', 'Kontroller', 'Oyun', 'Grafik']) {
-      await page.locator('.settings-panel .tabs button.tab', { hasText: t }).first().click({ timeout: 10000 });
+      await click('oyun içi ayarlar sekmesi: ' + t, page.locator('.settings-panel .tabs button.tab', { hasText: t }).first());
       await wait(300);
       pz.tabs.push(await evalJS(page, () => { const a = document.querySelector('.settings-panel .tabs button.tab.active'); return a ? a.textContent : null; }));
     }
     pz.benchButton = await page.getByRole('button', { name: /Performans testini başlat/ }).count();
-    await page.locator('.settings-panel button.close').first().click({ timeout: 10000 });
+    await click('ayarlar ✕', page.locator('.settings-panel button.close').first());
     await wait(700);
     pz.afterSettings = await evalJS(page, () => window.__game.ui.panel && window.__game.ui.panel.name);
-    await page.getByRole('button', { name: 'Nasıl Oynanır?', exact: true }).click({ timeout: 10000 });
+    await click('duraklat: Nasıl Oynanır?', page.getByRole('button', { name: 'Nasıl Oynanır?', exact: true }));
     await wait(700);
     pz.howto = await evalJS(page, () => window.__game.ui.panel && window.__game.ui.panel.name);
-    await page.locator('.panel-layer.open button.close').first().click({ timeout: 10000 });
+    await click('nasıl oynanır ✕', page.locator('.panel-layer.open button.close').first());
     await wait(700);
     pz.afterHowto = await evalJS(page, () => window.__game.ui.panel && window.__game.ui.panel.name);
   }
