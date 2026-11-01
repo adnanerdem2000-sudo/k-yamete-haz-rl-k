@@ -13,7 +13,7 @@ const t0 = Date.now();
 const procs = () => {
   const out = [];
   try {
-    const lines = execSync("ps -eo pid,args | grep chrome-headless-shel[l]").toString().trim().split('\n');
+    const lines = execSync("ps -eo pid,args | grep -E 'chrome-headless-shel[l]|chrome-linux64/chrom[e]'").toString().trim().split('\n');
     for (const l of lines) {
       const m = l.trim().match(/^(\d+)\s+(.*)$/); if (!m) continue;
       const pid = m[1]; const tm = m[2].match(/--type=([a-z-]+)/); const type = tm ? tm[1] : 'browser';

@@ -11,7 +11,12 @@ try { pw = require('playwright'); } catch { pw = require(execSync('npm root -g')
 const { chromium } = pw;
 
 const [scenarioPath, url = 'http://localhost:8080/'] = process.argv.slice(2);
-const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'] });
+// Tarayıcı: varsayılan Playwright başsız kabuğu (chrome-headless-shell). PW_CHANNEL=chromium → tam Chromium'un yeni
+// başsız modu; PW_ARGS="--a --b" → ek bayraklar. (Eski başsız kabukta iki sekme aura'nın sentetik fare hareketi
+// fırtınasını tetikleyip tarayıcı sürecini şişiriyor; bkz. docs/KNOWN_ISSUES.md.)
+const launchOpts = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.PW_ARGS || '').split(' ').filter(Boolean)] };
+if (process.env.PW_CHANNEL) launchOpts.channel = process.env.PW_CHANNEL;
+const browser = await chromium.launch(launchOpts);
 const logs = [];
 const errors = [];
 const pages = [];
@@ -26,6 +31,22 @@ async function newPage(name = 'p' + pages.length, w = 960, h = 540, sameContext 
   page.on('pageerror', (e) => { const t = `[${name}:pageerror] ${e.message}\n${(e.stack || '').split('\n').slice(0, 4).join('\n')}`; logs.push(t); errors.push(t); });
   // sekme çökmesi (ör. yazılım GPU'sunda bellek) başarısızlık sayılır
   page.on('crash', () => { const t = `[${name}:error] sekme çöktü (renderer crash)`; logs.push(t); errors.push(t); });
+  // İşaretçi kilidi başsız kabukta kapatılır: kilitliyken Chromium her fare olayında imleci ortaya taşır
+  // (MoveCursorToCenter → OnCursorMovedToRootLocation → PostSynthesizeMouseMove); başsız ekranda imleç hiç
+  // hareket etmediği için bu sonsuz döngüye girer: saniyede ~40 bin sentetik fare olayı, tarayıcı ana iş parçacığı
+  // %90 meşgul, iki sekmede tarayıcı süreci dakikada ~1-2 GB şişip OOM ile çöker, render tarafında GB'larca
+  // MouseEvent çöpü (Oilpan). PW_POINTERLOCK=1 ile eski davranış.
+  if (!process.env.PW_POINTERLOCK) {
+    await page.addInitScript(() => {
+      try {
+        Element.prototype.requestPointerLock = function () {
+          const el = this;
+          setTimeout(() => { try { document.dispatchEvent(new Event('pointerlockerror')); } catch { /* yoksay */ } void el; }, 0);
+          return Promise.reject(new Error('pointer lock test ortamında kapalı'));
+        };
+      } catch { /* yoksay */ }
+    });
+  }
   // grafik ayarlarını hafiflet (yazılım GPU)
   await page.addInitScript(() => {
     try {
