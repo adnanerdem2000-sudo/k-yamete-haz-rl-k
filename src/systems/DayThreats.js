@@ -39,6 +39,9 @@ export class DayThreats {
     if (!players.length) return;
     const day = S.time.day;
     for (const p of players) {
+      // üs gündüz dinlenme/inşa yeridir, sığınaktaki oyuncu yüzeyde değildir: tehditler dışarıda yağmalarken başlar
+      if (S.isInBase({ x: p.x, z: p.z })) continue;
+      if (S.world.under && S.world.under.zoneAt(p.x, p.y + 0.5, p.z)) continue;
       const reg = S.world.regionAt(p.x, p.z), rid = reg ? reg.id : null;
       // yağmacı devriyesi: oyuncunun 160 m çevresinde etkin devriye yoksa
       const raiders = [...S.zombies.list.values()].filter((z) => z.def.human && !z.dead);

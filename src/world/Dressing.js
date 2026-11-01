@@ -380,6 +380,12 @@ export function buildDressing(W, spots = []) {
     indoor++;
   }
   const decals = new Decals(W.root, list);
+  // yer altı sığınağı girişlerinin (merdiven evi kapısı, kapaklar, maden ağzı) önü boş kalsın: üretimden sonra süzülür,
+  // böylece rastgele sayı sırası ve şehrin geri kalanındaki torbalar değişmez
+  if (W.shelters && W.shelters.length) {
+    const near = (b) => W.shelters.some((sh) => Math.hypot(b.x - sh.entry.x, b.z - sh.entry.z) < 4.2 || Math.hypot(b.x - sh.entry.out.x, b.z - sh.entry.out.z) < 1.6);
+    for (let i = bags.length - 1; i >= 0; i--) if (near(bags[i])) bags.splice(i, 1);
+  }
   const bagMesh = new TrashBags(W.root, bags);
   const fac = [];
   for (const b of W.buildings || []) if (b.facade) fac.push(...b.facade);

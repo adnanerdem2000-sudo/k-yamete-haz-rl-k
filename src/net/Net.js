@@ -359,8 +359,9 @@ export class Net {
       throw e;
     }
     this.phase = this.phase === 'game' ? 'game' : 'lobby';
-    t.onHostData = (m) => this.onHostMsg(m);
-    t.onHostClose = (reason) => this.onHostLost(reason);
+    // kapatılmış (ayrılınca/yeniden bağlanınca değişen) taşıyıcıdan gecikmeli gelen ileti ve kapanış yok sayılır
+    t.onHostData = (m) => { if (this.transport === t) this.onHostMsg(m); };
+    t.onHostClose = (reason) => { if (this.transport === t) this.onHostLost(reason); };
     t.onCall = (call) => this.voice.answer && this.voice.answer(call);
     const prof = this.profile();
     const answer = new Promise((res, rej) => { this._joinWait = { res, rej }; setTimeout(() => { if (this._joinWait) { this._joinWait = null; rej(new Error('Oda yanıt vermedi.')); } }, 10000); });
@@ -390,7 +391,7 @@ export class Net {
       case 'pjoin': if (this.session) this.session.addRemotePlayer(m.info); break;
       case 'pleave': if (this.session) this.session.removeRemotePlayer(m.id); break;
       case 'pong': this.rtt = performance.now() - m.ts; this.pingOut = 0; break;
-      case 'ping': this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
+      case 'ping': if (this.transport) this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
       case 'pdata': if (this.session) { this.session.offlinePlayers = m.d || {}; if (m.zz) this.session.zoneState = m.zz; } break;
       case 'migrate': this.migrateHint = m; break;
       case 'kick': this.game.ui.alert('Oda sahibi seni odadan çıkardı.'); this.backToMenu(); break;
