@@ -250,10 +250,14 @@ _(aşamalar ilerledikçe doldurulur)_
   aldı, stok host ve istemcide 5 → 4. Eylem ofseti: ilk koşuda uzak avatar ilk gördüğü eylemi oynatmıyordu (eski
   davranış) → düzeltildi.
 - **Üç sekmeli göç (`host-migration3`):** A host, B ve C istemci; C yağmalar, B kapı açar; A kapanır → B host olur, C
-  kendiliğinden B'ye bağlanır. Ölçülen: B 24 sn'de host oldu, C 41 sn'de (dünyasını yeniden
-  kurarak) kendiliğinden bağlandı; C'nin yağmayla değişen envanteri ve açılan kapı korundu, boşaltılan konteyner iki
-  tarafta da boş, B'nin oyuncu listesinde C var, B'nin zombileri C'de görünüyor, C'nin gecikmesi 13 ms. Üç sekmenin
-  tepe belleği toplam 4,6 GB.
+  kendiliğinden B'ye bağlanır. Son kodla ölçülen: B 25 sn'de host oldu, gördüğü 6 zombinin 6'sı aynı yerlerde korundu
+  (bölge durumu `pdata` ile ulaştı), C 41 sn'de (dünyasını yeniden kurarak) bağlandı; C'nin yağmayla değişen
+  envanteri ve açılan kapı korundu, boşaltılan konteyner iki tarafta da boş, B'nin oyuncu listesinde C var, B'nin
+  zombileri C'de görünüyor, C'nin gecikmesi 11 ms. Üç sekmenin tepe belleği toplam 4,6 GB.
+- **İki sekme + geç katılan (`host-migration`):** B host oldu, envanter ve kapı korundu, göçten sonra katılan C
+  kapıyı açık görüyor ve B'nin oyuncu listesinde (son iki denetim bu turda eklendi).
+- **Son koşu (Aşama 7 kodu, sırayla):** `multiplayer-6` 258 sn, `multiplayer-local` 303 sn, `carry-mp` 284 sn,
+  `host-migration` 620 sn, `host-migration3` 843 sn — hepsi 0 hata. Birim testi 41/41.
 - **Test ortamı bulgusu:** iki sekmeli senaryoların çökmesi oyunun değil başsız kabuğun işaretçi kilidi döngüsüydü
   (bkz. §2/§3); düzeltmeden sonra iki sekme toplam ~3,3 GB, üç sekme ~3,8 GB.
 - **İnceleme:** iş akışı (3 mercek + bulgu başına 3 şüpheci) on aday buldu, hepsi uygulandı: çift tıklamada tüccar
