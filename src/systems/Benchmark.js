@@ -78,6 +78,8 @@ export class Benchmark {
     const L = S.local, st = S.localStats;
     if (L.vehicle) throw new Error('Araçtayken çalışmaz: önce araçtan in.');
     if (st.downed || st.dead) throw new Error('Oyuncu yerdeyken çalışmaz.');
+    // tırmanma, uyku, taşınma vb. durumlarda ışınlama durum makinesini bozar: yalnız yürürken/zıplarken/yüzerken
+    if (L.mode && !['ground', 'air', 'swim'].includes(L.mode)) throw new Error('Şu an çalışmaz: önce yere in (tırmanma, uyku ya da taşınma sırasında olmaz).');
     this.running = true;
     // oturum kapanır (menüye dönüş) ya da oda açılırsa test durur; geri yükleme yalnız aynı oturumda yapılır
     const alive = () => g.session === S && !S.disposed;
@@ -129,6 +131,7 @@ export class Benchmark {
         for (const id of spawned.splice(0)) S.zombies.removeZombie(id);
       }
     } finally {
+      this.running = false; // geri yüklemede bir adım hata verse de test "çalışıyor" durumunda kalmasın
       for (const [o, fn] of guards) o.damage = fn;
       if (saves) saves.autosave = autosave0;
       if (gfx.holdScale) gfx.holdScale(false);
@@ -138,7 +141,6 @@ export class Benchmark {
         if (saved.pitch !== undefined) L.camPitch = saved.pitch;
         if (autosaveDue && autosave0) autosave0.call(saves);
       }
-      this.running = false;
     }
     const gl = gfx.renderer.getContext();
     let gpu = null;

@@ -6,13 +6,13 @@
 // tests/visual/baseline/<ad>.png ile sayfa içinde karşılaştırılır (kanal farkı > 40/255
 // olan piksel oranı); eşik %2,5 (3B animasyonlu menü sahnelerinde %4). Yazılım GPU'sunda deterministik; başka GPU'da
 // yeniden taban alınmalı. Taban almak: VISUAL_BASELINE=1 node tools/e2e.mjs visual · çıktı: /tmp/visual/<ad>.png
+// Karşılaştırma ve taban Orta kalitede (oyunun varsayılanı; gölge, parlama, çimen açık, tam çözünürlük).
 // VISUAL_QUALITY=ultra|high|medium|low: o kalite seviyesinde görüntü alınır, karşılaştırılmaz (çıktı /tmp/visual-<kalite>/) —
 // kalite seviyelerinin görsel farkı için. Oyunun kendi ön ayarı (QUALITY_PRESETS) oyun açılmadan yazılır: gölge haritası
 // boyutu, kenar yumuşatma gibi yalnız açılışta okunan ayarlar da etkili olur.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { QUALITY_PRESETS } from '../../src/core/Settings.js';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const BASE = path.join(ROOT, 'tests/visual/baseline');
 const OUT = '/tmp/visual';
@@ -23,16 +23,21 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
   const OUTD = VQ ? `/tmp/visual-${VQ}` : OUT;
   const results = {};
   fs.mkdirSync(OUTD, { recursive: true });
-  if (VQ) {
-    if (!QUALITY_PRESETS[VQ]) throw new Error('VISUAL_QUALITY bilinmiyor: ' + VQ + ' (low|medium|high|ultra)');
-    await page.addInitScript(([q, preset]) => {
-      try {
-        const k = 'kiyamet_settings_v1', s = JSON.parse(localStorage.getItem(k) || '{}');
-        s.graphics = { ...(s.graphics || {}), quality: q, ...preset, autoScale: false };
-        localStorage.setItem(k, JSON.stringify(s));
-      } catch { /* yoksay */ }
-    }, [VQ, QUALITY_PRESETS[VQ]]);
-  }
+  // kalite: karşılaştırma oyunun varsayılanı Orta'da yapılır (koşucunun hafif test ayarları — Düşük, %60 çözünürlük,
+  // gölge/parlama/çimen kapalı — oyuncunun gördüğünü temsil etmez); VISUAL_QUALITY ile başka seviye. Ön ayar tablosu
+  // olmayan eski kodda (taban alma) Orta'nın değerleri kullanılır.
+  const Q = VQ || 'medium';
+  let presets = null;
+  try { presets = (await import('../../src/core/Settings.js')).QUALITY_PRESETS || null; } catch { /* eski kod */ }
+  if (VQ && !(presets && presets[VQ])) throw new Error('VISUAL_QUALITY bilinmiyor ya da bu kodda ön ayar yok: ' + VQ + ' (low|medium|high|ultra)');
+  const preset = presets ? presets[Q] : { shadows: true, bloom: true, grass: true, ao: false, waterRefl: false, viewDistance: 420, renderScale: 1 };
+  await page.addInitScript(([q, pr]) => {
+    try {
+      const k = 'kiyamet_settings_v1', s = JSON.parse(localStorage.getItem(k) || '{}');
+      s.graphics = { ...(s.graphics || {}), quality: q, ...pr, autoScale: false };
+      localStorage.setItem(k, JSON.stringify(s));
+    } catch { /* yoksay */ }
+  }, [Q, preset]);
   await page.addInitScript(() => {
     // tohumlanabilir rastgelelik: her sahne kurulumundan önce __seed(n)
     let s = 1;
@@ -57,6 +62,9 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
     window.__draw = (hour, cam) => {
       const T = 1000;
       g.env.weather = window.__clear;
+      // görüntü tabanlı ortam ışığı o saatin göğüyle yeniden çizilsin: yenileme oyun süresine (20 sn) ve duvar saatine
+      // (2,5 sn) bağlı; donmuş döngüde önceki sahnenin (ya da menünün akşam) ışığı kalıyordu
+      g.env.envT = 0; g.env._envMs = 0;
       g.env.update(0.016, T, hour * 60, cam.position, null);
       if (g.env.updateLamps) g.env.updateLamps(0.5, hour * 60, cam);
       window.__wind.uTime.value = T;
@@ -155,6 +163,9 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       // bina (garaj) dışındaki en yakın otomobil; kamera araç dönüşümünden: ön sol 3/4 dış görünüş, sürücü gözü iç görünüş
       const v = S.vehicles.list.filter((q) => !q.wrecked && !q.water && !q.def.bike && !(S.world.buildingAt && S.world.buildingAt(q.pos.x, q.pos.z))).sort((a, b) => Math.hypot(a.pos.x - P.x, a.pos.z - P.z) - Math.hypot(b.pos.x - P.x, b.pos.z - P.z))[0];
       if (!v) return false;
+      // görsel durum sabit: hasarsız gövde (araçlar rastgele hasarla doğar; oyun sırasında tohumlanmamış rastgelelik
+      // göçük/çatlak cam/boya durumunu koşudan koşuya değiştiriyordu)
+      if (v.visuals) { v.health = v.maxHealth; v.visuals.resetBody(); v.visuals.applyDamage(1); }
       v.root.updateMatrixWorld(true);
       const W = v.def.wid, Lh = v.def.len, sy = Math.min(0.85, Math.max(0.32, (v.modelH || 1.5) * 0.25));
       const loc = (x, y, z) => v.root.localToWorld(new THREE.Vector3(x, y, z));

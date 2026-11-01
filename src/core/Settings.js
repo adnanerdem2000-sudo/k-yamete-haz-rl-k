@@ -76,7 +76,7 @@ export const Settings = new SettingsStore();
  * Ayrıca kaliteye göre: gölge haritası (1024/2048/4096/4096), kenar yumuşatma (düşükte kapalı), çözünürlük tavanı
  * (1×/1×/1,5×/2×), bitki örtüsü mesafeleri, zombi sınırı (26/38/50/50), efekt yoğunluğu (%50/%80/%100/%100).
  * AO (ortam kapanması, GTAO) ve gerçek su yansıması (düzlemsel) yalnız Ultra'da varsayılan açık: ikisi de sahneyi
- * bir kez daha çizer (çizim çağrısı ~2×).
+ * bir kez daha çizer (ölçümde çizim çağrısı Yüksek'in 1,4–1,6 katı, göl yakınında ~6 katı).
  */
 export const QUALITY_PRESETS = {
   low: { shadows: false, bloom: false, grass: false, ao: false, waterRefl: false, viewDistance: 300, renderScale: 0.85 },

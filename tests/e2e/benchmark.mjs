@@ -90,6 +90,16 @@ export default async ({ page, url, evalJS, log, errors }) => {
   check(rb && rb.savesDuring === 0 && rb.savesAfter === 1, 'test sırasında otomatik kayıt yapılmamalı, sonda bir kez yapılmalı', rb);
   check(rb && rb.runningWhilePaused === true && rb.frames > 0 && rb.ms >= 2500 && !rb.err, 'duraklatmadan sonra ölçüm tamamlanmalı (duraklatma süresi ölçüme girmez)', rb);
   check(rb && /iptal/.test(rb.abort) && rb.runningAfterAbort === false && rb.state === 'menu', 'oyun kapanınca test iptal edilmeli', rb);
+  // iptalden sonra yeni oyun başlamalı ve fizik dünyası çalışmalı (önce kapanmış oturuma dokunulup Rapier bozuluyordu)
+  await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
+  const fresh = await page.waitForFunction(() => window.__game.state === 'playing' && window.__game.session && window.__game.phys && window.__game.phys.steps > 30, null, { timeout: 300000 }).then(() => true, () => false);
+  const fr = await evalJS(page, async () => {
+    const g = window.__game, s0 = g.phys.steps;
+    await new Promise((r) => setTimeout(r, 3000));
+    return { steps: g.phys.steps - s0, running: g.benchmark.running, zombies: g.session.zombies.list.size };
+  });
+  log('iptal sonrası yeni oyun', { fresh, ...fr });
+  check(fresh && fr && fr.steps > 0 && !fr.running, 'iptalden sonra yeni oyun başlamalı ve fizik ilerlemeli', { fresh, fr });
   fs.writeFileSync('/tmp/benchmark.json', JSON.stringify(out, null, 2));
   log('yazıldı', '/tmp/benchmark.json');
 };

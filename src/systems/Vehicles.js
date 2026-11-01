@@ -720,6 +720,9 @@ export class Vehicles {
   stepRemote(v, h) {
     const tg = v.netTarget;
     if (!tg) return;
+    // zemin türü uzaktan sürülen araçta da güncel kalsın (yolcunun lastik sesi asfalt/çim ayrımı)
+    const T = this.s.world.terrain;
+    if (T.surfaceAt) v.surface = T.surfaceAt(tg.x, tg.z);
     const t = v.body.translation();
     const k = Math.min(1, h * 12);
     v.body.setNextKinematicTranslation({ x: t.x + (tg.x - t.x) * k, y: t.y + (tg.y - t.y) * k, z: t.z + (tg.z - t.z) * k });
@@ -895,7 +898,12 @@ export class Vehicles {
     if (!arr) { this.init(); return; }
     for (const o of arr) { const v = new Vehicle(this.s, o); if (o.wrecked) v.wrecked = true; this.list.push(v); }
   }
-  dispose() { for (const v of this.list) v.dispose(); this.list = []; this.s.audio.stopLoop('engine_local'); }
+  dispose() {
+    for (const v of this.list) v.dispose();
+    this.list = [];
+    // oturum Game.endSession dışında kapanırsa da (yeniden bağlanma, host göçü) yerel araç döngüleri susar
+    for (const k of ['engine_local', 'skid_local', 'tire_local']) this.s.audio.stopLoop(k);
+  }
 }
 
 export { wrapAngle };
