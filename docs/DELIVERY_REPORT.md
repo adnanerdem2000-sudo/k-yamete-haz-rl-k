@@ -48,8 +48,16 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
   (çift avatar). Aşama 7.
 - **`Net.leave()` erken dönüşü**: yeniden bağlanırken çağrılan `leave` taşıyıcıyı kapatmıyordu. Aşama 7.
 - **Araç sürücü değişiminde `onRoad` TDZ hatası** (yüzey bloğu değişkenden önce okunuyordu); Aşama 5 inceleme.
-- **Çok oyunculu testlerde iki sekme belleği**: yazılım GPU'lu ortamda iki oyun sekmesi + GPU süreci birlikte
-  13,4 GB'lık süreç grubu sınırına dayanıyor; `carry-mp` sekmeleri çöküyordu. Aşama 7'de ölçüldü (aşağıda).
+- **Başsız tarayıcıda işaretçi kilidi döngüsü (test ortamı)**: çok oyunculu senaryolarda iki sekme çöküyordu
+  (`carry-mp`, `multiplayer-local`, `host-migration`'ın son adımı). Ölçüm: tarayıcı ana süreci oyun sırasında
+  dakikada 1–2 GB büyüyor (2,6 → 5,6 GB), render süreçlerinde Oilpan yığını 1,5–2 GB; 13,4 GB'lık süreç grubu
+  sınırında OOM. Chrome izi: tarayıcı ana iş parçacığında 6 sn'de 254 bin `PostSynthesizeMouseMove` görevi.
+  Neden: oyun işaretçi kilidi aldığında Chromium her fare olayında imleci pencere ortasına taşır; başsız kabukta
+  imleç hiç hareket etmediği için `MoveCursorToCenter → OnCursorMovedToRootLocation → PostSynthesizeMouseMove`
+  sonsuz döngüye giriyor (saniyede ~40 bin sentetik fare olayı). Tek sekmede de vardı (render süreci 2,4 GB,
+  oyun ~2 kat yavaş) ama sınırı aşmıyordu. Gerçek tarayıcıda imleç ortaya gittiği için oluşmaz. Ağ trafiği,
+  ses, bellek sızıntısı adayları sırayla elendi (`tools/dev/mp-mem-probe*.mjs`, `mem-infra-probe.mjs`,
+  `trace-probe.mjs`). Aşama 7.
 
 ## 3. Düzeltilen sorunlar
 - `Interact.findTarget`: uzaklık alanı `dist` oldu; `interact` senaryosu kapı adımı bunu yakalar.
@@ -66,6 +74,9 @@ donanım FPS ölçümü yok; botlar yağma/inşa yapmıyor; kalabalık sürüler
   sıra sayaçları oturum başında/çıkışta sıfırlanır.
 - `sanitizeIce`: yalnız `stun:`/`turn:`/`turns:` şemaları, TURN için kullanıcı adı + kimlik bilgisi zorunlu;
   ayarlar ekranında JSON ve depolama hataları ayrı iletilerle.
+- Test koşucusu (`tools/scenario.mjs`) sayfalara `requestPointerLock`'u reddeden bir başlangıç betiği ekler
+  (`PW_POINTERLOCK=1` ile eski davranış). İki sekmede tarayıcı süreci 94 MB'ta, render süreçleri 750–800 MB'ta
+  sabit (önce 2,6 → 5,6 GB ve 2,2–3,3 GB); tek sekmede render süreci 2,4 GB → ~0,8 GB.
 
 ## 4. Değiştirilen dosyalar ve eklenen sistemler
 _(aşamalar ilerledikçe doldurulur)_

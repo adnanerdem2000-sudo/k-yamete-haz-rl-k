@@ -13,7 +13,7 @@ const { chromium } = pw;
 const [scenarioPath, url = 'http://localhost:8080/'] = process.argv.slice(2);
 // Tarayıcı: varsayılan Playwright başsız kabuğu (chrome-headless-shell). PW_CHANNEL=chromium → tam Chromium'un yeni
 // başsız modu; PW_ARGS="--a --b" → ek bayraklar. (Eski başsız kabukta iki sekme aura'nın sentetik fare hareketi
-// fırtınasını tetikleyip tarayıcı sürecini şişiriyor; bkz. docs/KNOWN_ISSUES.md.)
+// fırtınasını tetikleyip tarayıcı sürecini şişiriyor; bkz. docs/DELIVERY_REPORT.md §2.)
 const launchOpts = { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', ...(process.env.PW_ARGS || '').split(' ').filter(Boolean)] };
 if (process.env.PW_CHANNEL) launchOpts.channel = process.env.PW_CHANNEL;
 const browser = await chromium.launch(launchOpts);

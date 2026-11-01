@@ -70,7 +70,9 @@ hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indiri
 - Host göçü üç ve daha fazla sekmeyle: yazılım GPU'lu ortamda üç oyun sekmesi bellek sınırını aşıyor; iki sekme +
   göçten sonra katılan üçüncü oyuncu test edildi.
 - Gerçek GPU'da kare hızı, hoparlörden duyulan ses (başsız tarayıcıda ses grafiği çalışır ama dinlenemez)
-  ve fare işaretçi kilidi (başsız modda desteklenmez; savaş girdisi kilit gerektirir).
+  ve fare işaretçi kilidi. Test koşucusu kilidi kapatır: başsız kabukta kilit, Chromium'un imleci ortalama
+  döngüsünü tetikleyip saniyede on binlerce sentetik fare olayı üretiyor ve iki sekmede tarayıcıyı bellekten
+  çökertiyordu (`tools/scenario.mjs`, `PW_POINTERLOCK=1` ile açılır). Savaş girdisi testlerde doğrudan çağrılır.
 
 ## Testleri çalıştırma
 ```bash

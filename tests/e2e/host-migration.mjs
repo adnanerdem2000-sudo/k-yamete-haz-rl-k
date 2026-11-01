@@ -1,6 +1,7 @@
-// Host göçü (yerel taşıyıcı, üç sekme): A host, B ve C istemci. B bir kapıyı açar; A sekmesi kapanır → oda sırasına
-// göre B yeni host olur (oturum korunur: kapı açık kalır, envanter durur), C aynı kodla B'ye yeniden bağlanır,
-// B'nin zombi simülasyonu başlar. Ağ göstergesi (ping/kayıp) de okunur.
+// Host göçü (yerel taşıyıcı, iki sekme + sonradan katılan): A host, B istemci. B bir kapıyı açar; A sekmesi kapanır →
+// B yeni host olur (oturum korunur: kapı açık kalır, envanter durur, bot vekili gerçek bota döner); C göçten sonra
+// aynı oda koduyla yeni host'a katılır ve kapı durumunu hoş geldin paketinden alır; B'nin zombi simülasyonu başlar.
+// Ağ göstergesi (ping/kayıp) de okunur. Üç eşzamanlı sekmeli takip yolu: host-migration3.mjs.
 export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
   const A = page;
@@ -14,7 +15,7 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
     const r = await evalJS(P, async ([c, ch]) => { const g = window.__game; try { await g.net.join(c, { local: true }); g.ui.menus.openLobby(); g.net.setLobby({ charId: ch }); g.net.setLobby({ ready: true }); return { ok: true, me: g.net.myId }; } catch (e) { return { ok: false, err: e.message }; } }, [code, charId]);
     return r;
   };
-  // bellek: aynı anda en fazla iki dünya (üç sekme host'un render sürecini çökertiyordu); C göçten sonra katılır
+  // C göçten sonra katılır (sonradan katılan oyuncu yolu)
   const B = await newPage('pB', 960, 540, true);
   const jb = await join(B, 'zulal');
   log('katılım', jb);
