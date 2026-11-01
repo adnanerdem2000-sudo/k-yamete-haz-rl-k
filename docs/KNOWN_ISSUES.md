@@ -13,7 +13,8 @@
   oda koduyla yeni host olur; diğerleri ona bağlanır. Dünya/zombi/bot/kapı/eşya durumu son anlık görüntüden ve
   8 sn'de bir yayımlanan oyuncu kayıt paketinden devralınır; aradaki en fazla 8 sn'lik envanter değişikliği
   kaybolabilir. Yeni host'un görüş alanı dışındaki (150 m ötesi) zombiler bölge kuralıyla yeniden oluşur; görülen
-  zombiler korunur ama canları dolar. Göç yalnız oyun sırasında ('playing') yapılır; lobide host düşerse oda kapanır. Test edilen:
+  zombiler korunur ama canları dolar. Göç yalnız oyun sırasında ('playing') yapılır; lobide host düşerse oda kapanır.
+  Host oyundan **bilerek** ayrılırsa ("Ana Menüye Dön") göç yapılmaz, oyun herkes için kapanır. Test edilen:
   iki sekme + göçten sonra katılan (`host-migration`) ve üç eşzamanlı sekme, ikinci istemcinin yeni host'a
   kendiliğinden bağlanması (`host-migration3`). Dörtten fazla gerçek sekmeyle göç denenmedi.
 - **Çevrimiçi (PeerJS) taşıyıcı** bu geliştirme ortamında internet kısıtı nedeniyle uçtan uca test
@@ -89,4 +90,19 @@
   açılardan bakınca bütün ekranı karartıyordu; artık onarılıyor (yüklenen modeller de taranıyor). Parlama geçişi ayrıca
   NaN/sonsuz pikselleri süzüyor: ileride benzer bir bozuk geometri gelirse ekran kararmaz, yalnız birkaç piksel koyu
   görünebilir.
+
+## Teslimden sonraki denetimin bulduğu hatalar (düzeltilmedi)
+Ayrıntı ve kanıt: `docs/DENETIM_NL2.md`.
+- Kayıttan yüklemede ve sonradan katılımda kapı durumu fiziğe uygulanmıyor: açık kaydedilen kapı fizikte kapalı kalabilir
+  ve oyuncu yaklaşınca herkes için kapanabilir; kırık kapının kanadı menteşede kalabilir.
+- Araç direksiyon simidi yolcu tarafında duruyor ve dönüşü görünmüyor.
+- Araç patinaj sesi hiç çalmıyor.
+- Araç göçüğü birçok modelde görünmüyor (gövdenin yanlış parçası eziliyor) ya da minibüste ters uçta çıkıyor; bozuk far
+  yalnız rengini değiştiriyor, ışığı sönmüyor.
+- Patlamalar her nesneye kütlesinden bağımsız aynı hızı veriyor (ağır nesne hafif gibi savruluyor).
+- Bazı kadın karakter kafalarında gözler saç rengine yakın boyanıyor; Punk ve SciFi kafalarında çene/boyun açık gri.
+- Host göçünden sonra gün kilitli görevler (ör. laboratuvar görevi) başlamayabilir; botların çantası ve silahları
+  varsayılana döner.
+- Kişilik kıpırdanması için iki ayrı zamanlayıcı ve zemin türü için iki ayrı sınıflayıcı var (biri kaldırılmalı).
+- Uçtan uca senaryoların 16'sı yalnız çökme/zaman aşımıyla başarısız olabilir (değer denetimi yok).
 

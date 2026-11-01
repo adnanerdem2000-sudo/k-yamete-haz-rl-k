@@ -11,7 +11,7 @@ kullanılır.
 | Katman | Kapsam | Sonuç |
 |---|---|---|
 | Birim testleri (`npm test`) | 47 test, 9 dosya | 47/47 |
-| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 27 senaryo | 27/27 (tam koşuda 26/27; `benchmark` test denetimi düzeltilip yeniden koşuldu) |
+| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 27 senaryo (11'inde değer denetimi var) | 27/27 hatasız (tam koşuda 26/27; `benchmark` test denetimi düzeltilip yeniden koşuldu); 16 senaryo denetimsiz² |
 | Görsel regresyon (`visual`) | istemdeki 12 sahne, 14 görüntü, Orta kalite | Aşama 7 → 8 karşılaştırması: fark %0–0,07, araç dışı Aşama 7'de siyah kare (düzeltilen hata); tam koşuda Aşama 8 tabanına göre ≤ %0,06 |
 | CI (`.github/workflows/ci.yml`) | her gönderimde birim + `smoke-menu` + `ui-clicks` | son koşu yeşil (GitHub Actions, run 37) |
 
@@ -31,33 +31,39 @@ kullanılır.
 ## Uçtan uca senaryolar (son tam koşu)
 | Senaryo | Kapsam | Süre | Sonuç |
 |---|---|---|---|
-| `ai` | Zombi türleri ve hayvan YZ (çığlıkçı, zırhlı, şişko patlaması, kurt sürüsü, Karabaş) | 0 dk 50 sn | geçti |
+| `ai` | Zombi türleri ve hayvan YZ (çığlıkçı, zırhlı, şişko patlaması, kurt sürüsü, Karabaş) | 0 dk 50 sn | hatasız koştu (denetimsiz)² |
 | `ai2` | Sürü ayrışması, oyuncunun içinden geçmeme, şişeyle dikkat dağıtma, bot yağma/inşaat emirleri | 1 dk 03 sn | geçti |
-| `audio` | Ses bağlamı + HRTF, zemine göre ayak sesi, iç mekân yankısı, oklüzyon, savaş teması | 0 dk 49 sn | geçti |
+| `audio` | Ses bağlamı + HRTF, zemine göre ayak sesi, iç mekân yankısı, oklüzyon, savaş teması | 0 dk 49 sn | hatasız koştu (denetimsiz)² |
 | `benchmark` | Performans testi dört kalitede; araç reddi, duraklatma, ertelenen kayıt, iptal ve sonrasında yeni oyun | 11 dk 29 sn | geçti (yeniden koşu)¹ |
-| `carry` | Nesne taşıma: al, taşı, bırak, fırlat | 1 dk 27 sn | geçti |
+| `carry` | Nesne taşıma: al, taşı, bırak, fırlat | 1 dk 27 sn | hatasız koştu (denetimsiz)² |
 | `carry-mp` | İki sekmede taşıma eşitlemesi, aynı kutuyu iki kişi alamama, taşıyan çıkınca bırakma | 4 dk 56 sn | geçti |
-| `ending` | 30. gün Son Işık, sığınak finali, sonuç ekranı, menüye dönüş | 1 dk 39 sn | geçti |
-| `gameplay` | Yağma, tüketim, üretim, inşa, savaş, araç, gece/uyku, olay kartı, kayıt, taşıma | 3 dk 56 sn | geçti |
+| `ending` | 30. gün Son Işık, sığınak finali, sonuç ekranı, menüye dönüş | 1 dk 39 sn | hatasız koştu (denetimsiz)² |
+| `gameplay` | Yağma, tüketim, üretim, inşa, savaş, araç, gece/uyku, olay kartı, kayıt, taşıma | 3 dk 56 sn | hatasız koştu (denetimsiz)² |
 | `host-migration` | İki sekme + geç katılan: host göçü, kapı/envanter korunur, geç katılan listede | 10 dk 08 sn | geçti |
 | `host-migration3` | Üç sekme: göç, zombi durumu ve yağmalanmış envanter korunur, ikinci istemci yeni host'a bağlanır | 14 dk 26 sn | geçti |
 | `interact` | Etkileşim hizası: hedefe dönme, eğilme anında alma, kapı kolu zamanlaması | 2 dk 30 sn | geçti |
-| `lineup` | Altı karakter farklı animasyon durumlarında (görsel kontrol) | 0 dk 56 sn | geçti |
-| `living` | Karga sürüleri ve duman, gürültüyle ürkme | 1 dk 00 sn | geçti |
-| `mobs` | Bütün zombi türleri ve hayvanlar (görsel kontrol) | 0 dk 43 sn | geçti |
-| `motion` | Eylem klipleri, zombi görünümleri, ayak IK'sı yamaçta, kıpırdanma | 0 dk 55 sn | geçti |
+| `lineup` | Altı karakter farklı animasyon durumlarında (görsel kontrol) | 0 dk 56 sn | hatasız koştu (denetimsiz)² |
+| `living` | Karga sürüleri ve duman, gürültüyle ürkme | 1 dk 00 sn | hatasız koştu (denetimsiz)² |
+| `mobs` | Bütün zombi türleri ve hayvanlar (görsel kontrol) | 0 dk 43 sn | hatasız koştu (denetimsiz)² |
+| `motion` | Eylem klipleri, zombi görünümleri, ayak IK'sı yamaçta, kıpırdanma | 0 dk 55 sn | hatasız koştu (denetimsiz)² |
 | `multiplayer-6` | 6 oyunculu ortam (2 sekme + 4 sahte eş), 7. oyuncu reddi, hayvan/tüccar/eylem eşitlemesi | 4 dk 49 sn | geçti |
-| `multiplayer-local` | İki sekme: oda, katılım, eşitleme, istemci eylemi, zombi anlık görüntüsü, sohbet | 4 dk 54 sn | geçti |
-| `nature` | Bitki örtüsü görünümleri, çizim/üçgen/kare süresi ölçümü | 0 dk 49 sn | geçti |
-| `physics` | Hareket ölçümleri: hız, zıplama, düşme hasarı, basamak, eğim, eşya düşürme | 1 dk 21 sn | geçti |
+| `multiplayer-local` | İki sekme: oda, katılım, eşitleme, istemci eylemi, zombi anlık görüntüsü, sohbet | 4 dk 54 sn | hatasız koştu (denetimsiz)² |
+| `nature` | Bitki örtüsü görünümleri, çizim/üçgen/kare süresi ölçümü | 0 dk 49 sn | hatasız koştu (denetimsiz)² |
+| `physics` | Hareket ölçümleri: hız, zıplama, düşme hasarı, basamak, eğim, eşya düşürme | 1 dk 21 sn | hatasız koştu (denetimsiz)² |
 | `physics2` | Menteşeli kapı, kilit, kırılma, su kaldırma kuvveti, çarpışma sesleri, çekmece | 5 dk 00 sn | geçti |
-| `regions` | Bölge turu (görsel kontrol) | 0 dk 32 sn | geçti |
-| `smoke-menu` | Ana menü ve menü ekranları | 2 dk 09 sn | geçti |
-| `smoke-single` | Tek oyunculu başlangıç, HUD, paneller, hareket | 2 dk 59 sn | geçti |
-| `story` | Hikâye: NPC/belge yerleşimi, santral, fener, pist enkazı çekme, paket, düşen uçak, Kanlı Ay, uçak finali | 3 dk 01 sn | geçti |
+| `regions` | Bölge turu (görsel kontrol) | 0 dk 32 sn | hatasız koştu (denetimsiz)² |
+| `smoke-menu` | Ana menü ve menü ekranları | 2 dk 09 sn | hatasız koştu (denetimsiz)² |
+| `smoke-single` | Tek oyunculu başlangıç, HUD, paneller, hareket | 2 dk 59 sn | hatasız koştu (denetimsiz)² |
+| `story` | Hikâye: NPC/belge yerleşimi, santral, fener, pist enkazı çekme, paket, düşen uçak, Kanlı Ay, uçak finali | 3 dk 01 sn | hatasız koştu (denetimsiz)² |
 | `ui-clicks` | Gerçek fare tıklaması: ana menü ekranları, ayarlar, Tek Oyna, günlük sekmeleri, duraklat menüsü | 3 dk 46 sn | geçti |
 | `vehicles2` | Kabin, kapı, bagaj, far, zemine göre sürüş, çarpışma hasarı, göçük normalleri, kapıya çarpma | 1 dk 03 sn | geçti |
 | `visual` | Görsel regresyon, 14 görüntü (Orta kalite) | 5 dk 50 sn | geçti |
+
+² Bu 16 senaryoda değer denetimi (`check`/`[assert]`) yok: yalnız sayfa hatası, çökme ya da bekleme zaman aşımıyla
+başarısız olabilirler. "Hatasız koştu" davranışın doğru olduğunu kanıtlamaz; bir kısmı (lineup, mobs, regions, living,
+nature) görsel kontrol için ekran görüntüsü üretir. Değer denetimi olan 11 senaryo: ai2, benchmark, carry-mp,
+host-migration, host-migration3, interact, multiplayer-6, physics2, ui-clicks, vehicles2, visual. `motion`
+senaryosunun yamaç (ayak IK'sı) bölümü yalnız günlüğe yazar. Ayrıntı: `docs/DENETIM_NL2.md`.
 
 ¹ Tam koşuda `benchmark` yalnız yeni eklenen bir denetimde düştü: iptalden sonra açılan yeni oyunda fiziğin ilerlemesi
 3 sn içinde bekleniyordu, oysa yazılım GPU'sunda yeni dünyanın ilk kareleri ~7 sn sürüyor (fizik kare döngüsünde

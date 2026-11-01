@@ -1,8 +1,10 @@
 # Teslim Raporu — "Next Level 2.0" turu
 
-Tur 1 Kasım 2026'da sekiz aşamanın sonunda tamamlandı. **Test edilemeyen sistemler ayrıca işaretlendi** (§6);
-hiçbir şey yalnızca derlendiği için "tamamlandı" sayılmadı. Kabul kriterleri §7'de, son test sonuçları §8'de, kalan
-sorunlar §9'da ve `KNOWN_ISSUES.md`'de.
+Sekiz aşama 1 Kasım 2026'da uygulandı ve teslim edildi, ama **istemin bütün ayrıntılı maddeleri karşılanmadı.**
+Teslimden sonra yapılan bağımsız eksiksizlik denetimi (§10, `docs/DENETIM_NL2.md`): istemdeki 253 somut talebin 101'i
+tam, 126'sı kısmi, 26'sı yapılmadı; kısmi/yok olanların 100'ü bu raporda önceden yazmıyordu ve denetim kodda düzeltilmemiş
+hatalar da buldu. Kabul kriterlerinin durumları (§7) bu denetime göre düzeltildi. Test edilemeyen sistemler §6'da,
+son test sonuçları §8'de, kalan sorunlar §9–10'da ve `KNOWN_ISSUES.md`'de.
 
 İstemin 18. bölümündeki başlıklar: başlangıç mimarisi §1 · tespit edilen / düzeltilen sorunlar §2–3 · değiştirilen
 dosyalar ve eklenen sistemler §4 · karakterler ve animasyonlar §5 Aşama 2 · fizik Aşama 3 · harita ve çevre Aşama 4 ·
@@ -438,22 +440,22 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
 | # | Ölçüt | Durum | Kanıt |
 |---|---|---|---|
 | 1 | Altı karakter görsel olarak ayırt edilebilir | Karşılandı | Aşama 2; `lineup`, görsel regresyon 02 (altı kart) |
-| 2 | Hareket robotik/kaygan değil | Kısmen (öznel) | Aşama 2 FootIK, yürüyüş/dönüş ölçümleri (`motion`); oyuncu değerlendirmesi yok |
-| 3 | Özel etkileşimler doğru animasyonla | Karşılandı | Aşama 2; `interact` (hedefe dönme, eylem anına bağlı zamanlama) |
-| 4 | Kapılar ve çekmeceler fiziksel | Karşılandı | Aşama 3; `physics2` (motor, itme, kilit, kırılma, çekmece) |
-| 5 | Kırılabilir nesnelerin çarpışma alanı güncellenir | Karşılandı | Aşama 3; `physics2` (kırılan kapının eklemi kalkar, kanat düşer) |
+| 2 | Hareket robotik/kaygan değil | Kısmen | Hareket motoru (`Motion`, `FootIK`) bu turda değişmedi; durma adımı, denge kaybı, yokuşta gövde eğimi yok. `motion` senaryosunun yamaç bölümü yalnız günlüğe yazıyor (denetimsiz). Oyuncu değerlendirmesi yok |
+| 3 | Özel etkileşimler doğru animasyonla | Kısmen | `interact`: hedefe dönme, eylem anına bağlı zamanlama. Kapı/dolap/çekmece/raf/kutu, jeneratör, yakıt, iki kişilik taşıma için özel animasyon yok; çoğu etkileşim genel klibi kullanıyor |
+| 4 | Kapılar ve çekmeceler fiziksel | Kısmen | `physics2` (motor, itme, kilit, kırılma, çekmece). Hata: kayıttan yüklemede ve sonradan katılımda kapı durumu fiziğe uygulanmıyor (§10) |
+| 5 | Kırılabilir nesnelerin çarpışma alanı güncellenir | Kısmen | `physics2`: kırılan kapının eklemi kalkar, kanat düşer. Dünyadaki çitler ve zayıf yapı parçaları kırılmıyor; mobilya statik |
 | 6 | Cephe ve iç mekân belirgin iyileşir | Karşılandı | Aşama 4; `facade` birim testleri, görsel 04/05/07 |
-| 7 | Araçlar türlerine göre farklı sürülür | Karşılandı | Aşama 5; `vehicles2` (tür ve zemin ölçümleri) |
-| 8 | Araç içi etkileşimler çalışır | Karşılandı | Aşama 5; `vehicles2` (kapı, bagaj, far, direksiyon), görsel 08b |
+| 7 | Araçlar türlerine göre farklı sürülür | Büyük ölçüde | `vehicles2` (tür ve zemin ölçümleri: tutunma, hız). Zemine göre sarsıntı ve süspansiyon farkı yok |
+| 8 | Araç içi etkileşimler çalışır | Kısmen | `vehicles2`: kapı, bagaj, far. Hata: direksiyon simidi yolcu tarafında ve dönüşü görünmüyor; vites/kontrol ayrıntısı yok (§10) |
 | 9 | Zombiler kalabalıkta takılmaz | Kısmen | Aşama 6; `ai2`: 12 zombi aynı noktadan 3 sn'de ayrıştı, oyuncunun içinden geçmedi. 40'lık sürüde takılma ölçülmedi; çok kalabalıkta yol bulma bütçesi kısa takılmalara yol açabilir (KNOWN_ISSUES) |
-| 10 | YZ arkadaşlar kaynak toplar, üs işi yapar | Karşılandı | Aşama 6; `ai2` (yağma ve inşaat emirleri) |
-| 11 | Eşya/araç/animasyon/dünya tutarlı eşitlenir | Karşılandı (yerel taşıyıcı) | Aşama 7; `carry-mp`, `multiplayer-local`, `multiplayer-6`; PeerJS ile uçtan uca yok |
+| 10 | YZ arkadaşlar kaynak toplar, üs işi yapar | Kısmen | `ai2`: yağma ve yarım yapıyı tamamlama emirleri. Kaynakları üsse taşıma, "araçta bekle" emri, tehlike uyarısı yok |
+| 11 | Eşya/araç/animasyon/dünya tutarlı eşitlenir | Kısmen | Eşya (`carry-mp`), animasyon ve dünya (`multiplayer-6`, host göçü) denetleniyor; araç eşitlemesi kodda var ama çok sekmeli hiçbir senaryoda denetlenmiyor, `multiplayer-local` denetimsiz; PeerJS ile uçtan uca yok |
 | 12 | TURN ile gerçek internet bağlantısı test edilir | **Karşılanamadı** | Ortamda internet üzerinden TURN yok; yapılandırma + birim testi var |
-| 13 | Host ayrılması ve yeniden bağlantı doğrulanır | Karşılandı | `host-migration`, `host-migration3`, `multiplayer-6` |
+| 13 | Host ayrılması ve yeniden bağlantı doğrulanır | Kısmen | `host-migration`, `host-migration3`, `multiplayer-6`: host sekmesi kapanınca/düşünce göç ve yeniden bağlanma doğrulandı. Host "Ana Menüye Dön" ile bilerek ayrılınca göç yok, oyun herkes için kapanıyor; göçte gün kilitli görevlerin açılması ve bot çantaları kayboluyor (§10) |
 | 14 | Test bağımlılıkları temiz kurulumda çalışır | Karşılandı | Aşama 1; Playwright `package.json`/kilit dosyasında, CI `npm ci` + `npx playwright install` |
 | 15 | CI yayın öncesi testleri çalıştırır | Kısmen | `ci.yml` her gönderimde birim + `smoke-menu` + `ui-clicks`; `pages.yml` yayından önce birim testlerini koşar ama depo şu an "Deploy from a branch" ile yayınlandığı için canlı yayın testleri beklemiyor |
 | 16 | Gerçek donanımda performans raporu | **Karşılanamadı** | Yalnız yazılım GPU'su; oyun içi performans testi ve JSON çıktısı eklendi |
-| 17 | Hikâye, kayıt, görev, finaller korunur | Karşılandı | `story`, `ending`, `gameplay` |
+| 17 | Hikâye, kayıt, görev, finaller korunur | Büyük ölçüde | `story`, `ending`, `gameplay` hatasız koşuyor ve final sonuç ekranına ulaşıyor, ama üçünde de değer denetimi yok (yalnız çökme/zaman aşımıyla düşer) |
 | 18 | Ana menü ve oyun içi butonlar gerçek tıklamayla çalışır | Büyük ölçüde | `ui-clicks`: ana menünün altı ekranı + geri, ayar sekmeleri ve kalite seçimi, Tek Oyna → Oyuna Başla, oyunda günlüğün altı sekmesi, duraklat → Ayarlar/Nasıl Oynanır?/Devam Et gerçek fare tıklamasıyla; diğer paneller (inşa, takım, depo, tüccar) işlevleri doğrudan çağıran senaryolarla, yıkıcı düğmeler tıklanmadı |
 
 ## 8. Test sonuçları (son koşu, Aşama 8 kodu)
@@ -462,7 +464,10 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
   `benchmark` yalnız yeni eklenen iptal sonrası denetiminde düştü (yeni oyunda fiziğin 3 sn içinde ilerlemesi
   bekleniyordu, yazılım GPU'sunda yeni dünyanın ilk kareleri ~7 sn sürüyor). Denetim "3 dk içinde 30 fizik adımı" oldu;
   oyun kodu değişmeden yeniden koşuldu ve geçti (37 sn'de 30 adım). Senaryo başına süre ve kapsam `TEST_REPORT.md`'de.
-  Turun başında 18 senaryo vardı; 9 yeni senaryo eklendi.
+  Turun başında 18 senaryo vardı; 9 yeni senaryo eklendi. **Uyarı:** 27 senaryonun 16'sında değer denetimi yok (ai,
+  audio, carry, ending, gameplay, lineup, living, mobs, motion, multiplayer-local, nature, physics, regions, smoke-menu,
+  smoke-single, story); bunlar yalnız sayfa hatası, çökme ya da bekleme zaman aşımıyla başarısız olabilir. "Geçti"
+  onlar için "hatasız koştu" demektir, davranışın doğru olduğunu kanıtlamaz (§10).
 - **Görsel regresyon:** Aşama 7 → 8, Orta kalite, 14 görüntü: 13'ünde fark %0–0,07; araç dışı Aşama 7'de siyah kare
   (düzeltilen hata). Tam koşuda Aşama 8 tabanına göre ≤ %0,06. Ultra görüntüleri ve karşılaştırma `docs/img/`.
 - **Performans:** yalnız yazılım GPU'sunda (Aşama 8 bölümündeki tablo); gerçek donanım ölçümü yok (§6).
@@ -470,6 +475,10 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
   yeşil.
 
 ## 9. Bilinen kalan sorunlar (özet; tamamı `KNOWN_ISSUES.md`)
+- Teslimden sonraki denetimin bulduğu ve henüz düzeltilmeyen hatalar (§10): kayıttan yüklemede/katılımda kapı fizik
+  durumu uygulanmıyor; direksiyon yolcu tarafında; patinaj sesi hiç çalmıyor; araç göçüğü çoğu modelde görünmüyor;
+  bozuk far ışığı sönmüyor; patlama itkisi kütleden bağımsız aynı hızı veriyor; bazı kadın kafalarında göz/çene renkleri
+  yanlış; host bilerek ayrılınca göç yok; göçten sonra gün kilitli görevler açılmayabilir; iki kopya sistem.
 - Gerçek internet üzerinden TURN bağlantısı, gerçek ekran kartında performans ve hoparlörden ses test edilemedi (§6).
 - Lobide host düşerse göç yok (oda kapanır); fizik nesnelerinin ara konumları istemcilerde yerel.
 - Çok kalabalık sürülerde (40+) zombilerin kısa takılması ölçülmedi; yol bulma bütçesi sınırlı.
@@ -479,4 +488,41 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
 - Ekran uzayı yansıması (SSR) ve HDRI dosyası yok; su yansıması yalnız en yakın su yüzeyinde.
 - Ultra, orta sınıf ekran kartı için ağır olabilir (çizim çağrısı Yüksek'in 1,4–1,6 katı, göl yakınında ~6 katı).
 - Mobil/dokunmatik kontrol yok.
+
+## 10. Bağımsız eksiksizlik denetimi (teslimden sonra, 1 Kasım 2026)
+"Tamamlandı mı?" sorusuna dürüst cevap vermek için istemin 18 bölümü 10 gruba ayrılıp her grup bir denetçiyle kod,
+test ve belgelerle madde madde karşılaştırıldı; "kısmi/yok ve belgelenmemiş" her aday ayrı bir doğrulayıcının çürütme
+denemesinden geçti. Ayrıntı ve tam liste: `docs/DENETIM_NL2.md`.
+
+| Bölüm | Tam | Kısmi | Yok | Zaten belgeli eksik | Doğrulanan belgesiz eksik | Çürütülen aday | Belirsiz |
+|---|---|---|---|---|---|---|---|
+| §1–2 Projeyi koru, öncelikler | 14 | 10 | 1 | 5 | 5 | 1 | 0 |
+| §3 Karakter sistemi | 10 | 13 | 2 | 3 | 10 | 2 | 0 |
+| §4–5 Hareket motoru, etkileşim animasyonları | 6 | 12 | 8 | 1 | 19 | 0 | 0 |
+| §6 Fizik | 14 | 10 | 1 | 0 | 8 | 3 | 0 |
+| §7 Harita ve çevre | 11 | 11 | 4 | 7 | 6 | 2 | 0 |
+| §8 Araçlar | 7 | 15 | 3 | 3 | 15 | 0 | 0 |
+| §9–10 Zombi YZ, YZ takım arkadaşları | 8 | 15 | 2 | 1 | 13 | 3 | 0 |
+| §11–12 Çok oyunculu, ses | 11 | 14 | 0 | 2 | 9 | 3 | 0 |
+| §13–15 Grafik/performans, test altyapısı, görsel regresyon | 13 | 9 | 4 | 6 | 7 | 0 | 0 |
+| §16–18 Aşamalı plan, kabul kriterleri, teslim raporu | 7 | 17 | 1 | 10 | 8 | 0 | 0 |
+| **Toplam** | 101 | 126 | 26 | 38 | 100 | 14 | 0 |
+
+- **Sonuç:** sekiz aşama uygulandı, ama istemin 253 ayrıntılı talebinin yalnız 101'i tam karşılandı; 126'sı kısmi,
+  26'sı yapılmadı. Kısmi/yok olanların 100'ü bu raporda önceden yazmıyordu (14 aday elendi). Kabul kriterleri (§7) bu
+  denetime göre düzeltildi.
+- **En büyük açıklar:** hareket motoru ve ayak IK'sı bu turda hiç değişmedi (durma adımı, denge kaybı, yokuşta gövde
+  eğimi yok); özel etkileşim animasyonları (kapı, dolap, çekmece, jeneratör, yakıt, iki kişilik taşıma) yok; itilebilir
+  mobilya ve kırılabilir çit/zayıf yapı yok; araçta zemine göre sarsıntı/süspansiyon ve vites/kontrol ayrıntısı yok;
+  botlarda kaynakları üsse taşıma ve "araçta bekle" emri yok; fizik, araç ve eşya paylaşımı için birim testi yok.
+- **Bulunan hatalar** (düzeltilmedi; ayrıntı `docs/DENETIM_NL2.md`): kayıttan yüklemede ve sonradan katılımda kapı
+  durumu fiziğe uygulanmıyor; direksiyon simidi yolcu tarafında; patinaj sesi hiç çalmıyor; araç göçüğü çoğu modelde
+  görünmüyor ya da ters uçta; bozuk far ışığı sönmüyor; patlama itkisi her gövdeye aynı hızı veriyor; bazı kadın
+  kafalarında göz ve çene renkleri yanlış; host bilerek ayrılınca göç yok; göçten sonra gün kilitli görevler açılmayabilir;
+  iki kıpırdanma zamanlayıcısı ve iki zemin sınıflayıcı (istemin "ikinci sistem kurma" kuralı); ayakkabı tabanı yuvası
+  ölü kod.
+- **Test kapsamı:** 27 uçtan uca senaryonun 16'sında değer denetimi yok (§8); `motion` senaryosunun yamaç bölümü
+  başarısız olamaz.
+- **Süreç:** istem ayrı bir geliştirme dalı istiyordu; bütün iş GitHub Pages'ten doğrudan yayınlanan tek dalda yapıldı,
+  her ara aşama canlıya gitti.
 
