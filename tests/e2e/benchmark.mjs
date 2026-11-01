@@ -92,14 +92,14 @@ export default async ({ page, url, evalJS, log, errors }) => {
   check(rb && /iptal/.test(rb.abort) && rb.runningAfterAbort === false && rb.state === 'menu', 'oyun kapanınca test iptal edilmeli', rb);
   // iptalden sonra yeni oyun başlamalı ve fizik dünyası çalışmalı (önce kapanmış oturuma dokunulup Rapier bozuluyordu)
   await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
-  const fresh = await page.waitForFunction(() => window.__game.state === 'playing' && window.__game.session && window.__game.phys && window.__game.phys.steps > 30, null, { timeout: 300000 }).then(() => true, () => false);
-  const fr = await evalJS(page, async () => {
-    const g = window.__game, s0 = g.phys.steps;
-    await new Promise((r) => setTimeout(r, 3000));
-    return { steps: g.phys.steps - s0, running: g.benchmark.running, zombies: g.session.zombies.list.size };
-  });
-  log('iptal sonrası yeni oyun', { fresh, ...fr });
-  check(fresh && fr && fr.steps > 0 && !fr.running, 'iptalden sonra yeni oyun başlamalı ve fizik ilerlemeli', { fresh, fr });
+  const fresh = await page.waitForFunction(() => window.__game.state === 'playing' && window.__game.session && window.__game.phys, null, { timeout: 300000 }).then(() => true, () => false);
+  // yazılım GPU'sunda yeni dünyanın ilk kareleri (gölgelendirici derlemesi) saniyelerce sürer; fizik kare döngüsünde
+  // adımlanır: bozuk fizik dünyası hiç ilerlemez, yavaş kare sonunda ilerler (en fazla 3 dk beklenir)
+  const s0 = await evalJS(page, () => ({ steps: window.__game.phys.steps, frames: window.__game.perf ? window.__game.perf.n : 0, t: performance.now() }));
+  const adv = await page.waitForFunction((s) => window.__game.phys.steps >= s + 30, s0 && s0.steps, { timeout: 180000 }).then(() => true, () => false);
+  const fr = await evalJS(page, (s) => { const g = window.__game; return { steps: g.phys.steps - s.steps, frames: (g.perf ? g.perf.n : 0) - s.frames, sec: Math.round((performance.now() - s.t) / 1000), running: g.benchmark.running, state: g.state }; }, s0);
+  log('iptal sonrası yeni oyun', { fresh, adv, ...fr });
+  check(fresh && adv && fr && fr.steps >= 30 && !fr.running && fr.state === 'playing', 'iptalden sonra yeni oyun başlamalı ve fizik ilerlemeli', { fresh, adv, fr });
   fs.writeFileSync('/tmp/benchmark.json', JSON.stringify(out, null, 2));
   log('yazıldı', '/tmp/benchmark.json');
 };

@@ -24,7 +24,12 @@ const run = (name) => new Promise((resolve) => {
   let tail = '';
   const keep = (b) => { out.write(b); tail = (tail + b.toString()).slice(-4000); };
   p.stdout.on('data', keep); p.stderr.on('data', keep);
-  p.on('close', (code) => { out.end(); resolve({ name, code, sec: Math.round((Date.now() - t0) / 1000), summary: (tail.match(/== (OK|HATA)[^\n]*/) || ['(özet yok)'])[0] }); });
+  p.on('close', (code) => {
+    out.end();
+    // başarısızlıkta denetim hataları özet satırının altına basılır (CI günlüğünde neden görünsün; tam çıktı /tmp/e2e-<ad>.log)
+    const why = code !== 0 ? [...new Set(tail.split('\n'))].filter((l) => /^\[(assert|fatal|scenario-error|eval-error|p\d+:(?:pageerror|error))\]/.test(l)).slice(0, 8).map((l) => '    ' + l.slice(0, 400)) : [];
+    resolve({ name, code, sec: Math.round((Date.now() - t0) / 1000), summary: (tail.match(/== (OK|HATA)[^\n]*/) || ['(özet yok)'])[0], why });
+  });
 });
 
 const results = [];
@@ -33,6 +38,7 @@ for (const n of names) {
   const r = await run(n);
   results.push(r);
   console.log(`${r.code === 0 ? '✔' : '✘'} ${n.padEnd(18)} ${String(r.sec).padStart(4)} sn  ${r.summary}`);
+  for (const l of r.why || []) console.log(l);
 }
 server.kill();
 const bad = results.filter((r) => r.code !== 0);
