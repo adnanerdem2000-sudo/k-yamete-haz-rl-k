@@ -30,7 +30,19 @@ export class Loot {
     this.list = session.world.containers;
     this.byId = new Map(this.list.map((c) => [c.id, c]));
     this.state = new Map(); // id → {searched, slots:[], locked}
+    // açık tutulan konteynerler (arama sürüyor ya da depo paneli açık): dolap kapağı/çekmece herkeste açık görünsün.
+    // Host kimin açtığını tutar (users), herkes sayıyı (inUse) olaydan alır. Geçici durum: kayda girmez.
+    this.inUse = new Map(); // id → kullanan sayısı
+    this.users = new Map(); // (host) id → Set(oyuncu/bot kimliği)
     const S = session;
+    S.on('cont_use', (p, from) => {
+      if (!this.byId.has(p.id)) return;
+      const set = this.users.get(p.id) || new Set();
+      if (p.on) set.add(from); else set.delete(from);
+      if (set.size) this.users.set(p.id, set); else this.users.delete(p.id);
+      S.emit({ k: 'cont_use', id: p.id, n: set.size });
+    });
+    S.onEvt('cont_use', (e) => { if (e.n > 0) this.inUse.set(e.id, e.n); else this.inUse.delete(e.id); });
     // ---- eylemler (host)
     S.on('search_done', (p, from) => {
       const c = this.byId.get(p.id);
@@ -199,6 +211,15 @@ export class Loot {
       }
     }
   }
+
+  /** (host) Oyundan kopan oyuncunun açık tuttuğu konteynerler kapanır */
+  dropUser(pid) {
+    for (const [id, set] of [...this.users]) if (set.delete(pid)) { if (!set.size) this.users.delete(id); this.s.emit({ k: 'cont_use', id, n: set.size }); }
+  }
+
+  /** Hoş geldin paketi: o an açık tutulan konteynerler */
+  usageSnapshot() { return [...this.inUse].map(([id, n]) => [id, n]); }
+  applyUsage(arr) { this.inUse.clear(); for (const [id, n] of arr || []) if (n > 0) this.inUse.set(id, n); }
 
   serialize() {
     const out = {};

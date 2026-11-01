@@ -98,12 +98,12 @@ class RoomPlacer {
 }
 
 /** Instancer'a KayKit/Kenney modeli ekle (şablon koordinatı) */
-function model(c, kit, name, tx, ty, tz, rot, scale) {
+function model(c, kit, name, tx, ty, tz, rot, scale, variant = null) {
   const p = c.fr;
   const sc = typeof scale === 'number' ? _s.set(scale, scale, scale) : _s.set(scale[0], scale[1], scale[2]);
   _m.compose(_p.set(tx, ty, tz), _q.setFromAxisAngle(_Y, rot), sc);
   const world = new THREE.Matrix4().multiplyMatrices(p.matrix, _m);
-  c.ctx.instancer.add(kit, name, world, { interior: true });
+  c.ctx.instancer.add(kit, name, world, { interior: true, variant });
 }
 
 /** Eşyanın çarpışma kutusu (şablon koordinatlarında merkez + yarı boyut, dönüş 90°'nin katı) */
@@ -124,6 +124,14 @@ function container(c, type, tx, tz, h = 0.8, opts = {}) {
     id: `${c.B.id}:${c.B.containers.length}`, type, label: opts.label || CONTAINER_LABELS[type] || 'Konteyner',
     x: wp.x, y: c.baseY + c.F + h, z: wp.z, building: c.B.id, room: c.curRoom, size: opts.size || 1, locked: opts.locked || 0, special: opts.special || null,
   };
+  // açılır ön yüzler (Fronts/Drawers) için mobilyanın dünya yönü (yerel +Z ön yüz), ölçüleri, zemin yüksekliği, modeli
+  // ve rengi. Kayda girmez (yağma durumu kimlikle saklanır): kayıt biçimi değişmez.
+  if (opts.frame) {
+    const f = opts.frame;
+    ct.yaw = c.fr.angle(f.rot); ct.fw = f.w; ct.fd = f.d; ct.fh = f.h; ct.fy = c.baseY + c.F;
+    if (f.model) ct.fmodel = f.model;
+    if (opts.frontColor) ct.fcol = opts.frontColor;
+  }
   c.B.containers.push(ct);
   c.ctx.containers.push(ct);
   return ct;
@@ -133,9 +141,9 @@ function furniture(c, P, kit, name, w, d, h, opts = {}) {
   const slot = P.alloc(w, h > 1.0, opts.prefer, d);
   if (!slot) return null;
   const pos = P.wallPos(slot, d);
-  model(c, kit, name, pos.x + (opts.dx || 0), c.F + (opts.y || 0), pos.z + (opts.dz || 0), pos.rot + (opts.rotOff || 0), opts.scale || KK);
+  model(c, kit, name, pos.x + (opts.dx || 0), c.F + (opts.y || 0), pos.z + (opts.dz || 0), pos.rot + (opts.rotOff || 0), opts.scale || KK, opts.variant || null);
   if (opts.collide !== false) collide(c, pos.x, pos.z, w, d, pos.rot, h, { walkable: opts.walkable });
-  if (opts.container) container(c, opts.container, pos.x + Math.sin(pos.rot) * 0.0, pos.z, Math.min(h, 1.2), { label: opts.label, size: opts.size });
+  if (opts.container) container(c, opts.container, pos.x + Math.sin(pos.rot) * 0.0, pos.z, Math.min(h, 1.2), { label: opts.label, size: opts.size, frame: { rot: pos.rot + (opts.rotOff || 0), w, d, h, model: name } });
   return { ...pos, slot };
 }
 
@@ -154,9 +162,11 @@ function protoItem(c, P, w, d, h, draw, opts = {}) {
   const slot = P.alloc(w, h > 1.0, opts.prefer, d);
   if (!slot) return null;
   const pos = P.wallPos(slot, d);
-  draw(pos.x, pos.z, pos.rot);
+  c.frontColor = null;
+  draw(pos.x, pos.z, pos.rot); // çizim, ön yüz rengini c.frontColor'a bırakabilir (gardırop, dolap)
   if (opts.collide !== false) collide(c, pos.x, pos.z, w, d, pos.rot, h);
-  if (opts.container) container(c, opts.container, pos.x, pos.z, Math.min(h, 1.2), { label: opts.label, size: opts.size, locked: opts.locked });
+  if (opts.container) container(c, opts.container, pos.x, pos.z, Math.min(h, 1.2), { label: opts.label, size: opts.size, locked: opts.locked, frame: { rot: pos.rot, w, d, h, model: 'proto' }, frontColor: c.frontColor });
+  c.frontColor = null;
   return pos;
 }
 
@@ -229,11 +239,12 @@ const ROOMS = {
         else model(c, 'kitchen', nm, pos.x, c.F, pos.z, pos.rot, sc);
         if (!nm.startsWith('stove') && !hasWin) model(c, 'kitchen', i % 2 ? 'kitchencabinet_half' : 'kitchencabinet', pos.x, c.F - 0.15, pos.z, pos.rot, [KK, 0.72, 0.42]);
         collide(c, pos.x, pos.z, 1.4, 0.98, pos.rot, 0.95);
-        container(c, nm.startsWith('stove') ? 'stove' : 'kitchen_cabinet', pos.x, pos.z, 0.9);
+        container(c, nm.startsWith('stove') ? 'stove' : 'kitchen_cabinet', pos.x, pos.z, 0.9, { frame: { rot: pos.rot, w: 1.4, d: 0.98, h: 0.95, model: nm } });
       }
     }
-    furniture(c, P, 'kitchen', c.rng.chance(0.5) ? 'fridge_A' : 'fridge_B', 1.0, 0.95, 1.8, { scale: [0.5, 0.72, 0.42], container: 'fridge' });
-    if (pro) furniture(c, P, 'kitchen', 'fridge_A_decorated', 1.0, 0.95, 1.8, { scale: [0.5, 0.72, 0.42], container: 'fridge' });
+    // buzdolabı kapakları modelden ayrılır ('nodoor'), Fronts sağ ön kenardaki menteşeden açar
+    furniture(c, P, 'kitchen', c.rng.chance(0.5) ? 'fridge_A' : 'fridge_B', 1.0, 0.95, 1.8, { scale: [0.5, 0.72, 0.42], container: 'fridge', variant: 'nodoor' });
+    if (pro) furniture(c, P, 'kitchen', 'fridge_A_decorated', 1.0, 0.95, 1.8, { scale: [0.5, 0.72, 0.42], container: 'fridge', variant: 'nodoor' });
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
     if (!pro && P.centerFree(cx - 1.3, cz - 1.3, cx + 1.3, cz + 1.3)) {
       model(c, 'kitchen', c.rng.chance(0.5) ? 'kitchentable_A' : 'kitchentable_A_large_decorated', cx, c.F, cz, 0, KK);
@@ -258,9 +269,7 @@ const ROOMS = {
     protoItem(c, P, 1.3, 0.62, 2.0, (x, z, rot) => {
       const col = c.rng.pick(['#8a6244', '#e8e2d8', '#a8794f', '#5d4433']);
       pbox(c, x, z, rot, -0.65, 0, -0.31, 0.65, 2.0, 0.31, 'wood', col);
-      pbox(c, x, z, rot, -0.01, 0.08, 0.31, 0.01, 1.95, 0.33, 'plain', '#3a2a1f');
-      pbox(c, x, z, rot, -0.12, 1.0, 0.31, -0.06, 1.2, 0.36, 'shiny', '#d4af37');
-      pbox(c, x, z, rot, 0.06, 1.0, 0.31, 0.12, 1.2, 0.36, 'shiny', '#d4af37');
+      c.frontColor = col; // iki kanat, ek yeri ve kulplar Fronts'ta (menteşeden açılır)
     }, { container: 'wardrobe' });
     furniture(c, P, 'furniture', 'cabinet_medium', 1.4, 0.7, 0.7, { container: 'dresser' });
     furniture(c, P, 'furniture', c.rng.pick(['pictureframe_medium', 'pictureframe_small_A']), 0.6, 0.14, 0.2, { y: 1.5, collide: false });
@@ -338,8 +347,7 @@ const ROOMS = {
       protoItem(c, P, 1.4, 0.75, 2.0, (x, z, rot) => { // içecek dolabı
         pbox(c, x, z, rot, -0.7, 0, -0.37, 0.7, 2.0, 0.37, 'shiny', '#ecf0f1');
         for (let i = 0; i < 4; i++) for (let k = 0; k < 8; k++) pbox(c, x, z, rot, -0.62 + k * 0.155, 0.2 + i * 0.45, 0.05, -0.52 + k * 0.155, 0.48 + i * 0.45, 0.25, 'plain', c.rng.pick(['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#ffffff']));
-        pbox(c, x, z, rot, -0.7, 0.05, 0.36, 0.7, 1.95, 0.38, 'shiny', '#d6eaf8');
-      }, { container: 'shelf_drinks', prefer: ['B', 'L', 'R'] });
+      }, { container: 'shelf_drinks', prefer: ['B', 'L', 'R'] }); // iki cam kapak Fronts'ta
     }
     if (goods === 'electronics' || goods === 'clothes') {
       furniture(c, P, 'furniture', 'table_medium_long', 2.1, 1.4, 0.7, { container: goods === 'clothes' ? 'shelf_clothes' : 'shelf_electronics', label: 'Teşhir Masası' });
@@ -487,6 +495,7 @@ const ROOMS = {
   armory(r, c, P) {
     for (let i = 0; i < 3; i++) protoItem(c, P, 1.0, 0.55, 2.0, (x, z, rot) => {
       pbox(c, x, z, rot, -0.5, 0, -0.27, 0.5, 2.0, 0.27, 'metal', r.police ? '#34495e' : '#556b2f');
+      c.frontColor = r.police ? '#34495e' : '#556b2f';
       for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.42 + k * 0.3, 0.4, 0.2, -0.38 + k * 0.3, 1.6, 0.26, 'plain', '#1b1b1b');
     }, { container: 'weapon_locker' });
     militaryCrate(c, P); militaryCrate(c, P);
@@ -509,7 +518,7 @@ const ROOMS = {
     }
     for (let i = 0; i < 3; i++) protoItem(c, P, 0.6, 0.55, 1.9, (x, z, rot) => {
       pbox(c, x, z, rot, -0.3, 0, -0.27, 0.3, 1.9, 0.27, 'metal', r.lockers ? '#7f8c8d' : '#556b2f');
-      for (let k = 0; k < 4; k++) pbox(c, x, z, rot, -0.2, 1.4 + k * 0.08, 0.27, 0.2, 1.42 + k * 0.08, 0.29, 'plain', '#2e4053');
+      c.frontColor = r.lockers ? '#7f8c8d' : '#556b2f'; // kanat (havalandırma yarıklarıyla) Fronts'ta
     }, { container: 'locker' });
   },
   warehouse_hall(r, c, P) {
@@ -590,8 +599,7 @@ const ROOMS = {
   },
   vault(r, c, P) {
     for (let i = 0; i < 2; i++) protoItem(c, P, 1.2, 0.7, 1.4, (x, z, rot) => {
-      pbox(c, x, z, rot, -0.6, 0, -0.35, 0.6, 1.4, 0.35, 'metal', '#717d7e');
-      pbox(c, x, z, rot, -0.1, 0.6, 0.35, 0.1, 0.8, 0.4, 'shiny', '#d4af37');
+      pbox(c, x, z, rot, -0.6, 0, -0.35, 0.6, 1.4, 0.35, 'metal', '#717d7e'); // ağır kanat ve çark Fronts'ta
     }, { container: 'safe', label: 'Çelik Kasa' });
   },
   radio_room(r, c, P) {
@@ -622,7 +630,7 @@ const ROOMS = {
     }, { container: 'stove', label: 'Soba' });
     protoItem(c, P, 1.0, 0.6, 0.6, (x, z, rot) => {
       pbox(c, x, z, rot, -0.5, 0, -0.3, 0.5, 0.55, 0.3, 'wood', '#7e5109');
-      pbox(c, x, z, rot, -0.52, 0.5, -0.32, 0.52, 0.6, 0.32, 'wood', '#6e4b1f');
+      c.frontColor = '#6e4b1f'; // kapak Fronts'ta
     }, { container: 'cabin_chest' });
     furniture(c, P, 'furniture', 'shelf_B_small_decorated', 0.7, 0.4, 0.7, { y: 1.4, collide: false });
     const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
@@ -688,8 +696,8 @@ function medCart(c, P) {
 function militaryCrate(c, P) {
   protoItem(c, P, 1.2, 0.7, 0.7, (x, z, rot) => {
     pbox(c, x, z, rot, -0.6, 0, -0.35, 0.6, 0.6, 0.35, 'wood', '#4d5a2a');
-    pbox(c, x, z, rot, -0.62, 0.6, -0.37, 0.62, 0.66, 0.37, 'wood', '#3d4820');
     pbox(c, x, z, rot, -0.15, 0.25, 0.35, 0.15, 0.4, 0.37, 'plain', '#d4ac0d');
+    c.frontColor = '#3d4820'; // arkadan menteşeli kapak Fronts'ta
   }, { container: 'ammo_crate' });
 }
 

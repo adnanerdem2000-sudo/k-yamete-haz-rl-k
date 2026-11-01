@@ -28,12 +28,20 @@ export default async ({ page, url, shot, wait, evalJS, log, newPage, errors }) =
   await evalJS(B, () => { const S = window.__game.session; S.local.spawnAt(S.local.pos.x + 3, S.local.pos.y, S.local.pos.z - 2, 0); });
   await wait(2500);
   log('konum eşitleme', await evalJS(A, () => { const S = window.__game.session; const r = [...S.players.values()].find((p) => !p.isLocal); return r ? r.pos.toArray().map((v) => +v.toFixed(1)) : null; }), await evalJS(B, () => window.__game.session.local.pos.toArray().map((v) => +v.toFixed(1))));
-  // istemci yağma eylemi
-  const loot = await evalJS(B, () => { const S = window.__game.session; const c = S.world.containers.find((q) => q.building === 'home' && !q.locked && q.id !== 'home:0'); S.act('search_done', { id: c.id }); return c.id; });
+  // istemci yağma eylemi (açılır ön yüzü olan bir ev konteyneri: dolap kapağı host'ta da açık görünmeli)
+  const loot = await evalJS(B, () => { const S = window.__game.session; const f = S.fronts.cands.find((q) => q.ct.building === 'home' && !q.ct.locked && q.ct.id !== 'home:0'); const c = f ? f.ct : S.world.containers.find((q) => q.building === 'home' && !q.locked && q.id !== 'home:0'); S.act('search_done', { id: c.id }); return c.id; });
   await wait(2500);
+  const useOpen = await evalJS(A, (id) => { const S = window.__game.session; const c = S.fronts.cands.find((q) => q.ct.id === id); return { inUse: S.loot.inUse.get(id) || 0, hedef: c ? S.fronts.target(c) : null }; }, loot);
+  log('istemci açık tutuyor (host görüşü)', useOpen);
+  check(useOpen.inUse === 1 && (useOpen.hedef === null || useOpen.hedef === 1), 'istemcinin açtığı dolap host tarafında da açık olmalı', useOpen);
   log('istemci yağma', await evalJS(B, (id) => { const S = window.__game.session; const st = S.loot.get(id); return { searched: st && st.searched, slots: st && st.slots.filter(Boolean).map((s) => s.id + 'x' + s.qty), panel: window.__game.ui.panel && window.__game.ui.panel.name }; }, loot));
   await evalJS(B, (id) => { window.__game.session.act('loot_take_all', { id }); }, loot);
   await wait(2500);
+  await evalJS(B, () => window.__game.ui.closePanel());
+  await wait(2500);
+  const useClosed = await evalJS(A, (id) => { const S = window.__game.session; const c = S.fronts.cands.find((q) => q.ct.id === id); return { inUse: S.loot.inUse.get(id) || 0, hedef: c ? +S.fronts.target(c).toFixed(2) : null }; }, loot);
+  log('istemci kapattı (host görüşü)', useClosed);
+  check(useClosed.inUse === 0 && (useClosed.hedef === null || useClosed.hedef < 0.5), 'istemci kapatınca dolap host tarafında kapanmalı (aranmış: aralık)', useClosed);
   log('istemci envanter', await evalJS(B, () => window.__game.session.inventory.items().map((s) => s.id + 'x' + s.qty)));
   log('host konteyner', await evalJS(A, (id) => { const st = window.__game.session.loot.get(id); return st && st.slots.filter(Boolean).length; }, loot));
   // zombi anlık görüntüsü

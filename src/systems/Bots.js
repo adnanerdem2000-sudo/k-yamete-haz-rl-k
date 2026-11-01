@@ -283,7 +283,11 @@ export class Bots {
         if (c) {
           const d = dist(b.pos.x, b.pos.z, c.x, c.z);
           if (d > 1.7) { fp = { x: c.x, z: c.z }; b.lootT = 0; }
-          else { b.lootT = (b.lootT || 0) + dt; b.speed = 0; b.yaw = Math.atan2(c.x - b.pos.x, c.z - b.pos.z); if (b.lootT > 2.5) { b.lootT = 0; this.botLoot(b, c); } }
+          else {
+            // arama boyunca dolap kapağı/çekmece herkeste açık görünsün
+            if (b.usingCont !== c.id) { if (b.usingCont) S.applyAction('cont_use', { id: b.usingCont, on: false }, b.id); b.usingCont = c.id; S.applyAction('cont_use', { id: c.id, on: true }, b.id); }
+            b.lootT = (b.lootT || 0) + dt; b.speed = 0; b.yaw = Math.atan2(c.x - b.pos.x, c.z - b.pos.z); if (b.lootT > 2.5) { b.lootT = 0; this.botLoot(b, c); }
+          }
         } else if (b.anchor) fp = b.anchor;
       } else if (b.order === 'build') {
         // inşaat: üsteki bitmemiş yapıya gider, 2 sn'de bir çeyrek ilerletir (8 sn'de biter)
@@ -355,6 +359,7 @@ export class Bots {
   /** Konteyneri ara ve içindekileri al (host): search_done + loot_take_all → grant bot envanterine */
   botLoot(b, c) {
     const S = this.s;
+    if (b.usingCont) { S.applyAction('cont_use', { id: b.usingCont, on: false }, b.id); b.usingCont = null; }
     (b.lootDone || (b.lootDone = new Set())).add(c.id); b.lootTarget = null;
     S.applyAction('search_done', { id: c.id }, b.id);
     const st = S.loot.state.get(c.id);

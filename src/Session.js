@@ -17,6 +17,7 @@ import { GroundItems } from './systems/GroundItems.js';
 import { PhysProps } from './systems/PhysProps.js';
 import { DoorPhysics } from './physics/DoorPhysics.js';
 import { Drawers } from './physics/Drawers.js';
+import { Fronts } from './systems/Fronts.js';
 import { installBuoyancy } from './physics/Buoyancy.js';
 import { ContactSounds } from './physics/ContactSounds.js';
 import { Interact } from './systems/Interact.js';
@@ -122,6 +123,7 @@ export class Session {
     this.props = new PhysProps(this);
     this.doorPhys = this.game.phys ? new DoorPhysics(this) : null;
     this.drawers = this.game.phys ? new Drawers(this) : null;
+    this.fronts = new Fronts(this); // dolap kanatları, buzdolabı/fırın kapakları, sandık kapakları (görsel, eşitlenir)
     this.build = new Build(this);
     this.zombies = new Zombies(this);
     this.vehicles = new Vehicles(this);
@@ -316,6 +318,7 @@ export class Session {
     this.game.phys.update(dt);
     if (this.doorPhys) this.doorPhys.update(dt);
     if (this.drawers) this.drawers.update(dt);
+    if (this.fronts) this.fronts.update(dt);
     this.updateTimers(dt);
     if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.postPhysicsLocal(dt);
     else pl.postPhysics(dt);
@@ -929,6 +932,7 @@ export class Session {
       this.inventory.add('water_bottle', 2, null, true);
     }
     this.loot.load(w.loot);
+    if (w.lootUse) this.loot.applyUsage(w.lootUse); // o an açık dolaplar (sonradan katılan da açık görsün)
     this.ground.load(w.ground);
     this.build.load(w.build);
     this.vehicles.load(w.vehicles);
@@ -949,7 +953,7 @@ export class Session {
     this.disposed = true;
     this.audio.occluder = null;
     this.audio.setEnvironment(false);
-    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.doorPhys, this.drawers, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
+    for (const sys of [this.storyWorld, this.zombies, this.vehicles, this.npcs, this.ground, this.props, this.doorPhys, this.drawers, this.fronts, this.fx, this.build, this.bots, this.events, this.endings]) if (sys && sys.dispose) sys.dispose();
     if (this.buoyancyOff) this.buoyancyOff();
     if (this.contacts) this.contacts.dispose();
     if (this.living) for (const l of Object.values(this.living)) { this.game.scene.remove(l.mesh); l.mesh.geometry.dispose(); l.mesh.material.dispose(); }

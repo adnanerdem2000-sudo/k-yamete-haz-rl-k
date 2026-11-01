@@ -270,7 +270,7 @@ export class Net {
     }
     return {
       seed: S.seed, time: S.time.serialize(), flags: S.flags, relations: S.relations, difficulty: S.cfg.difficulty,
-      loot: S.loot.serialize(), ground: S.ground.serialize(), build: S.build.serialize(), vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
+      loot: S.loot.serialize(), lootUse: S.loot.usageSnapshot(), ground: S.ground.serialize(), build: S.build.serialize(), vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
       quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(), story: S.storyWorld.serialize(),
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
       props: S.props && S.props.serializeDynamic ? S.props.serializeDynamic() : null,
@@ -330,6 +330,7 @@ export class Net {
         S.offlinePlayers = S.offlinePlayers || {};
         if (rec.saved) S.offlinePlayers[peer.token] = rec.saved;
         for (const v of S.vehicles.list) { const si = v.seats.indexOf(peer.id); if (si >= 0) S.emit({ k: 'veh_seat', id: v.id, seat: si, player: null }); }
+        if (S.loot && S.loot.dropUser) S.loot.dropUser(peer.id); // açık bıraktığı dolap/çekmeceler kapanır
         S.removeRemotePlayer(peer.id);
         for (const o of this.peers.values()) if (o.inGame) this.transport.send(o.pid, { t: 'pleave', id: peer.id });
       }

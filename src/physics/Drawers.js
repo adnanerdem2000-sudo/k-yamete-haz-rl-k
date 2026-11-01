@@ -6,8 +6,28 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { G } from './PhysicsWorld.js';
 
-const DRAWER_TYPES = new Set(['dresser', 'nightstand', 'desk', 'filing_cabinet', 'counter', 'bathroom_cabinet', 'radio_desk', 'medical_cart', 'cart', 'register']);
-const TRAVEL = 0.34, NEAR = 22, FAR = 28, MAX = 14;
+// 'cart' (alışveriş arabası modeli) çıkarıldı: çekmecesi yok, çekmece mobilyanın üstünde havada kalıyordu
+const DRAWER_TYPES = new Set(['dresser', 'nightstand', 'desk', 'filing_cabinet', 'counter', 'bathroom_cabinet', 'radio_desk', 'medical_cart', 'register']);
+const TRAVEL = 0.34, NEAR = 22, FAR = 28, MAX = 14, AJAR = 0.05;
+// çekmece ortasının zeminden yüksekliği ve mobilyanın ön yüzünün eşya merkezinden uzaklığı (KayKit dolaplar 0,35 m;
+// prosedürel eşyalarda derinliğin yarısı). Eskiden yükseklik konteyner noktasından (mobilyanın üstü) alındığı için
+// masa, TV ünitesi ve telsiz masasında çekmece mobilyanın üstünde havada kalıyordu.
+function drawerPlacement(ct) {
+  const H = ct.fh || 0.8, m = ct.fmodel || '';
+  let y;
+  switch (ct.type) {
+    case 'nightstand': case 'dresser': y = m.startsWith('cabinet') ? 0.53 : Math.min(H - 0.12, 0.42); break;
+    case 'desk': case 'radio_desk': y = Math.min(H, 0.8) - 0.15; break;
+    case 'filing_cabinet': y = Math.max(0.3, H - 0.25); break;
+    case 'counter': case 'register': y = Math.min(H, 1.05) - 0.2; break;
+    case 'bathroom_cabinet': y = 0.62; break;
+    case 'medical_cart': y = 0.78; break;
+    default: y = Math.min(H, 1.0) - 0.2;
+  }
+  const front = m.startsWith('cabinet') ? 0.35 : (ct.fd || 0.6) / 2;
+  const color = ct.type === 'filing_cabinet' ? '#7b878c' : ct.type === 'medical_cart' ? '#dfe3e4' : ct.type === 'register' ? '#7d3412' : ct.type === 'bathroom_cabinet' ? '#ddd5c7' : null;
+  return { y, front, color };
+}
 const _q = new THREE.Quaternion(), _up = new THREE.Vector3(0, 1, 0), _v = new THREE.Vector3();
 
 let GEO = null, MAT = null;
@@ -20,7 +40,16 @@ function drawerGeometry() {
   GEO = mergeGeometries([front, box, handle], false);
   return GEO;
 }
-function drawerMaterial() { return MAT || (MAT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.75, metalness: 0.05 })); }
+function drawerMaterial(color = null) {
+  if (!MAT) MAT = new Map();
+  const k = color || 'wood';
+  if (!MAT.has(k)) {
+    const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: color === '#7b878c' ? 0.45 : 0.75, metalness: color === '#7b878c' ? 0.4 : 0.05 });
+    if (color) m.color.set(color).multiplyScalar(1.6); // köşe renkleri (ahşap tonu) türün rengiyle çarpılır
+    MAT.set(k, m);
+  }
+  return MAT.get(k);
+}
 
 export class Drawers {
   constructor(session) {
@@ -29,15 +58,17 @@ export class Drawers {
     this.R = this.pw.R;
     this.active = new Map(); // container id → kayıt
     this.t = 0;
-    this.cands = session.world.containers.filter((c) => DRAWER_TYPES.has(c.type) && !c.locked);
+    // yalnız bir binanın içindeki mobilyalar (dış mekândaki modelsiz tıbbi sandıkta çekmece boşlukta oluşuyordu)
+    this.cands = session.world.containers.filter((c) => DRAWER_TYPES.has(c.type) && !c.locked && c.building);
     this.group = new THREE.Group();
     this.group.name = 'drawers';
     session.game.scene.add(this.group);
   }
 
-  /** Konteynerin baktığı yön: odasının merkezine doğru (yoksa oyuncuya) */
+  /** Konteynerin baktığı yön: mobilyanın kayıtlı yönü (ön yüz); yoksa odasının merkezine doğru (yoksa oyuncuya) */
   facing(ct) {
     const S = this.s;
+    if (ct.yaw !== undefined) return { x: Math.sin(ct.yaw), z: Math.cos(ct.yaw) };
     const B = S.world.buildingById && S.world.buildingById[ct.building];
     const room = B && B.rooms && B.rooms.find((r) => r.id === ct.room);
     let fx = 0, fz = 1;
@@ -53,8 +84,11 @@ export class Drawers {
     const yaw = Math.atan2(f.x, f.z);
     _q.setFromAxisAngle(_up, yaw);
     const quat = { x: _q.x, y: _q.y, z: _q.z, w: _q.w };
-    const x = ct.x + f.x * 0.08, y = ct.y - 0.06, z = ct.z + f.z * 0.08;
-    const mesh = new THREE.Mesh(drawerGeometry(), drawerMaterial());
+    // çekmece ön yüzü mobilyanın ön yüzünün 1 cm önünde (gövde 0,19 + ön kapak 0,0125)
+    const pl = ct.fy !== undefined ? drawerPlacement(ct) : null;
+    const off = pl ? pl.front - 0.19 : 0.08;
+    const x = ct.x + f.x * off, y = pl ? ct.fy + pl.y : ct.y - 0.06, z = ct.z + f.z * off;
+    const mesh = new THREE.Mesh(drawerGeometry(), drawerMaterial(pl && pl.color));
     mesh.castShadow = true;
     this.group.add(mesh);
     const d = this.pw.addDynamic(mesh, { type: 'box', hx: 0.21, hy: 0.085, hz: 0.19 }, x, y, z, { quat, density: 180, friction: 0.4, bounce: 0, group: G.PROP, filter: G.PLAYER | G.PROP | G.DEBRIS, linDamp: 5, angDamp: 6 });
@@ -64,8 +98,8 @@ export class Drawers {
     jd.limitsEnabled = true;
     jd.limits = [0, TRAVEL];
     const joint = w.createImpulseJoint(jd, anchor, d.body, true);
-    const r = { ct, d, anchor, joint, open: false, f, x0: x, z0: z };
-    joint.configureMotorPosition(0, 140, 26);
+    const r = { ct, d, anchor, joint, open: false, f, x0: x, z0: z, rest: this.restPos(ct) };
+    joint.configureMotorPosition(r.rest, 140, 26);
     this.active.set(ct.id, r);
     return r;
   }
@@ -77,14 +111,18 @@ export class Drawers {
     this.active.delete(r.ct.id);
   }
 
-  /** Açık olmalı mı: aranıyor ya da depo paneli bu konteynere açık */
+  /** Açık olmalı mı: yerelde aranıyor ya da depo paneli açık; ya da başka bir oyuncu/bot kullanıyor (Loot.inUse) */
   wantOpen(ct) {
     const S = this.s;
     const hold = S.interact && S.interact.hold;
     if (hold && hold.container === ct) return true;
     const st = S.ui && S.ui.panels && S.ui.panels.storage;
-    return !!(st && st.kind === 'container' && st.id === ct.id && S.ui.panel && S.ui.panel.name === 'storage');
+    if (st && st.kind === 'container' && st.id === ct.id && S.ui.panel && S.ui.panel.name === 'storage') return true;
+    return !!(S.loot && S.loot.inUse && S.loot.inUse.has(ct.id));
   }
+
+  /** Aranmış çekmece biraz dışarıda kalır (karıştırılmış görünüm; aranma durumu kayıtta ve ağda) */
+  restPos(ct) { const st = this.s.loot && this.s.loot.state.get(ct.id); return st && st.searched ? AJAR : 0; }
 
   /** Çekmecenin dışarı çıkma miktarı (m) */
   extension(r) { const t = r.d.body.translation(); return (t.x - r.x0) * r.f.x + (t.z - r.z0) * r.f.z; }
@@ -105,12 +143,13 @@ export class Drawers {
       }
     }
     for (const r of this.active.values()) {
-      const want = this.wantOpen(r.ct);
-      if (want !== r.open) {
-        r.open = want;
-        r.joint.configureMotorPosition(want ? TRAVEL : 0, 140, 26);
+      const want = this.wantOpen(r.ct), rest = this.restPos(r.ct);
+      if (want !== r.open || (!want && rest !== r.rest)) {
+        const closing = r.open && !want;
+        r.open = want; r.rest = rest;
+        r.joint.configureMotorPosition(want ? TRAVEL : rest, 140, 26);
         r.d.body.wakeUp();
-        if (!want) S.audio && S.audio.play('door', { at: r.ct, vol: 0.25, rate: 1.9 });
+        if (closing) S.audio && S.audio.play('door', { at: r.ct, vol: 0.25, rate: 1.9 });
       }
     }
   }

@@ -107,18 +107,20 @@ export class Assets {
     const key = `${kit}/${name}${variant ? '#' + variant : ''}`;
     if (this.partsCache.has(key)) return this.partsCache.get(key);
     // görünüm çeşitleri (yanmış araç enkazı vb.) temel parçalardan türetilir
-    if (variant) {
+    // 'nodoor': adında _door geçen alt ağlar atlanır (buzdolabı kapakları ayrıca menteşeden açılır: Fronts)
+    if (variant && variant !== 'nodoor') {
       const v = variant === 'burnt' ? burntParts(this.parts(kit, name)) : this.parts(kit, name);
       this.partsCache.set(key, v);
       return v;
     }
-    const src = this.index[key];
+    const src = this.index[`${kit}/${name}`];
     const out = [];
     if (src) {
       const tmp = src.clone(true);
       tmp.position.set(0, 0, 0); tmp.rotation.set(0, 0, 0); tmp.scale.set(1, 1, 1);
       tmp.updateMatrixWorld(true);
       tmp.traverse((o) => {
+        if (variant === 'nodoor' && /_door/i.test(o.name)) return;
         if (o.isMesh && !o.isSkinnedMesh) {
           const mats = Array.isArray(o.material) ? o.material : [o.material];
           if (mats.length === 1) out.push({ geometry: o.geometry, material: mats[0], matrix: o.matrixWorld.clone() });

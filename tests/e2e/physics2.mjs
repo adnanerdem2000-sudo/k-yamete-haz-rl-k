@@ -67,7 +67,10 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   });
   log('kilitli kapı', lk);
   if (lk) check(lk.sabit, 'kilitli kapı sabit gövde olmalı', lk);
-  // 4) kırılma: ağır hasar → eklem kopar, kanat düşer
+  // 4) kırılma: ağır hasar → eklem kopar, kanat düşer. Kapı önce kapatılır: 2. adımda oyuncu iterek açtığı için
+  // kanat ~90° açık kalabiliyor, içe doğru itki o zaman kanadı devirmek yerine zeminde kaydırıyordu (sonuç açıya bağlıydı)
+  await evalJS(page, () => window.__game.session.act('door', { id: window.__r.d.id, open: false }));
+  await simWait(120);
   const br0 = await evalJS(page, () => { const r = window.__r; const t = r.body.translation(); window.__game.session.act('door_damage', { id: r.d.id, dmg: 5000 }); return { y: +t.y.toFixed(2) }; });
   await simWait(150);
   const br1 = await evalJS(page, () => { const r = window.__r; const t = r.body ? r.body.translation() : null; return { broken: r.d.broken, eklem: !!r.joint, y: t ? +t.y.toFixed(2) : null, govde: !!r.body }; });
