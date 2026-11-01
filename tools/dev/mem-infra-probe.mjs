@@ -29,25 +29,31 @@ export default async ({ page, url, wait, evalJS, log, newPage }) => {
     await A.waitForFunction(() => window.__game.state === 'playing', null, { timeout: 300000 });
   }
   log('oyunda; bekleniyor', WAIT);
+  // izleme oyun başlarken açılır: 10 sn'de bir hafif (light) periyodik döküm + sonda açık istek; detaylı döküm
+  // bellek sınırına yakın süreçleri çökertebiliyor
+  await cdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { recordMode: 'recordContinuously', includedCategories: ['disabled-by-default-memory-infra'], memoryDumpConfig: { triggers: [{ mode: 'light', periodic_interval_ms: 10000 }] } } });
   await wait(WAIT * 1000);
-  await cdp.send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { includedCategories: ['disabled-by-default-memory-infra'], memoryDumpConfig: { triggers: [] } } });
-  const dump = await cdp.send('Tracing.requestMemoryDump', { deterministic: false, levelOfDetail: 'detailed' });
-  log('döküm', dump);
+  try { const dump = await cdp.send('Tracing.requestMemoryDump', { deterministic: false, levelOfDetail: 'light' }); log('döküm', dump); } catch (e) { log('döküm hatası', e.message); }
   await wait(1500);
   const done = new Promise((r) => cdp.once('Tracing.tracingComplete', r));
   await cdp.send('Tracing.end');
   await done;
+  log('olaylar', events.length);
   const lines = [`# MODE=${MODE} WAIT=${WAIT} dökümler=${events.length}`];
   const byPid = new Map();
-  for (const ev of events) {
-    const al = ev.args && ev.args.dumps && ev.args.dumps.allocators; if (!al) continue;
-    const m = byPid.get(ev.pid) || new Map(); byPid.set(ev.pid, m);
+  const series = new Map(); // pid -> [ts, totals]
+  for (const ev of events.sort((a, b) => a.ts - b.ts)) {
+    const d = ev.args && ev.args.dumps; if (!d) continue;
+    const pt = d.process_totals; if (pt) { const arr = series.get(ev.pid) || []; series.set(ev.pid, arr); arr.push(`${Math.round((ev.ts || 0) / 1e6)}s:${Math.round(parseInt(pt.resident_set_bytes || '0', 16) / 1048576)}MB`); }
+    const al = d.allocators; if (!al) continue;
+    const m = new Map(); byPid.set(ev.pid, m); // en son döküm kazanır
     for (const [name, a] of Object.entries(al)) {
       const sz = a.attrs && (a.attrs.effective_size || a.attrs.size); if (!sz) continue;
       const v = parseInt(sz.value, 16); if (!(v > 0)) continue;
-      m.set(name, Math.max(m.get(name) || 0, v));
+      m.set(name, v);
     }
   }
+  for (const [pid, arr] of series) lines.push(`pid ${pid} RSS zaman serisi: ${arr.join(' ')}`);
   for (const [pid, m] of byPid) {
     // yalnız üst düzey ve ikinci düzey girdiler; MB cinsinden, en büyük 18
     const rows = [...m.entries()].filter(([n]) => n.split('/').length <= 2).sort((a, b) => b[1] - a[1]).slice(0, 18);
