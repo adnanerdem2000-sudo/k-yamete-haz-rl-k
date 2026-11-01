@@ -198,6 +198,61 @@ _(aşamalar ilerledikçe doldurulur)_
 - **Yapılmadı:** botların araç sürmesi (yalnız yolcu olarak biner), botların kendi başına üs savunması inşa etmesi
   (yalnız oyuncunun yerleştirdiği yapıyı tamamlar), zombi sürüsü için akış alanı (flow field) — A* bütçesi yeterli
   bulundu.
+### Aşama 7 — Çok oyunculu
+- **STUN/TURN:** `PeerTransport.iceServers()` varsayılan genel STUN listesine `window.KIYAMET_ICE`, localStorage
+  `kiyamet.net.ice` (Ayarlar → Oyun → "TURN sunucuları (JSON)") ya da `?ice=` parametresinden gelen sunucuları
+  ekler; `sanitizeIce` yalnız `stun:`/`turn:`/`turns:` şemalarını ve kimlik bilgisi tam TURN girdilerini kabul eder.
+  Kimlik bilgisi depoda/kodda yok. Gerçek TURN bağlantısı bu ortamda test edilemedi.
+- **Ağ göstergesi:** host eşlere, istemci host'a 2 sn'de bir (duvar saatiyle; yavaş karede oyun zamanı yavaş akar)
+  ping atar; gösterilen gecikme son ölçüm ile cevapsız en eski pingin yaşından büyüğüdür (takılan bağlantı hemen
+  görünür). Kayıp, durum/anlık görüntü sıra numaralarından. HUD'da ms + kayıp yüzdesi, iyi/orta/kötü renk.
+- **Yeniden bağlanma ve host göçü:** kopmada önce aynı koda yeniden bağlanma (40 deneme; aynı jetonla gelen eşin eski
+  kaydı düşürülür, sesli çağrı yeniden yanıtlanır). Host "kesin" kayıpsa (kapanış iletisi + 5 sn ya da 90 sn sessizlik,
+  iki başarısız deneme, oyun sürüyorsa) oda sırasındaki ilk çevrimiçi istemci aynı oda koduyla host olur; diğerleri
+  ona kendiliğinden bağlanır. Yeni host gördüğü zombileri (aynı tür, konum, yön), bot vekillerini ve hayvan
+  kopyalarını gerçek simülasyona çevirir, ayrılanların koltuklarını boşaltır; envanterler ve zombi bölge nüfusu /
+  öldürülen sayıları 8 sn'de bir yayımlanan `pdata` paketinden geri yüklenir (ölen zombiler geri gelmez; önceden
+  yeni host bölgeleri sıfırdan kuruyordu).
+  Yerel taşıyıcıda host tarafı takılma koruması ve dünyasını kuran eşe 4 dk zaman aşımı eklendi.
+- **Fizik ve dünya senkronu:** taşınan nesne ve dinamik nesnelerin son konumu hoş geldin paketinde (sonradan katılan,
+  yeni host); araç koltuğu/kapı/bagaj `veh_set` ile. **Hayvanlar** artık yalnız host'ta değil: host simüle eder
+  (algı, saldırı, doğma ve kaybolma bütün oyunculara göre), istemcilere 5/sn anlık görüntü (konum, yön, hız, durum,
+  can) gider, istemci enterpolasyon + 0,4 sn tahminle taşır; istemcinin vuruşu host'ta işlenir, saldırının hasarı
+  (boğa/ayı itmesiyle) yalnız hedef oyuncuya olay olarak gider, saldırı klibi/sesi herkeste oynar. **Tüccar stoğu**
+  host'ta düşer (`trade_buy` eylemi → `trade_stock` olayı), alıcı ödeyemezse satış geri alınır, stok hoş geldin
+  paketinde.
+- **Animasyon senkronu:** tek seferlik eylemler sayaç + klip kimliği + süreyle gidiyordu; şimdi başlangıç zamanı
+  (`actT`: paket gönderilirken eylemin üzerinden geçen süre) da gider; uzak avatar klibi o kadar ileriden başlatır,
+  böylece klip aynı paketteki (gecikmeli gösterilen) konumla eş zamanlı kalır; ilk görülen ama hâlâ süren eylem de
+  kaldığı yerden oynar. Protokol sürümü 4. (İlk sürüm ağ gecikmesini de ekliyordu; inceleme, hareket kliplerinin
+  konumun önüne geçtiğini gösterdi → kaldırıldı.)
+- **3B ses:** `Voice.spatialize` her uzak oyuncu için `MediaStreamSource → Gain → PannerNode(HRTF, ters mesafe,
+  35 m)`; dinleyici = kamera; iki tarafta telsiz varsa mesafesiz. Yalnız PeerJS taşıyıcısında; başsız ortamda
+  mikrofon/hoparlör olmadığından yalnız kod incelemesiyle doğrulandı.
+- **6 oyunculu test ortamı (`multiplayer-6`):** A host + B istemci gerçek sekmeler, dört oyuncu protokol düzeyinde
+  sahte eş (hafif sayfa, BroadcastChannel). Ölçülen: host ve gerçek istemci 6 oyuncu gördü; sahte eşler
+  anlık görüntüde 6 oyuncu aldı (ortalama anlık görüntü ~1,1 KB, 10/sn); 7. oyuncu "Oda dolu." ile reddedildi;
+  ayrılan eş aynı jetonla aynı oda kaydına döndü (çift kayıt yok); host'un ölçtüğü gecikme 17–21 ms; sahte eşin
+  sohbeti gerçek istemcide göründü. Hayvan: host'ta doğan geyik istemcide aynı konumda (fark 0,00 m), istemcinin
+  vuruşu host'ta öldürdü; saldıran yaban domuzunun hasarı (14) istemciye ulaştı. Takas: istemci 10 para ödedi, eşyayı
+  aldı, stok host ve istemcide 5 → 4. Eylem ofseti: ilk koşuda uzak avatar ilk gördüğü eylemi oynatmıyordu (eski
+  davranış) → düzeltildi.
+- **Üç sekmeli göç (`host-migration3`):** A host, B ve C istemci; C yağmalar, B kapı açar; A kapanır → B host olur, C
+  kendiliğinden B'ye bağlanır. Ölçülen: B 24 sn'de host oldu, C 41 sn'de (dünyasını yeniden
+  kurarak) kendiliğinden bağlandı; C'nin yağmayla değişen envanteri ve açılan kapı korundu, boşaltılan konteyner iki
+  tarafta da boş, B'nin oyuncu listesinde C var, B'nin zombileri C'de görünüyor, C'nin gecikmesi 13 ms. Üç sekmenin
+  tepe belleği toplam 4,6 GB.
+- **Test ortamı bulgusu:** iki sekmeli senaryoların çökmesi oyunun değil başsız kabuğun işaretçi kilidi döngüsüydü
+  (bkz. §2/§3); düzeltmeden sonra iki sekme toplam ~3,3 GB, üç sekme ~3,8 GB.
+- **İnceleme:** iş akışı (3 mercek + bulgu başına 3 şüpheci) on aday buldu, hepsi uygulandı: çift tıklamada tüccar
+  stoğunun boşa düşmesi (doğrulandı → ödenemeyen satış iadesi + bekleyen istek koruması), gece yarısını geçen açık
+  panelde yanlış gün, protokol sürümünün artırılmaması, anlık görüntü kesilince hayvanın sınırsız kayması ve göçte bu
+  kaymış konumun benimsenmesi, göçte hayvan canının dolması, saldırı klibi/sesinin yalnız host'ta oynaması; animasyon
+  merceği ayrıca ağ gecikmesinin klip ofsetine eklenmesini (hareket klipleri konumun önüne geçiyordu; tek ham RTT
+  örneği; host'un kendi kaydına da +50 ms) buldu → gecikme terimi kaldırıldı.
+- **Yapılmadı / sınırlar:** lobide host düşerse göç yok (oda kapanır); çevrimiçi (PeerJS/TURN) uçtan uca test yok;
+  sesli sohbet 3B konumlandırması dinlenemedi; fizik nesnelerinin ara konumları istemcilerde yerel (son konum/taşıma
+  eşitlenir); 6 oyunculu ortamın dört oyuncusu gerçek oyun sekmesi değil protokol düzeyinde sahte eş.
 ## 6. Test edilemeyenler
 - Gerçek internet üzerinden WebRTC/TURN bağlantısı (ortam ağ kısıtı).
 - Gerçek GPU kare hızı (yazılım GPU'su; ölçümler çizim çağrısı/üçgen/CPU ile sınırlı).

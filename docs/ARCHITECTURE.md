@@ -229,6 +229,20 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   (`PhysProps.serializeDynamic`).
 - **Yakınlık sesi:** uzak oyuncuların sesi Web Audio `PannerNode` (HRTF, ters mesafe, 35 m) ile konumlanır; iki
   tarafta da telsiz varsa mesafesiz ve yönsüz (özet paketinde `radio`).
+- **Hayvanlar:** yapay zekâ host'ta (`NPCs.updateAnimals`); algı, saldırı, doğma ve kaybolma bütün oyunculara göre
+  (`playerAnchors`). Host anlık görüntüsüne 5/sn `an` alanı eklenir (`animalSnapshotFor`: id, tür, konum, yön, hız,
+  durum, bayrak, grup, sıra, can); istemci `applyAnimalSnapshot` ile kopya kurar, `updateRemoteAnimal` enterpolasyon +
+  0,4 sn tahminle taşır. Saldırı hasarı `dmg_player` (boğa/ayıda `push`) olayıyla hedefe, saldırı/sarsılma görseli
+  `animal_fx` olayıyla herkese. Göçte `promoteAnimals` kopyaları gerçek simülasyona çevirir (son anlık görüntü konumu).
+- **Tüccar stoğu:** `NPCs.tradeStock(npc, gün)` tohumdan aynı başlangıcı verir; satın alma `trade_buy` eylemi →
+  host stoğu düşer → `trade_stock` olayı (alıcıda para/eşya); ödenemezse `trade_refund`. Stok hoş geldin paketinde.
+- **Eylem başlangıç zamanı:** anim durumunda `act` [sayaç, klip, süre, tür] + `actT` (paket gönderilirken eylemin
+  üzerinden geçen süre); alıcı `Avatar.play(..., off = actT)` ile klibi o kadar ileriden başlatır. Ağ gecikmesi
+  ayrıca eklenmez: konum da aynı gecikmeyle gösterildiğinden klip, aynı paketteki konumla eş zamanlı kalır (atlama,
+  tırmanma gibi hareket klipleri öne geçmez). Protokol sürümü 4.
+- **Bağlantı sağlamlığı:** ping duvar saatiyle 2 sn'de bir; gösterge = max(son ölçüm, cevapsız en eski ping). Yerel
+  taşıyıcıda host tarafı takılma koruması (kendi zamanlayıcısı 10 sn gecikirse eş süreleri sıfırlanır) ve
+  `Net.peerTimeout`: hoş geldin almış ama dünyasını kurmakta olan eşe 4 dk, diğerlerine 45 sn.
 
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),

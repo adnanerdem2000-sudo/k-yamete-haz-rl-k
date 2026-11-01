@@ -775,10 +775,20 @@ export class Session {
   becomeHost() {
     this.isHost = true;
     this.offlinePlayers = this.offlinePlayers || {};
-    // istemci zombi görünümleri (eski host'un anlık görüntüsü) hayalet kalmasın: temizle, bölge nüfusunu yeniden kur
+    // zombi durumu korunur: istemcinin gördüğü zombiler (eski host'un son anlık görüntüsü) aynı tür, konum ve yönle
+    // gerçek zombiye dönüşür (can tam); bölge nüfusu ve öldürülen sayıları son paylaşılan değerden (pdata / hoş geldin)
+    // geri yüklenir → ölenler geri gelmez, görüş dışındaki nüfus bölge kuralıyla tamamlanır
+    const seen = [];
+    for (const v of this.zombies.views.values()) if (v.state && !v.state.dead && v.type) seen.push({ type: v.type, x: v.pos.x, z: v.pos.z, yaw: v.state.yaw || 0, alert: v.state.state === 'chase' || v.state.state === 'attack' });
     for (const id of [...this.zombies.views.keys()]) this.zombies.removeZombie(id);
     this.zombies.list.clear();
     this.zombies.init();
+    if (this.zoneState) this.zombies.load({ zones: this.zoneState });
+    for (const q of seen) {
+      const zb = this.zombies.spawn(q.type, q.x, q.z, { zone: this.zombies.zoneFor(q.x, q.z) });
+      if (zb) { zb.yaw = q.yaw; if (q.alert) zb.alert = 1; }
+    }
+    this.promotedZombies = seen.length;
     if (this.bots && this.bots.promoteProxies) this.bots.promoteProxies();
     // ayrılan oyuncuların koltukları boşalır; sürücüsüz araçlar dinamik gövdeye döner
     for (const v of this.vehicles.list) {
@@ -902,6 +912,7 @@ export class Session {
   applyWelcome(w) {
     this.seed = w.seed;
     this._trade = w.trade || {};
+    this.zoneState = w.zones || null; // zombi bölge nüfusu (göçte geri yüklenir)
     this.time.set(w.time.total);
     this.time.dayMinutes = w.time.dayMinutes;
     this.flags = w.flags || {};

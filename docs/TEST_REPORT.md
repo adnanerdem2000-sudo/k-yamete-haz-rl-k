@@ -65,10 +65,11 @@ hızında **otomatik çözünürlük** iç çözünürlüğü %55'e kadar indiri
 ## Test edilemeyenler
 - PeerJS (WebRTC) ile gerçek internet üzerinden bağlantı, TURN sunucusu ve sesli sohbet (3B konumlandırma
   dahil): geliştirme ortamının ağ kısıtı ve mikrofon/hoparlör yokluğu nedeniyle çalıştırılamadı. Protokol aynı
-  olduğundan yerel taşıyıcı testleri (`multiplayer-local`, `carry-mp`, `host-migration`) mantığı doğrular;
+  olduğundan yerel taşıyıcı testleri (`multiplayer-local`, `carry-mp`, `host-migration`, `host-migration3`,
+  `multiplayer-6`) mantığı doğrular;
   NAT/TURN kaynaklı sorunlar `KNOWN_ISSUES.md`'de.
-- Host göçü üç ve daha fazla sekmeyle: yazılım GPU'lu ortamda üç oyun sekmesi bellek sınırını aşıyor; iki sekme +
-  göçten sonra katılan üçüncü oyuncu test edildi.
+- Altı tam oyun sekmesiyle çok oyunculu oyun: yazılım GPU'sunda çok yavaş; 6 oyunculu ortam 2 gerçek sekme + 4
+  protokol düzeyi sahte eşle test edildi (`multiplayer-6`). Üç gerçek sekmeyle host göçü test edildi (`host-migration3`).
 - Gerçek GPU'da kare hızı, hoparlörden duyulan ses (başsız tarayıcıda ses grafiği çalışır ama dinlenemez)
   ve fare işaretçi kilidi. Test koşucusu kilidi kapatır: başsız kabukta kilit, Chromium'un imleci ortalama
   döngüsünü tetikleyip saniyede on binlerce sentetik fare olayı üretiyor ve iki sekmede tarayıcıyı bellekten

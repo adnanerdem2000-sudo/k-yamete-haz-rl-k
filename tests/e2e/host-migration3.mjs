@@ -42,6 +42,11 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   const synced = await B.waitForFunction(([tok, ser]) => { const S = window.__game.session; const d = S.offlinePlayers && S.offlinePlayers[tok]; return !!d && JSON.stringify(d.inv) === ser; }, [jc.token, cSer], { timeout: 600000 }).then(() => true).catch(() => false);
   log('C kayıt verisi B\'de', synced);
   check(synced, 'C\'nin güncel kayıt verisi pdata ile B\'ye ulaşmalı');
+  // B'nin gördüğü (eski host'un) zombileri: göçte aynı yerlerde gerçek zombiye dönüşmeli
+  await evalJS(A, () => { const S = window.__game.session; const r = [...S.players.values()].find((p) => !p.isLocal); for (let i = 0; i < 3; i++) S.zombies.spawn('normal', r.pos.x + 14 + i * 2, r.pos.z + 12, {}); });
+  await B.waitForFunction(() => [...window.__game.session.zombies.views.values()].filter((v) => !v.state.dead).length >= 3, null, { timeout: 120000 }).catch(() => {});
+  const zBefore = await evalJS(B, () => [...window.__game.session.zombies.views.values()].filter((v) => !v.state.dead).map((v) => [v.type, Math.round(v.pos.x), Math.round(v.pos.z)]));
+  log('B zombi görünümleri (göç öncesi)', zBefore.length);
   const succ = await evalJS(B, () => window.__game.net.successor());
   log('aday', succ, 'B', jb.me, 'C', jc.me);
   check(succ === jb.me, 'göç adayı B olmalı (oda sırası)', { succ, b: jb.me });
@@ -52,6 +57,11 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   const bHost = await B.waitForFunction(() => window.__game.net.isHost && window.__game.session && window.__game.session.isHost, null, { timeout: 180000 }).then(() => true).catch(() => false);
   log('B host oldu', bHost, 'sn', Math.round((Date.now() - t0) / 1000));
   check(bHost, 'B yeni host olmalı');
+  const zAfter = await evalJS(B, () => { const S = window.__game.session; return { promoted: S.promotedZombies, list: [...S.zombies.list.values()].filter((z) => !z.dead).map((z) => [z.type, Math.round(z.x), Math.round(z.z)]), zoneState: !!S.zoneState }; });
+  log('B zombiler (göç sonrası)', { promoted: zAfter.promoted, list: zAfter.list.length, zoneState: zAfter.zoneState });
+  const near = zBefore.filter(([t, x, z]) => zAfter.list.some(([t2, x2, z2]) => t2 === t && Math.hypot(x2 - x, z2 - z) < 4)).length;
+  check(zAfter.promoted >= Math.min(3, zBefore.length) && near >= Math.min(3, zBefore.length), 'göçte görülen zombiler aynı yerlerde korunmalı', { once: zBefore.length, korunan: near, promoted: zAfter.promoted });
+  check(zAfter.zoneState, 'bölge nüfusu (öldürülen sayıları) yeni host\'a pdata ile ulaşmış olmalı');
   // C kendiliğinden B'ye bağlanır ve dünyayı hoş geldin paketinden yeniden kurar
   const cBack = await C.waitForFunction(() => { const g = window.__game; return g.net.mode === 'client' && !g.net.reconnecting && g.state === 'playing' && g.session && g.session.players && g.session.players.size >= 2; }, null, { timeout: 900000 }).then(() => true).catch(() => false);
   log('C yeniden bağlandı', cBack, 'sn', Math.round((Date.now() - t0) / 1000));

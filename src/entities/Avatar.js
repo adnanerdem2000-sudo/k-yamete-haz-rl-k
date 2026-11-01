@@ -380,14 +380,14 @@ export class Avatar {
     // uzak oyuncu taklası (ağ durumundan yükselen kenar)
     if (a.roll && !this._rolling && !this.overlays.some((o) => o.name === 'roll') && !(this.motion && this.motion.playing('Roll'))) this.play('roll', 0.72);
     this._rolling = !!a.roll;
-    // uzak oyuncunun eylemi (sıra numarası değişince bir kez). İlk görüşte: başlangıç zamanı (actT) biliniyorsa ve eylem
-    // hâlâ sürüyorsa kaldığı yerden oynatılır; bitmiş (eski) eylem oynatılmaz
+    // uzak oyuncunun eylemi (sıra numarası değişince bir kez), başlangıç zamanıyla: klip, gönderenin paketi yolladığı anda
+    // geçmiş süre (actT) kadar ileriden başlar → aynı paketteki konumla eş zamanlı (konum da gecikmeli gösterilir; ağ
+    // gecikmesi ayrıca eklenmez). İlk görüşte eylem hâlâ sürüyorsa kaldığı yerden oynar; bitmiş eylem oynatılmaz
     if (a.act && a.act !== this.lastAct) {
       if (this._ractN === undefined) {
         this._ractN = a.act[0];
-        const off = (a.actT || 0) + (a._lat || 0);
-        if (a.actT !== undefined && a.act[1] !== 'stop' && off < (a.act[2] || 0)) this.play(a.act[1], a.act[2], a.act[3], Math.max(0, off));
-      } else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3], Math.max(0, (a.actT || 0) + (a._lat || 0))); }
+        if (a.actT !== undefined && a.act[1] !== 'stop' && a.actT < (a.act[2] || 0)) this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT));
+      } else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT || 0)); }
     }
     if (this.motion) { this.updateMotion(dt, a, mode, s, dead); return; }
     // ---- prosedürel tam gövde modları

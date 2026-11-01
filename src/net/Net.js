@@ -275,6 +275,7 @@ export class Net {
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
       props: S.props && S.props.serializeDynamic ? S.props.serializeDynamic() : null,
       trade: S._trade || {},
+      zones: S.zombies && S.zombies.serialize ? S.zombies.serialize().zones : null,
       players, you, charId: p ? p.charId : 'mert', name: p ? p.name : 'Oyuncu', look: p ? p.look : {},
     };
   }
@@ -307,7 +308,6 @@ export class Net {
     if (!rec.target) rec.target = new THREE.Vector3();
     rec.target.set(m.p[0], m.p[1], m.p[2]);
     rec.anim = m.a;
-    if (rec.anim && typeof rec.anim === 'object') Object.defineProperty(rec.anim, '_lat', { value: (peer.rtt || 0) / 2000, enumerable: false, writable: true });
     rec.vehicleId = m.v || null;
     rec.seat = m.s || 0;
     rec.summary = m.h;
@@ -389,7 +389,7 @@ export class Net {
       case 'pleave': if (this.session) this.session.removeRemotePlayer(m.id); break;
       case 'pong': this.rtt = performance.now() - m.ts; this.pingOut = 0; break;
       case 'ping': this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
-      case 'pdata': if (this.session) this.session.offlinePlayers = m.d || {}; break;
+      case 'pdata': if (this.session) { this.session.offlinePlayers = m.d || {}; if (m.zz) this.session.zoneState = m.zz; } break;
       case 'migrate': this.migrateHint = m; break;
       case 'kick': this.game.ui.alert('Oda sahibi seni odadan çıkardı.'); this.backToMenu(); break;
       case 'host_left': this.game.ui.alert('Oda sahibi oyunu kapattı.'); this.backToMenu(); break;
@@ -424,8 +424,6 @@ export class Net {
       if (!rec.target) rec.target = new THREE.Vector3();
       rec.target.set(a[1], a[2], a[3]);
       rec.anim = a[4];
-      // eylem klibinin başlangıç ofseti için tahmini gecikme (host üzerinden aktarılan: +50 ms); ağa yazılmaz
-      if (rec.anim && typeof rec.anim === 'object') Object.defineProperty(rec.anim, '_lat', { value: (this.rtt || 0) / 2000 + 0.05, enumerable: false, writable: true });
       if (rec.held !== a[5]) { rec.held = a[5]; rec.avatar.hold(a[5]); }
       rec.vehicleId = a[6] || null; rec.seat = a[7] || 0;
       rec.summary = a[8];
@@ -584,7 +582,8 @@ export class Net {
         const d = { ...(S.offlinePlayers || {}) };
         d[this.token] = S.localData();
         for (const q of S.players.values()) if (!q.isLocal && q.token && q.saved) d[q.token] = q.saved;
-        this.broadcast({ t: 'pdata', d });
+        // + zombi bölge nüfusu/öldürülen sayıları: host düşerse yeni host ölenleri geri getirmez
+        this.broadcast({ t: 'pdata', d, zz: S.zombies && S.zombies.serialize ? S.zombies.serialize().zones : null });
       }
     } else {
       this.sendT -= dt;
