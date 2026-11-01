@@ -1,4 +1,4 @@
-# Bilinen Sorunlar ve Sınırlamalar ("Next Level 2.0" turu sonu, 1 Kasım 2026)
+# Bilinen Sorunlar ve Sınırlamalar ("Next Level 2.0" turu ve 1 Kasım 2026 özellik turu sonu)
 
 ## Çok oyunculu
 - **Oda listesi:** Herkese açık PeerJS sinyal sunucusu oda listelemeyi desteklemediği için "Açık Odalar"
@@ -91,14 +91,36 @@
   NaN/sonsuz pikselleri süzüyor: ileride benzer bir bozuk geometri gelirse ekran kararmaz, yalnız birkaç piksel koyu
   görünebilir.
 
-## Teslimden sonraki denetimin bulduğu hatalar (düzeltilmedi)
+## Binalar, dolaplar, araçlar, gündüz/gece, yer altı sığınakları (1 Kasım 2026 turu)
+- **Kuleler:** şehir silüetindeki 11 MegaKit kulesinin yalnız zemin katı girilebilir; üst katlar dış kabuktur (merdiven
+  yok). Vitrinler içeriden tahtayla kapatılmıştır ve kırılamaz.
+- **Dolap kapakları görseldir:** kanat/kapak/çekmece ön yüzleri çarpışma almaz (açık kapağın içinden geçilebilir);
+  yalnız menteşeli oda kapıları ve fizikli çekmeceler fizik nesnesidir. Kapaklar oyuncuya ≈32 m içinde canlanır.
+- **Araçlar:** yanmış terk edilmiş arabalar hâlâ dekordur (binilemez). Terk edilmiş arabaların yakıtı ve arızası her
+  yeni oyunda aynı tohumla belirlenir.
+- **Gündüz/gece:** doğal zombiler yalnız 20.30–06.00 arasında doğar (final sırasında ve çılgınlık olayında saatten
+  bağımsız). Hikâye olaylarının gündüz istediği zombiler ve sürüler o gecenin alacakaranlığına ertelenir. Yağmacı devriyeleri
+  ve başıboş köpekler yalnız oda sahibinde üretilir (istemciler anlık görüntüyle görür); oyuncu üssündeyken ya da bir
+  sığınaktayken başlamaz, dışarıda yağmalarken çıkar. Şafakta toprağa dönmesi
+  ertelenen (savaştaki) zombiler en geç 90 sn sonra döner.
+- **Sığınaklara iniş/çıkış kararmalı ışınlamadır** (merdivenden inme animasyonu yok). Sığınak odaları prosedürel
+  beton/kaya kutularıdır (model değil); mağara ve maden odalarında düzensiz kaya yüzü ve ahşap destekler var.
+- **Zombiler sığınaklara hiç inmez** ve yüzeydeki zombi yer altındaki oyuncuyu ne görür ne duyar; yer altındaki
+  silah sesi yine de yüzeyde gürültü olarak yayılır (zombiler girişin üstünde toplanabilir).
+- **YZ arkadaşlar** yalnız "Takip et" emrindeyken oda sahibinin peşinden sığınağa iner ve çıkar; sığınak içinde yol
+  bulma yüzey ızgarasını kullandığı için uzak odalara giderken duvara takılabilirler (yakın takipte sorun yok).
+- Sığınağa araçla girilemez. Sığınakta yapı (barikat, yatak, sandık, kamp ateşi…) kurulabilir; yapı oda zeminine oturur,
+  "yalnız üs alanında" kuralı yüzeydeki konuma göre uygulanır (ev sığınağı üs alanının altındadır).
+- Deniz seviyesinin altına inen sığınaklarda deniz/göl yüzeyleri yer altındayken gizlenir; yüzeye çıkınca yeniden
+  görünür.
+
+## Teslimden sonraki denetimin bulduğu hatalar (düzeltilmeyenler)
+Bu turda düzeltilenler (`42085cf`): direksiyon simidi sürücü tarafında ve kollu, dönüşü görünüyor; patinaj (kayma)
+sesi çalıyor; göçük boyalı gövde kabuğuna araç çerçevesinde uygulanıyor; bozuk farın ışığı sönüyor. Göçük ve bozuk far
+`vehicles3` ile denetleniyor; direksiyon ve patinaj sesi otomatik testte denetlenmiyor.
 Ayrıntı ve kanıt: `docs/DENETIM_NL2.md`.
 - Kayıttan yüklemede ve sonradan katılımda kapı durumu fiziğe uygulanmıyor: açık kaydedilen kapı fizikte kapalı kalabilir
   ve oyuncu yaklaşınca herkes için kapanabilir; kırık kapının kanadı menteşede kalabilir.
-- Araç direksiyon simidi yolcu tarafında duruyor ve dönüşü görünmüyor.
-- Araç patinaj sesi hiç çalmıyor.
-- Araç göçüğü birçok modelde görünmüyor (gövdenin yanlış parçası eziliyor) ya da minibüste ters uçta çıkıyor; bozuk far
-  yalnız rengini değiştiriyor, ışığı sönmüyor.
 - Patlamalar her nesneye kütlesinden bağımsız aynı hızı veriyor (ağır nesne hafif gibi savruluyor).
 - Bazı kadın karakter kafalarında gözler saç rengine yakın boyanıyor; Punk ve SciFi kafalarında çene/boyun açık gri.
 - Host göçünden sonra gün kilitli görevler (ör. laboratuvar görevi) başlamayabilir; botların çantası ve silahları

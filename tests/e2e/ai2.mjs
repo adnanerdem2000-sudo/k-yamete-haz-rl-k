@@ -13,6 +13,7 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     g.ui.onLockChange = () => {};
     for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel();
     window.__step = (frames, keys = [], each = null) => { const inp = g.input; for (let i = 0; i < frames; i++) { inp.down.clear(); for (const k of keys) inp.down.add(k); S.update(1 / 60); if (each) each(i); inp.endFrame(); } };
+    S.dayThreats.t = 1e9; // gündüz tehditleri (yağmacı devriyesi, başıboş köpek) bu senaryonun konusu değil: daynight denetler
   });
   // 1) ayrışma: 12 zombi aynı noktaya doğar, 3 sn sonra en yakın çift ≥ 0,45 m
   const sep = await evalJS(page, () => {

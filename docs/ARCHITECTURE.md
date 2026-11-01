@@ -284,6 +284,38 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   `tests/visual/baseline/` (Aşama 8 öncesi kodla alınmış). `VISUAL_QUALITY=<seviye>` oyunun kendi ön ayarını açılıştan
   önce yazıp karşılaştırmasız görüntü alır (kalite seviyelerinin görsel farkı için).
 
+## Binalar, dolaplar, araçlar, gündüz/gece, yer altı (1 Kasım 2026 turu)
+- **Kit kabuklu binalar** (`BuildingTemplates.kitTemplate`, `BuildingGen.buildKitBuilding`, ölçülmüş `KIT_SHELLS`):
+  şehir silüetindeki MegaKit kuleleri dış kabuk olarak aynı yerde kalır, zemin katına prosedürel iç mekân kurulur
+  (zemin, tavan + kamerayı içeride tutan tavan döşemesi, model duvarları arasında çevre çarpıştırıcıları, kapı,
+  oda bölmeleri, mobilya). Yeni binalar `BUILDINGS` sonuna `localIds: true` ile eklenir: kapı/pencere kimlikleri bina
+  adlı (`kule3.d0`), eski kimlikler kaymaz. Verandasız dış kapılara kapı basamağı (`addDoorstep`) eklenir.
+- **Dolap ön yüzleri** (`src/systems/Fronts.js`): mobilyanın kayıtlı yönü/ölçüsünden (`Furnish.container` → `yaw/fw/fd/fh`)
+  kanat, kapak, çekmece üretir; malzeme başına bir InstancedMesh. Açıklık hedefi: kilitli 0, kullanımda 1, aranmış
+  0,18–0,40 aralık. Kullanım `cont_use` eylemiyle host üzerinden eşitlenir (`Loot.inUse/users`, kopan oyuncununkiler
+  `dropUser` ile kapanır, sonradan katılan `lootUse` ile alır). Fizikli çekmeceler (`physics/Drawers.js`) aynı yönü kullanır.
+- **Araçlar:** yanmamış terk edilmiş arabalar (`WorldBuilder.abandonedCar` → `Vehicles.spawn`, kimlik `ab<n>`, bagaj
+  `trunk:<id>`), araç başına arıza/ihtiyaç (`needs/fault/abandoned`). Far ışıkları sahnede sabit 4 SpotLight'lık bir
+  havuzdan (`updateHeadlightPool`) en yakın farı yanan araçlara atanır; 40 m ötedeki boş araçta kabin ayrıntısı gizlenir.
+- **Gündüz/gece** (`TimeSystem.DUSK` 20.30, `DAWN` 06.00): doğal zombi nüfusu yalnız gece doğar; alacakaranlıkta
+  oyuncuların 25–60 m çevresinde `emerge` (anlık görüntü kodu 4), şafakta `burrow` (kod 5) durumuyla toprağa döner ve
+  öldürülmüş sayılmadan bölge nüfusuna eklenir. Gündüz istenen olay zombileri (`Events.zSpawn/zHorde`) o gecenin
+  alacakaranlığına `zspawn` planıyla ertelenir. `src/systems/DayThreats.js` (yalnız host): yağmacı devriyeleri,
+  başıboş köpek sürüleri, alacakaranlık/şafak duyuruları. `PlayerStats` güneş maruziyetiyle (`env.sun`) vücut ısısını
+  yükseltir. Uyku hızı: gece güvenli yerde (sığınak ya da savunması ≥ 20 üs) ×40, açıkta ×8.
+- **Yer altı sığınakları** (`src/world/Underground.js`, `src/systems/Shelters.js`): 8 sığınak gerçek XZ konumunda,
+  arazinin ≥ 8,8 m altında beton/kaya odalar (zemin, duvar, tavan çarpıştırıcılı; geçitler odalar arasında ve merdiven
+  sahanlığından salona). Yüzey girişleri: merdiven evi + tabela, kapak, maden ağzı, ip merdivenli yarık, mahzen
+  kapağı; giriş/çıkış kararmalı ışınlamadır. `world.under` (`UnderZones.zoneAt/cavityAt`) bölge kaydı y'ye kör
+  sistemleri bölgeye duyarlı yapar: `CollisionWorld.groundHeight/raycast` (arazi o hacimde katı değil), oyuncu
+  kamerası tavan–zemin arasında, `Session` (`local.zone`, `env.underground`, ses ortamı, ortam sesleri, ihtiyaçlarda iç
+  mekân, zemin sesi), `Environment` (gökyüzü/güneş ışığı kısılır, yağmur ve deniz/göl düzlemleri çizilmez, lamba
+  havuzu yalnız o bölgenin ışıklarını seçer), `Zombies.perceive` (yer altındaki oyuncu/botu algılamaz),
+  `Bots.followZone` (takipçi bot iner/çıkar), `Build` (ev sığınağı bölge `ev`), `Endings` (kızıl sis/sığınak finali).
+  Kilit (levye/maymuncuk ya da anahtar kartı), jeneratör ve "görüldü" durumu host-otoriter `shelter` eylemiyle
+  eşitlenir; kayıtta ve hoş geldin paketinde `shelters` alanı. Bitki saçılımı girişlerin 5–6 m çevresini boş bırakır
+  (`Vegetation.exclude`, rastgele sayı sırasını değiştirmeden).
+
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),
   14 NPC (selam, sohbet konuları `lore`, ticaret bayrağı), 29 görev, 38 belge, 7 final.
@@ -306,6 +338,6 @@ rastgele yönde köpek, silah, çığlık, inilti ya da korna (sentez, yönlü v
 ## Kayıt
 `Session.serialize()` tüm dünya durumunu (zaman, bayraklar, ilişkiler, konteynerler, yerdeki eşyalar,
 yapılar, zombi bölgeleri, araçlar, NPC'ler, görevler, olaylar, harita sisi, hava, YZ arkadaşlar, kapı/pencere
-durumları) ve oyuncuları **jeton** ile saklar. Çok oyunculuda istemcilerin envanteri 8 sn'de bir host'a
+durumları, yer altı sığınaklarının kilit/jeneratör durumu) ve oyuncuları **jeton** ile saklar. Çok oyunculuda istemcilerin envanteri 8 sn'de bir host'a
 yedeklenir; oyuncu düşer ya da sonradan katılırsa eşyaları iade edilir. Kayıtlar `localStorage`'da
 (otomatik + 3 yuva) tutulur, JSON olarak dışa/içe aktarılabilir.

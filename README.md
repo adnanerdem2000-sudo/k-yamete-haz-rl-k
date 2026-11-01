@@ -14,6 +14,19 @@ için yol haritası `docs/ROADMAP.md` içinde.
 - **2 × 2 km ada, 18 bölge:** mahalle, şehir merkezi, hastane, liman, sanayi, askerî bölge, laboratuvar, orman,
   dağ kampı ve yeni eklenen **çiftlik köyü, deniz feneri, sahil tatil köyü, cezaevi, havaalanı, dağ köyü
   (cami), baraj ve santral, anakara köprüsü**. Göller, baraj gölü, boğaz ve anakara kıyısı.
+- **Her binaya girilebilir:** şehir silüetindeki 11 kule (zemin katları: kafe, market, klinik, daire…), mahalle
+  evleri ve dağ köyü camisi dahil adadaki 86 binanın hepsine kapıdan yürüyerek girilir.
+- **Gerçekten açılan dolaplar:** ararken gardırop ve dolap kanatları, buzdolabı ve fırın kapakları, sandık kapakları
+  ve çekmeceler fiziksel olarak açılır; aranmış dolap aralık kalır; çok oyunculuda başkasının açtığı dolabı herkes görür.
+- **Kullanılabilir araçlar:** yolda terk edilmiş 23 araba dahil bütün araçlara binilip sürülür (az yakıt, bazılarında
+  patlak lastik ya da bitik akü); bagajları yağmalanır.
+- **Gündüz yağma, gece zombi:** zombiler alacakaranlıkta (20.30) oyuncuların çevresinde topraktan çıkar, şafakta
+  (06.00) toprağa geri döner. Gündüz başka tehlikeler var: yağmacı devriyeleri, başıboş köpek sürüleri, öğle güneşinde
+  güneş çarpması. Gece açıkta uyumak zor; sığınakta ya da savunmalı üste uyku hızlı geçer.
+- **Yer altı sığınakları (haritada 🕳️):** şehir halk sığınağı, hastane bodrumu ve morg, askerî komuta sığınağı
+  (levye), çiftlik fırtına mahzeni, orman mağarası (ip merdiven), fener mahzeni, eski maden galerisi ve laboratuvar
+  B1 katı (anahtar kartı). Merdivenle iniliyor; içeride ganimet, ranzalar, jeneratörle yanan ışıklar var. Zombiler
+  aşağı inemez, takip eden YZ arkadaşların seninle iner.
 - **Hikâye:** 30 günlük takvim, **45 rastgele olay** (paraşütlü yardım paketi, alevler içinde düşen uçak,
   Kanlı Ay, kurt sürüsü, sis, sarsıntı, cezaevi isyanı, kaçak bilim insanı, kablo hırsızları…), **14 NPC**
   (Pilot Aydın, Fener Bekçisi İsmail, Mühendis Zeynep, Muhtar Ömer, Gardiyan Necla, Murat ve Defne…) ile
@@ -135,9 +148,10 @@ birim testlerini ve kısa uçtan uca duman testlerini (gerçek fare tıklamalı 
 
 Tüm tuşlar **Ayarlar → Kontroller**'den değiştirilebilir.
 
-**Temel döngü:** Gündüz keşfe çık ve yağmala → akşam üsse dön, pencereleri tahtayla güçlendir, barikat
-kur → gece uyuyarak zamanı hızlandır (takımın yarısı yatmalı) → takvim olaylarına, rastgele olaylara ve
-sürülere hazırlan → 30. gün 22:00'ye kadar bir kaçış yolu hazırla.
+**Temel döngü:** Gündüz keşfe çık ve yağmala (zombi yok ama yağmacılar, başıboş köpekler ve öğle güneşi var) →
+20.30'dan önce üsse ya da bir yer altı sığınağına dön, pencereleri tahtayla güçlendir, barikat kur → gece zombiler
+topraktan çıkar; korunaklı yerde uyuyarak zamanı hızlandır (takımın yarısı yatmalı; açıkta uyku yavaş geçer) →
+takvim olaylarına, rastgele olaylara ve sürülere hazırlan → 30. gün 22:00'ye kadar bir kaçış yolu hazırla.
 
 **Finaller (Görevler → Kaçış Planları):** Yeraltı sığınağı · Askerî helikopter (30. gün 20:00) ·
 Martı teknesi (fener yanarsa açıktaki yük gemisine) · Dağ kampı · Köprüden araç konvoyu (30. gün 21:00) ·
@@ -159,8 +173,8 @@ src/
   main.js, Game.js         önyükleme, ana döngü, menü sahnesi (gün batımında üs)
   Session.js               oturum: host-otoriter eylem/olay hattı, ihtiyaçlar, uyku, kayıt
   core/                    grafik (Three.js + son işlem), giriş, ayarlar, varlık yükleyici, yardımcılar
-  world/                   ada arazisi, yollar, köprü, girilebilir binalar + iç mekân, bitki örtüsü, su, gökyüzü,
-                           çarpışma dünyası, yol bulma ızgarası (A*)
+  world/                   ada arazisi, yollar, köprü, girilebilir binalar + iç mekân, yer altı sığınakları,
+                           bitki örtüsü, su, gökyüzü, çarpışma dünyası, yol bulma ızgarası (A*)
   physics/                 Rapier 3D dünyası: sabit adım, enterpolasyon, karakter denetleyicisi, dinamik nesneler
   entities/                iskeletli karakterler (klip + prosedürel katmanlar), oyuncu, zombi ve hayvan görünümleri
   systems/                 envanter, ihtiyaçlar, zaman, ortam/hava, yağma, üretim, inşa, zombiler, savaş, araçlar,

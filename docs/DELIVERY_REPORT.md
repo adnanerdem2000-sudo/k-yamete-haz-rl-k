@@ -476,9 +476,13 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
 
 ## 9. Bilinen kalan sorunlar (özet; tamamı `KNOWN_ISSUES.md`)
 - Teslimden sonraki denetimin bulduğu ve henüz düzeltilmeyen hatalar (§10): kayıttan yüklemede/katılımda kapı fizik
-  durumu uygulanmıyor; direksiyon yolcu tarafında; patinaj sesi hiç çalmıyor; araç göçüğü çoğu modelde görünmüyor;
-  bozuk far ışığı sönmüyor; patlama itkisi kütleden bağımsız aynı hızı veriyor; bazı kadın kafalarında göz/çene renkleri
+  durumu uygulanmıyor; patlama itkisi kütleden bağımsız aynı hızı veriyor; bazı kadın kafalarında göz/çene renkleri
   yanlış; host bilerek ayrılınca göç yok; göçten sonra gün kilitli görevler açılmayabilir; iki kopya sistem.
+  (Direksiyonun yolcu tarafında olması, patinaj sesinin çalmaması, göçüğün yanlış parçada çıkması ve bozuk farın
+  sönmemesi 1 Kasım özellik turunda düzeltildi, §11.)
+- 1 Kasım özellik turunun sınırlamaları (§11 ve `KNOWN_ISSUES.md`): kulelerin yalnız zemin katı girilebilir; dolap
+  kapakları görseldir (çarpışma almaz); yanmış arabalar dekor; sığınaklara iniş kararmalı ışınlama; botlar yalnız
+  "Takip et" emrindeyken sığınağa iner.
 - Gerçek internet üzerinden TURN bağlantısı, gerçek ekran kartında performans ve hoparlörden ses test edilemedi (§6).
 - Lobide host düşerse göç yok (oda kapanır); fizik nesnelerinin ara konumları istemcilerde yerel.
 - Çok kalabalık sürülerde (40+) zombilerin kısa takılması ölçülmedi; yol bulma bütçesi sınırlı.
