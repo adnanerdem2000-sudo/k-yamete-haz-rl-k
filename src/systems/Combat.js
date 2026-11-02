@@ -378,8 +378,8 @@ export class Combat {
           if (S.props) S.props.burst(p.x, p.y + 0.1, p.z, 'glass', 1, [p.vx * 0.05, p.vz * 0.05]);
           S.audio.play('glass', { at: { x: p.x, y: p.y, z: p.z }, vol: 0.8, range: 40 });
         } else if (p.kind === 'fire') {
-          // ateş şişenin düştüğü yerde (yer altı sığınağında atılan molotof yüzeyde değil, odada yanar)
-          S.act('molotov', { x: p.x, y: Math.max(p.y - 0.3, S.world.physics.groundHeight(p.x, p.z, p.y + 0.5)), z: p.z, r: 4 });
+          // ateş şişenin düştüğü yerin altındaki zeminde (yer altı sığınağında atılan molotof yüzeyde değil, odada yanar)
+          S.act('molotov', { x: p.x, y: S.world.physics.groundHeight(p.x, p.z, p.y + 0.5), z: p.z, r: 4 }); // duvara çarpan şişe havada değil, dibindeki zeminde yanar
           S.act('noise', { x: p.x, z: p.z, r: 30, src: 'fire' });
           S.audio.play('glass', { at: { x: p.x, y: p.y, z: p.z }, vol: 1 });
         }

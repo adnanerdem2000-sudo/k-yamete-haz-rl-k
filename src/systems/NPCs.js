@@ -486,6 +486,8 @@ export class NPCs {
       const dx = a.x - pos.x, dz = a.z - pos.z, d = Math.hypot(dx, dz);
       if (d > range + a.def.size[2] * 0.5) continue;
       if ((dx * fx + dz * fz) / (d || 1) < 0.3) continue;
+      // yalnız yatay mesafe yetmez: sığınaktaki oyuncu tavanın üstündeki, kuledeki oyuncu dibindeki hayvanı vuramaz
+      if (Math.abs((a.y ?? pos.y) - pos.y) > 2.5 || !this.s.sameLevel(a, pos)) continue;
       this.s.act('animal_hit', { id: a.id, dmg });
       this.s.fx.hit(a.x, a.y + 0.7, a.z, 'flesh');
       hits++;
@@ -695,10 +697,12 @@ export class NPCs {
       this._spawnT = (this._spawnT || 0) - dt;
       if (this._spawnT <= 0) {
         this._spawnT = 3;
-        const p = anchors.length > 1 ? anchors[Math.floor(Math.random() * anchors.length)] : anchors[0];
+        // yer altındaki oyuncunun çevresinde doğurma: onu göremeyen hayvanlar yalnız nüfusu doldurur
+        const cand = anchors.filter((q) => !q.under);
+        const p = cand.length > 1 ? cand[Math.floor(Math.random() * cand.length)] : cand[0];
         const alive = this.animals.filter((a) => !a.dead).length;
-        const fm = forestMask(p.x, p.z);
-        if (alive < Math.min(15, 9 + 2 * (anchors.length - 1)) && (fm > 0.3 || p.y > 25)) {
+        const fm = p ? forestMask(p.x, p.z) : 0;
+        if (p && alive < Math.min(15, 9 + 2 * (anchors.length - 1)) && (fm > 0.3 || p.y > 25)) {
           const a = Math.random() * Math.PI * 2, r = 45 + Math.random() * 40;
           const x = p.x + Math.cos(a) * r, z = p.z + Math.sin(a) * r;
           if (!S.world.terrain.isWater(x, z) && !S.world.buildingAt(x, z) && forestMask(x, z) > 0.25) {

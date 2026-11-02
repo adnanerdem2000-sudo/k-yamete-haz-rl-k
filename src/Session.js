@@ -500,14 +500,16 @@ export class Session {
   damageLocal(amount, kind = 'zombie', from = null) {
     const st = this.localStats;
     if (st.downed || this.local.mode === 'sleep' && kind === 'internal') return;
+    const wasAsleep = this.local.mode === 'sleep';
     const res = st.damage(amount * this.diff.dmg, kind);
     if (amount >= 3 && this.t - (this._hurtT || -9) > 0.6) { this._hurtT = this.t; this.audio.play('hurt', { vol: Math.min(0.8, 0.35 + amount / 40), vary: 0.18 }); }
     this.onLocalDamaged(amount, kind);
     if (res.bleed) this.ui.toast('Kanıyorsun! Bandaj kullan.', 'danger');
     if (res.infected) this.ui.toast('Isırık enfekte olabilir…', 'danger');
     if (res.downed) this.onDowned();
-    // hasar uyandırır: uyku oyu da geri çekilir (yoksa dövüş hızlandırılmış zamanda sürer, uyku perdesi kalır)
-    if (this.local.mode === 'sleep') { this.wake(); this.ui.toast('Uyandın! Saldırı altındasın!', 'danger'); }
+    // hasar uyandırır: uyku oyu da geri çekilir (yoksa dövüş hızlandırılmış zamanda sürer, uyku perdesi kalır).
+    // Darbe yere düşürse de (mod artık 'downed') oy geri çekilmeli: kontrol hasardan önceki moda bakar.
+    if (wasAsleep) { this.wake(); if (!res.downed) this.ui.toast('Uyandın! Saldırı altındasın!', 'danger'); }
   }
 
   onLocalDamaged(amount, kind) {
@@ -742,7 +744,7 @@ export class Session {
         return this.isInBase(p.pos) && this.build.defenseScore() >= 20;
       });
       if (!safe) ff = 8;
-      if (!safe && this.sleepState && this.sleepState.ff !== 8) this.emit({ k: 'toast', text: 'Açıkta uyuyorsunuz: gece yavaş geçecek, zombiler gelebilir. Sığınakta ya da korunaklı üste uyuyun.', kind: 'warn', dur: 6 });
+      if (!safe && this.time.ff !== 8) this.emit({ k: 'toast', text: 'Açıkta uyuyorsunuz: gece yavaş geçecek, zombiler gelebilir. Sığınakta ya da korunaklı üste uyuyun.', kind: 'warn', dur: 6 });
     }
     if (!voteChanged && this.time.ff === ff) return;
     this.emit({ k: 'sleep', ff, votes: this.sleepVotes.size, need });

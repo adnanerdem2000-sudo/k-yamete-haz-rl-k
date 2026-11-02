@@ -115,7 +115,9 @@ export class Effects {
 
   /** Kalıcı ateş (kamp ateşi, molotof, patlama) */
   fire(x, y, z, life = 10, scale = 1) {
-    const f = { x, y, z, life, scale, light: { x, y: y + 0.8, z, color: 0xff7a2a, intensity: 22 * scale, range: 12 * scale, flicker: true, on: true, always: true } };
+    // bölge: sığınakta yanan ateş yalnız sığınaktayken, yüzeydeki yalnız yüzeydeyken ışık havuzuna girer
+    const zone = this.s.levelOf ? this.s.levelOf(x, y, z) : null;
+    const f = { x, y, z, life, scale, light: { x, y: y + 0.8, z, color: 0xff7a2a, intensity: 22 * scale, range: 12 * scale, flicker: true, on: true, always: true, zone } };
     this.s.env.extraLights.push(f.light);
     this.fires.push(f);
     return f;

@@ -59,6 +59,8 @@ export class NavGrid {
   rasterize(c, ci0 = 0, cj0 = 0, ci1 = SIZE - 1, cj1 = SIZE - 1) {
     if (!c.enabled || !c.blocksNav || c.isFloor) return;
     const ground = this.terrain.heightAt((c.minX + c.maxX) / 2, (c.minZ + c.maxZ) / 2);
+    // toprağın altındaki (yer altı sığınağı) hiçbir şey yüzey ızgarasına basılmaz, işaretli kapı olsa bile
+    if (c.maxY < ground - 2) return;
     if (c.maxY < ground + 0.5 || c.minY > ground + 1.9) {
       // kapı/pencere gibi işaretliler yine de işaretlenir
       if (!c.navType) return;

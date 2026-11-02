@@ -206,7 +206,7 @@ export class Build {
         st.ladder = { x: st.x + 1.5, z: st.z, top: st.y + 4.15, bottom: st.y };
       }
       if (def.light) {
-        st.light = { x: st.x, y: st.y + def.size[1] + 0.2, z: st.z, color: def.fire ? 0xff8a3a : 0xfff0d0, intensity: def.fire ? 18 : 40, range: def.light, flicker: !!def.fire, on: false, always: !!def.fire };
+        st.light = { x: st.x, y: st.y + def.size[1] + 0.2, z: st.z, color: def.fire ? 0xff8a3a : 0xfff0d0, intensity: def.fire ? 18 : 40, range: def.light, flicker: !!def.fire, on: false, always: !!def.fire, zone: S.levelOf(st.x, st.y, st.z) };
         S.env.extraLights.push(st.light);
       }
     }
@@ -575,7 +575,7 @@ export class Build {
     const mesh = makeFire();
     mesh.position.set(e.x, y + 0.05, e.z);
     S.game.scene.add(mesh);
-    const light = { x: e.x, y: y + 0.9, z: e.z, color: 0xff8a3a, intensity: 20, range: 13, flicker: true, on: true, always: true };
+    const light = { x: e.x, y: y + 0.9, z: e.z, color: 0xff8a3a, intensity: 20, range: 13, flicker: true, on: true, always: true, zone: S.levelOf(e.x, y, e.z) };
     S.env.extraLights.push(light);
     this.fires.set(e.id, { x: e.x, y, z: e.z, fuel: e.fuel, mesh, light });
   }
@@ -765,7 +765,7 @@ export class Build {
       if (st.built < 1) continue;
       const def = BUILDABLES[st.type];
       if (!def.trap) continue;
-      if (Math.abs(st.x - zb.x) > 1.4 || Math.abs(st.z - zb.z) > 1.4) continue;
+      if (Math.abs(st.x - zb.x) > 1.4 || Math.abs(st.z - zb.z) > 1.4 || Math.abs((zb.y ?? st.y) - st.y) > 1.5) continue; // üst kattaki/çatıdaki zombi tuzağa basmaz
       if (def.trap.slow) { zb.slow = def.trap.slow; zb.hp -= def.trap.dps * 0.05; }
       if (def.trap.dmg && !zb._trapped) {
         zb._trapped = st.id; zb.hp -= def.trap.dmg; zb.stagger = 0.6;
@@ -803,7 +803,8 @@ export class Build {
         const def = BUILDABLES[st.type];
         if (!def.sensor || st.built < 1) continue;
         let near = false;
-        for (const z of S.zombies.list.values()) if (!z.dead && dist(z.x, z.z, st.x, st.z) < def.sensor) { near = true; break; }
+        // toprağa dönen zombi tehdit değil; çok üstteki/alttaki (çatı, uçurum) sayılmaz, yamaç payı bırakılır
+        for (const z of S.zombies.list.values()) if (!z.dead && z.state !== 'burrow' && dist(z.x, z.z, st.x, st.z) < def.sensor && Math.abs((z.y ?? st.y) - st.y) < 4) { near = true; break; }
         if (near && !st._alarm) { st._alarm = true; S.emit({ k: 'toast', text: '🚨 ALARM! Üs çevresinde zombi!', kind: 'danger' }); S.audio.play('alert', { vol: 1 }); S.applyAction('noise', { x: st.x, z: st.z, r: 25, src: 'alarm' }, null); }
         if (!near) st._alarm = false;
       }
