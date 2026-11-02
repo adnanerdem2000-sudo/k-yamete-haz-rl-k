@@ -404,7 +404,7 @@ export class Bots {
       if (d < bd) { bd = d; best = { id: p.id, pos }; }
     }
     for (const o of this.list) {
-      if (o === b || !o.stats.downed) continue;
+      if (o === b || !o.stats.downed || !S.sameLevel(b.pos, o.pos)) continue; // yere düşmüş bot da aynı katta olmalı
       const d = dist(b.pos.x, b.pos.z, o.pos.x, o.pos.z);
       if (d < bd) { bd = d; best = { id: o.id, pos: o.pos }; }
     }

@@ -97,15 +97,24 @@
 - **Dolap kapakları görseldir:** kanat/kapak/çekmece ön yüzleri çarpışma almaz (açık kapağın içinden geçilebilir);
   yalnız menteşeli oda kapıları ve fizikli çekmeceler fizik nesnesidir. Kapaklar oyuncuya ≈56 m içinde çizilir (en
   yakınlar öncelikli); daha uzaktan bir pencereden bakılırsa buzdolabı kapaksız görünebilir.
-- **Araçlar:** yanmış terk edilmiş arabalar hâlâ dekordur (binilemez). Terk edilmiş arabaların yakıtı ve arızası her
-  yeni oyunda aynı tohumla belirlenir. Sürücüsüz araçları yalnız host simüle eder; konumları istemcilere 0,1 sn'de bir
-  (değişenler) ve 3 sn'de bir (hepsi) gönderilir: istemci park etmiş bir arabaya çarptığında itme host'ta hesaplanır ve
-  kısa bir gecikmeyle görünür. Zombi, mermi, görüş ve yol ızgarası için park etmiş araç 2–3 daireyle temsil edilir
-  (köşelerde birkaç santim pay; içinde biri varken mermi ve görüşü kesmez).
-- **Kapı pervazları** yol ızgarasında pay almaz (yoksa 1 m'lik kapılar ızgarada tamamen kapanıyordu): zombi, bot ve
-  NPC'ler kapıdan pervaza sürtünerek geçer, kapı kenarında kısa takılma görülebilir.
+- **Araçlar:** yanmış terk edilmiş arabalar hâlâ dekordur (binilemez). Terk edilmiş arabaların yakıtı ve arızası
+  konumlarına bağlı tohumla belirlenir (her yeni oyunda aynı). Sürücüsüz araçları yalnız host simüle eder; konumları
+  istemcilere 0,1 sn'de bir (değişenler) ve 3 sn'de bir (hepsi) gönderilir. Park etmiş arabayı yalnız host'taki fizik
+  kıpırdatır (host'un oyuncusu ya da sürdüğü araç, patlama, sarsıntı): istemcide park etmiş araç kinematik (itilemez)
+  bir gövdedir, host'ta da uzak oyuncuların fizik gövdesi yoktur; istemci park etmiş arabayı yürüyerek itemez, kendi
+  aracıyla çarptığında araba duvar gibi davranır (pratikte kıpırdamaz).
+- **Araç vekilleri:** zombi/bot/NPC çarpışması, mermi, görüş ve ses örtmesi için her kara aracı 3–4 daireyle temsil
+  edilir (yarıçap yarı genişlik, merkezler arası en fazla bir yarıçap: ortada yarık yok); köşelerin ve tampon
+  uçlarının dış kenarı dairelerin dışında kalır (ölçülen en kötü: binek araçta ~0,45 m, askerî kamyon ve zırhlı
+  minibüste ~0,6 m), ama aracı enine kesen her çizgi bir daireye çarpar. İçinde biri varken mermi ve görüşü kesmez. Park etmiş (boş) araç yol ızgarasında engeldir:
+  zombi ve botlar onu dolanarak yol planlar, zombi araç içinde doğmaz; sürülen ya da içinde biri olan araç ızgarada
+  yer almaz (değen zombi/bot çarpışmayla dışarı itilir).
+- **Kapı pervazları** yol ızgarasında pay almaz (yoksa 1 m'lik kapılar ızgarada tamamen kapanıyordu): zombiler kapalı
+  kapıyı zorlayarak, botlar yalnız açık kapıdan binaya yol bulur (botlar kapı açmaz) ve pervaza sürtünerek geçer, kapı
+  kenarında kısa takılma görülebilir. NPC'ler yol ızgarası kullanmaz, hedefe düz yürür.
 - **Gündüz/gece:** doğal zombiler yalnız 20.30–06.00 arasında doğar (final sırasında ve çılgınlık olayında saatten
-  bağımsız). Hikâye olaylarının gündüz istediği zombiler ve sürüler o gecenin alacakaranlığına ertelenir. Yağmacı devriyeleri
+  bağımsız). Hikâye olaylarının gündüz istediği zombiler o gece 20.35'te aynı yerde topraktan çıkar, sürüler
+  20.55'te gelir. Yağmacı devriyeleri
   ve başıboş köpekler yalnız oda sahibinde üretilir (istemciler anlık görüntüyle görür); oyuncu üssündeyken ya da bir
   sığınaktayken başlamaz, dışarıda yağmalarken çıkar. Şafakta toprağa dönmesi
   ertelenen (savaştaki) zombiler en geç 90 sn sonra döner. Geceye ertelenen olay zombileri kovalama hedefini taşımaz:
@@ -115,12 +124,14 @@
 - **Sığınaklara iniş/çıkış kararmalı ışınlamadır** (merdivenden inme animasyonu yok). Sığınak odaları prosedürel
   beton/kaya kutularıdır (model değil); mağara ve maden odalarında düzensiz kaya yüzü ve ahşap destekler var.
 - **Zombiler sığınaklara hiç inmez** ve yüzeydeki zombi yer altındaki oyuncuyu ne görür ne duyar; yer altındaki
-  silah sesi yine de yüzeyde gürültü olarak yayılır (zombiler girişin üstünde toplanabilir).
+  silah sesi yine de yüzeyde gürültü olarak yayılır (zombiler sesin çıktığı noktanın üstünde, yüzeyde toplanabilir).
 - **YZ arkadaşlar** yalnız "Takip et" emrindeyken oda sahibinin peşinden sığınağa iner ve çıkar (eskort edilen NPC'ler de
   liderleriyle iner); sığınak içinde yol bulma yüzey ızgarasını kullandığı için uzak odalara giderken duvara
   takılabilirler (yakın takipte sorun yok).
-- Sığınağa araçla girilemez ve sığınaklara yapı kurulamaz (yol ızgarası yalnız yüzeyi kapsar); sığınaklarda yatak
-  ve depo zaten var. Kat ayrımı (`Session.levelOf` ya da yükseklik farkı) alan hasarına, hayvanlara, botların
+- Sığınağa araçla girilemez ve sığınaklara yapı kurulamaz (yol ızgarası yalnız yüzeyi kapsar). Her sığınakta eşya
+  bırakılabilen konteynerler var; hazır yatak yalnız Şehir Halk Sığınağı, Askerî Komuta Sığınağı, Orman Mağarası ve
+  Fener Mahzeni'nde var, Hastane Bodrumu ve Morg, Çiftlik Fırtına Mahzeni, Eski Maden Galerisi ve Laboratuvar B1
+  Katı'nda uyumak için uyku tulumu gerekir (sığınaktaki hızlı gece uykusu tulumla da geçerli). Kat ayrımı (`Session.levelOf` ya da yükseklik farkı) alan hasarına, hayvanlara, botların
   hedeflerine, ateş/yapı ışıklarına, tuzak ve alarma uygulanır; yer altındaki silah sesi yine yüzeyde duyulur
   (bilinçli).
 - **Sürüm uyumu:** ağ protokolü 6'ya çıktı; eski sürümle açık kalmış bir sekme yeni host'a katılamaz ("Oyun sürümleri

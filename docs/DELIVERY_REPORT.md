@@ -538,15 +538,17 @@ denemesinden geçti. Ayrıntı ve tam liste: `docs/DENETIM_NL2.md`.
 kullanılabilir olsun. Gündüz vakti sadece loot yapalım, zombiler gece olunca ortaya çıksın, gündüz başka sorunlar olsun.
 Sığınaklar olsun, yer altlarında oralara girebilelim." Her özellik ayrı commit olarak gönderildi (`42085cf` ve `84d9c08`
 araçlar, `bbe2743` binalar, `41302af` dolaplar, `dbe115f` gündüz/gece, `5fb38f7` sığınaklar), ardından bağımsız
-inceleme düzeltmeleri (`7a45173`, `d2eb253` ve `6c1fe8b`).
+inceleme düzeltmeleri (`d2eb253` ve `6c1fe8b`); aradaki `7a45173` incelemeden önceki küçük düzeltmelerdir (gündüz
+tehditleri üste ve sığınakta başlamıyor, ayrıldıktan sonra gelen host iletisi çökertmiyor, sığınak kapısı önü boş).
+Belge doğrulamasının bulduğu üç kod eksiği (aşağıda) son düzeltme commit'inde tamamlandı.
 
 | İstek | Durum | Ne yapıldı | Kanıt (otomatik test) |
 |---|---|---|---|
-| Her binaya girilebilsin | Karşılandı (kulelerde yalnız zemin kat) | 11 MegaKit kulesinin zemin katı, 5 dekor ev ve cami girilebilir bina oldu (toplam 86); verandasız kapılardaki eşik basamağı hatası (yalnız zıplayarak giriliyordu) düzeltildi; kapı pervazları yol ızgarasında kapıyı kapatmıyor, zombi/bot/NPC her binanın içine yol buluyor | `buildings`: 86 binanın her birine dış kapıdan yürüyerek giriliyor; kulelerde kamera tavan altında; eski kapı/pencere kimlikleri kaymıyor |
+| Her binaya girilebilsin | Karşılandı (kulelerde yalnız zemin kat) | 11 MegaKit kulesinin zemin katı, 5 dekor ev ve cami girilebilir bina oldu (toplam 86); verandasız kapılardaki eşik basamağı hatası (yalnız zıplayarak giriliyordu) düzeltildi; kapı pervazları yol ızgarasında kapıyı kapatmıyor: zombiler kapalı kapıyı zorlayarak, botlar açık kapıdan her binanın içine yol buluyor (botlar kapı açmaz; NPC'ler yol ızgarası kullanmaz, hedefe düz yürür) | `buildings`: 86 binanın her birine dış kapıdan yürüyerek giriliyor; kulelerde kamera tavan altında; eski kapı/pencere kimlikleri kaymıyor |
 | Dolap/çekmece fiziksel açılsın | Karşılandı (kapaklar görsel) | Gardırop/dolap kanatları, buzdolabı/fırın kapakları, ecza dolabı, kasa, içecek dolabı, tezgâh, sandık kapakları, alet dolabı çekmeceleri arama ve depo paneli sırasında menteşesinden açılıyor; aranmış dolap aralık kalıyor; kullanım çok oyunculuda ve host göçünde eşitleniyor; fizikli çekmeceler mobilyanın gerçek ön yüzüne oturuyor | `fronts` (12 türde aç/kapa/aralık, kilitli kasa, başkasının kullanımı, çekmece yön/yükseklik); `multiplayer-local` (istemcinin açtığı dolap host'ta açık) |
 | Araçlar kullanılabilsin | Karşılandı | Yoldaki 23 terk edilmiş araba binilip sürülen gerçek araç (az yakıt, bazılarında patlak lastik/bitik akü, bagaj yağması); iki yandan binme; çok oyunculuda host'un kendi aracını sürememesi, yolcunun aracı hareketsiz görmesi ve park hâlindeki araçların eşitlenmemesi düzeltildi; park etmiş araç mermiyi ve görüşü kesiyor | `vehicles3`, `vehicles2`, `multiplayer-local` (host sürüşü) |
 | Gündüz yağma, gece zombi, gündüz başka sorunlar | Karşılandı | Doğal zombiler alacakaranlıkta (20.30) topraktan çıkıyor, şafakta (06.00) toprağa dönüyor; gündüz olay zombileri geceye erteleniyor; gündüz yağmacı devriyeleri, başıboş köpek sürüleri, güneş çarpması; gece açıkta uyku yavaş (×8), sığınakta ya da korunaklı üste hızlı (×40); hasar uyandırır | `daynight` (öğlen 0 zombi; alacakaranlıkta yakında çıkış; şafakta hepsi döner, ölü sayılmaz; devriye, köpek, sıcak çarpması, açıkta uyku, alacakaranlıkta uyku yavaşlar, hasar uyandırır ve oyu geri çeker) |
-| Yer altı sığınakları | Karşılandı (iniş kararmalı ışınlama) | 8 sığınak (şehir, hastane, askerî, çiftlik, orman mağarası, fener, maden galerisi, laboratuvar B1); kilit (levye/maymuncuk, anahtar kartı), jeneratörle ışık, ganimet, yatak, güvenli uyku; zombiler ve hayvanlar inemez, toprağın öbür yanını algılayamaz; patlama/zehir/ateş katlar arasında geçmez; takipçi botlar ve eskort NPC'ler iner/çıkar; ev sığınağı aynı sisteme bağlandı | `shelters` (8 sığınağa iniş, odalarda yürüme, bütün odalara/konteynerlere/çıkışa/jeneratöre erişim, E ile inip çıkma, kilitler, kamera, yağmur ve deniz gizli, zombi algısı, ışık, ganimet, uyku, kayıt, ev sığınağı, bot) |
+| Yer altı sığınakları | Karşılandı (iniş kararmalı ışınlama) | 8 sığınak (şehir, hastane, askerî, çiftlik, orman mağarası, fener, maden galerisi, laboratuvar B1); kilit (levye/maymuncuk, anahtar kartı), jeneratörle ışık, ganimet, güvenli uyku (dördünde hazır yatak, öbürlerinde uyku tulumuyla); zombiler ve hayvanlar inemez, toprağın öbür yanındakini algılayamaz (yer altındaki silah sesi yüzeyde yine duyulur); patlama/zehir/ateş katlar arasında geçmez; takipçi botlar ve eskort NPC'ler iner/çıkar; ev sığınağı aynı sisteme bağlandı | `shelters` (8 sığınağa iniş, odalarda yürüme, bütün odalara/konteynerlere/çıkışa/jeneratöre erişim, E ile inip çıkma, kilitler, kamera, yağmur ve deniz gizli, zombi algısı, ışık, ganimet, uyku, kayıt, ev sığınağı, bot) |
 
 ### Bağımsız inceleme
 Beş özelliğin her biri ayrı bir inceleyiciye verildi (kodu ve testleri okuyup hata arayan); her aday bulguyu ikinci bir
@@ -569,8 +571,26 @@ doğrulayıcı commit `7a45173` üzerinde çürütmeye çalıştı.
   oyuncunun çevresinde hayvan doğmuyor; duvara çarpan molotof havada değil dibindeki zeminde yanıyor; yer altındaki
   hiçbir çarpıştırıcı yüzey yol ızgarasına basılmıyor; ateş ve yapı ışıkları bulundukları kata göre seçiliyor; tuzak ve
   alarm başka kattaki zombiye tepki vermiyor.
+- Tablodaki bir madde yarım kalmıştı ve belge doğrulaması (aşağıda) bunu yakaladı: terk edilmiş arabalar mermiyi,
+  görüşü ve zombi/bot geçişini kesiyordu ama yol ızgarasına basılmıyordu (zombi ve botlar yolu arabaların içinden
+  planlıyor, zombi araç içinde doğabiliyordu). Son düzeltme commit'inde park etmiş araçlar yol ızgarasına girdi.
 - Ertelenen olay zombilerinin "kovala" hedefi taşınmıyor: topraktan çıkan zombi zaten hedefsiz başlıyor (çıkış
   animasyonu hedefi siliyor), oyuncuyu algılayınca kovalıyor.
+
+### Belge doğrulaması
+Teslim belgelerindeki (§11, `KNOWN_ISSUES.md`, `ARCHITECTURE.md`, README) her somut iddia koda karşı denetlendi:
+dört denetçi 323 iddiayı kodla karşılaştırdı, ayrı şüpheci doğrulayıcılar her bulguyu çürütmeye çalıştı. 26 aday
+bulgunun 17'si doğrulandı ve belgeler düzeltildi, 9'u çürütüldü. Doğrulananların üçü belge değil kod eksiğiydi ve
+kodda düzeltildi:
+- Park etmiş araçlar yol ızgarasında değildi (yukarıdaki yarım kalmış inceleme maddesi): artık boş araç ızgarada
+  engel; vekiller yer değiştirince ya da biri binince/inince ızgaranın o alanı yeniden çiziliyor.
+- Araç vekil daireleri uzun araçlarda aracın ortasında 0,15–0,83 m'lik yarık bırakıyordu (mermi, görüş ve NPC
+  geçiyordu): daireler yarı genişlik yarıçapla ve en fazla bir yarıçap aralıkla yerleşiyor, ortada yarık yok.
+- Bot, yere düşmüş başka bir botu kaldırmaya giderken kat denetimi yapmıyordu (insan oyuncular için yapıyordu).
+Belgede düzeltilenlerden bazıları: botlar kapı açmaz (yalnız açık kapıdan girer), NPC'ler yol ızgarası kullanmaz;
+sığınakların dördünde hazır yatak yok (uyku tulumu gerekir); dolap kapakları görseldir, fizikli olanlar
+çekmecelerdir; uyku için oyuncuların yarıdan fazlası gerekir; yanmış ve birkaç dekor araç binilemez; istemci park
+etmiş arabayı itemez; olay zombilerinin ertelenme saatleri (20.35, sürüler 20.55).
 
 ### Test sonuçları (bu turun son kodu)
 Tam regresyon (32 senaryo, sırayla) `6c1fe8b` üzerinde koşuyor; sonuçlar bu alt bölüme işlenecek. Şimdiye kadar:

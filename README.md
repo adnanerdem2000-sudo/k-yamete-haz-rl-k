@@ -17,16 +17,20 @@ için yol haritası `docs/ROADMAP.md` içinde.
 - **Her binaya girilebilir:** şehir silüetindeki 11 kule (zemin katları: kafe, market, klinik, daire…), mahalle
   evleri ve dağ köyü camisi dahil adadaki 86 binanın hepsine kapıdan yürüyerek girilir.
 - **Gerçekten açılan dolaplar:** ararken gardırop ve dolap kanatları, buzdolabı ve fırın kapakları, sandık kapakları
-  ve çekmeceler fiziksel olarak açılır; aranmış dolap aralık kalır; çok oyunculuda başkasının açtığı dolabı herkes görür.
-- **Kullanılabilir araçlar:** yolda terk edilmiş 23 araba dahil bütün araçlara binilip sürülür (az yakıt, bazılarında
-  patlak lastik ya da bitik akü); bagajları yağmalanır.
+  menteşesinden açılır (görsel; çarpışma almaz), şifonyer, komodin, masa ve dosya dolabı çekmeceleri fizikli olarak
+  dışarı kayar; aranmış dolap aralık kalır; çok oyunculuda başkasının açtığı dolabı herkes görür.
+- **Kullanılabilir araçlar:** yolda terk edilmiş 23 araba artık gerçek araç: öbür sürülebilir araçlar gibi binilip
+  sürülür (az yakıt, bazılarında patlak lastik ya da bitik akü), bagajları yağmalanır. Kaza yerlerindeki yanmış
+  arabalar ve birkaç dekor araç (benzinlikteki tanker, havaalanındaki itfaiye aracı gibi) binilemez.
 - **Gündüz yağma, gece zombi:** zombiler alacakaranlıkta (20.30) oyuncuların çevresinde topraktan çıkar, şafakta
   (06.00) toprağa geri döner. Gündüz başka tehlikeler var: yağmacı devriyeleri, başıboş köpek sürüleri, öğle güneşinde
   güneş çarpması. Gece açıkta uyumak zor; sığınakta ya da savunmalı üste uyku hızlı geçer.
 - **Yer altı sığınakları (haritada 🕳️):** şehir halk sığınağı, hastane bodrumu ve morg, askerî komuta sığınağı
   (levye), çiftlik fırtına mahzeni, orman mağarası (ip merdiven), fener mahzeni, eski maden galerisi ve laboratuvar
-  B1 katı (anahtar kartı). Merdivenle iniliyor; içeride ganimet, ranzalar, jeneratörle yanan ışıklar var. Zombiler
-  aşağı inemez, takip eden YZ arkadaşların seninle iner.
+  B1 katı (anahtar kartı). Girişte E'ye basılı tutunca ekran kararıp merdivenin dibine inilir (yürüyerek inme
+  animasyonu yok); içeride ganimet ve jeneratörle yanan ışıklar var, şehir ve askerî sığınakta ranzalar, fener
+  mahzeninde ve orman mağarasında birer yatak bulunur (öbür dördünde uyumak için uyku tulumu gerekir). Zombiler aşağı
+  inemez, takip eden YZ arkadaşların seninle iner.
 - **Hikâye:** 30 günlük takvim, **45 rastgele olay** (paraşütlü yardım paketi, alevler içinde düşen uçak,
   Kanlı Ay, kurt sürüsü, sis, sarsıntı, cezaevi isyanı, kaçak bilim insanı, kablo hırsızları…), **14 NPC**
   (Pilot Aydın, Fener Bekçisi İsmail, Mühendis Zeynep, Muhtar Ömer, Gardiyan Necla, Murat ve Defne…) ile
@@ -150,7 +154,7 @@ Tüm tuşlar **Ayarlar → Kontroller**'den değiştirilebilir.
 
 **Temel döngü:** Gündüz keşfe çık ve yağmala (zombi yok ama yağmacılar, başıboş köpekler ve öğle güneşi var) →
 20.30'dan önce üsse ya da bir yer altı sığınağına dön, pencereleri tahtayla güçlendir, barikat kur → gece zombiler
-topraktan çıkar; korunaklı yerde uyuyarak zamanı hızlandır (takımın yarısı yatmalı; açıkta uyku yavaş geçer) →
+topraktan çıkar; korunaklı yerde uyuyarak zamanı hızlandır (oyuncuların yarıdan fazlası yatmalı, iki kişide ikisi de; YZ arkadaşlar sayılmaz; açıkta uyku yavaş geçer) →
 takvim olaylarına, rastgele olaylara ve sürülere hazırlan → 30. gün 22:00'ye kadar bir kaçış yolu hazırla.
 
 **Finaller (Görevler → Kaçış Planları):** Yeraltı sığınağı · Askerî helikopter (30. gün 20:00) ·

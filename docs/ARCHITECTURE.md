@@ -294,13 +294,16 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   kanat, kapak, çekmece üretir; malzeme başına bir InstancedMesh. Açıklık hedefi: kilitli 0, kullanımda 1, aranmış
   0,18–0,40 aralık. Kullanım `cont_use` eylemiyle host üzerinden eşitlenir (`Loot.inUse/users`, kopan oyuncununkiler
   `dropUser` ile kapanır, sonradan katılan `lootUse` ile alır). Fizikli çekmeceler (`physics/Drawers.js`) aynı yönü kullanır.
-- **Araçlar:** yanmamış terk edilmiş arabalar (`WorldBuilder.abandonedCar` → `Vehicles.spawn`, kimlik `ab<n>`, bagaj
-  `trunk:<id>`), araç başına arıza/ihtiyaç (`needs/fault/abandoned`). Far ışıkları sahnede sabit 4 SpotLight'lık bir
+- **Araçlar:** yanmamış terk edilmiş arabalar (`WorldBuilder.abandonedCar` → `Vehicles.spawn`, kimlik `ab<n>`; bagaj
+  ayrı konteyner değil, aracın kayıtta saklanan ve `veh_set` ile eşitlenen `trunk` dizisidir, içeriği `trunk:<id>`
+  tohumuyla `Loot.generate`'ten dolar; eski kayıtta aynı yerdeki eski `w:` bagaj konteynerinin durumu taşınır), araç
+  başına arıza/ihtiyaç (`needs/fault/abandoned`). Far ışıkları sahnede sabit 4 SpotLight'lık bir
   havuzdan (`updateHeadlightPool`) en yakın farı yanan araçlara atanır; 40 m ötedeki boş araçta kabin ayrıntısı gizlenir.
 - **Gündüz/gece** (`TimeSystem.DUSK` 20.30, `DAWN` 06.00): doğal zombi nüfusu yalnız gece doğar; alacakaranlıkta
   oyuncuların 25–60 m çevresinde `emerge` (anlık görüntü kodu 4), şafakta `burrow` (kod 5) durumuyla toprağa döner ve
-  öldürülmüş sayılmadan bölge nüfusuna eklenir. Gündüz istenen olay zombileri (`Events.zSpawn/zHorde`) o gecenin
-  alacakaranlığına `zspawn` planıyla ertelenir. `src/systems/DayThreats.js` (yalnız host): yağmacı devriyeleri,
+  öldürülmüş sayılmadan bölge nüfusuna eklenir. Gündüz istenen olay zombileri o geceye ertelenir: `Events.zSpawn`
+  istekleri `zspawn` planında toplanır ve 20.35'te aynı yerde topraktan çıkar, sürüler (`Events.zHorde`) `horde`
+  planıyla 20.55'te gelir. `src/systems/DayThreats.js` (yalnız host): yağmacı devriyeleri,
   başıboş köpek sürüleri, alacakaranlık/şafak duyuruları. `PlayerStats` güneş maruziyetiyle (`env.sun`) vücut ısısını
   yükseltir. Uyku hızı: gece güvenli yerde (sığınak ya da savunması ≥ 20 üs) ×40, açıkta ×8.
 - **Yer altı sığınakları** (`src/world/Underground.js`, `src/systems/Shelters.js`): 8 sığınak gerçek XZ konumunda,
@@ -321,16 +324,19 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   %52,9'u aynı yerde. Ağaç durumu kaydedilmediği için kayıtlar etkilenmez.
 - **Kat ayrımı** (`Session.levelOf(x,y,z)` → yüzey için `null`, yer altında bölge kimliği; `sameLevel(a,b)`): yalnız
   yatay mesafeye bakan sistemler toprağın iki yanını karıştırmasın diye — patlama (`PhysProps`), şişko/zehir bulutu
-  (`Zombies`), botların hedefi ve kaldırması (`Bots`), oyuncunun hayvana yakın dövüşü (`NPCs.meleeHit`), ateş ve yapı
+  (`Zombies`), botların zombi hedefi ve yere düşmüş arkadaşı (oyuncu ya da bot) kaldırması (`Bots`), oyuncunun hayvana yakın dövüşü (`NPCs.meleeHit`), ateş ve yapı
   ışıklarının `zone` alanı (`Effects.fire`, `Build`). Hayvanlar `NPCs.playerAnchors()` içindeki `under` bayrağıyla yer
   altındaki oyuncuyu algılamaz, ısırmaz, çevresinde doğmaz. Molotof şişenin değdiği noktanın altındaki zeminde yanar
   (`groundHeight(x, z, y + 0.5)`), ateş alanı ±2,5 m yükseklikte etkiler. `NavGrid.rasterize` arazinin 2 m altındaki
   çarpıştırıcıları yüzey ızgarasına basmaz; çarpıştırıcı başına `navPad` (kapı pervazlarında 0).
 - **Araç eşitlemesi:** sürücüsüz araçları host simüle eder; `Vehicles.restSnapshot()` anlık görüntüde `vh` alanıyla
   değişen araçları (3 sn'de bir hepsini) gönderir, istemci `applyRest` ile kinematik hedefe çeker. Hoş geldin paketinde
-  koltuk doluluğu (`vseats`). Park etmiş araç `updateProxy()` ile CollisionWorld'de 2–3 daire vekil (`noPhysics`, tür
-  `vehicle`; boşken mermi/görüş/yol ızgarasını keser) taşır; `dispose` Rapier araç denetleyicisini ve vekilleri
-  kaldırır. Ağ protokolü 6.
+  koltuk doluluğu (`vseats`). Her kara aracı (sürülürken de; su araçlarında yok) `updateProxy()` ile CollisionWorld'de
+  3–4 daire vekil (`noPhysics`, tür `vehicle`; yarıçap yarı genişlik, merkezler arası en fazla bir yarıçap) taşır:
+  zombi/bot/NPC çarpışmasında engeldir, boşken mermi ve görüşü de keser. Boşken `blocksNav` açıktır: vekiller yer
+  değiştirince ya da doluluk değişince `NavGrid.rebuildArea` eski + yeni alanı yeniden çizer (park etmiş araç ızgarada
+  engel, zombi içinde doğmaz; sürülen araç ızgarada yok). `dispose` Rapier araç denetleyicisini ve vekilleri kaldırır.
+  Ağ protokolü 6.
 - **Göç ve uyku:** yeni host `Loot.users/inUse`'u temizler (açık kalmış dolaplar kapanır), zombilerin gece/gündüz
   durumunu (`_wasNight`) devralır, gündüzse `dawn()` ile toprağa döndürür; ertelenmiş olay planı gündüz ateşlenmez.
   Uyku hızı oy değişince ve uyurken alacakaranlık/şafak dönünce (`_sleepNight`) yeniden hesaplanır; hasar uyandırır

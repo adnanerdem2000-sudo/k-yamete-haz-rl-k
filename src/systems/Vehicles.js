@@ -336,11 +336,15 @@ class Vehicle {
    *  aracı bilsin. Rapier'e aynalanmaz (gövde zaten orada). Dolu araç görüşü/kurşunu kesmez (sürücü görünür, vurulur). */
   updateProxy() {
     if (this.water) return;
-    const P = this.s.world.physics;
+    const P = this.s.world.physics, nav = this.s.world.nav;
     const occupied = this.seats.some(Boolean);
-    const L = this.def.len, W = this.def.wid, r = W * 0.46;
-    if (!this.proxy) {
-      const n = L > W * 2.2 ? 3 : 2;
+    // daireler gövdeyi boşluksuz örtsün: yarıçap yarı genişlik (yanlar gövdeyle aynı hizada), uç daireler tampona
+    // değer, merkezler arası en fazla bir yarıçap (iki daire arasındaki bel genişliğin %87'si; ortada yarık kalmaz,
+    // mermi/görüş/NPC aracın içinden geçemez). Köşe uçları dairelerin dışında kalır (en fazla ~0,4 r).
+    const L = this.def.len, W = this.def.wid, r = W * 0.5, span = Math.max(0, L / 2 - r);
+    const n = span > 0.01 ? Math.ceil((2 * span) / r) + 1 : 1;
+    if (!this.proxy || this.proxy.length !== n) {
+      if (this.proxy) for (const c of this.proxy) P.remove(c);
       this.proxy = [];
       for (let i = 0; i < n; i++) { const c = new Collider({ shape: 'circle', x: this.pos.x, z: this.pos.z, r, minY: this.pos.y, maxY: this.pos.y + 1, kind: 'vehicle', walkable: false, blocksNav: false, owner: this }); c.noPhysics = true; P.add(c); this.proxy.push(c); }
       this._px = null;
@@ -348,15 +352,24 @@ class Vehicle {
     const q = this._px;
     if (q && Math.abs(q.x - this.pos.x) < 0.06 && Math.abs(q.z - this.pos.z) < 0.06 && Math.abs(q.y - this.pos.y) < 0.08 && Math.abs(wrapAngle(q.yaw - this.yaw)) < 0.025 && q.occ === occupied) return;
     this._px = { x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yaw, occ: occupied };
-    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), n = this.proxy.length, span = Math.max(0, L / 2 - r);
+    // park etmiş (kimsenin oturmadığı) araç yol ızgarasında engeldir: zombi ve botlar onu dolanarak yol planlar, zombi
+    // araç içinde doğmaz. Sürülen/dolu araç ızgaraya basılmaz (hareket ederken her karede ızgarayı değiştirmesin).
+    // Izgara, vekiller yer değiştirince ya da doluluk değişince eski + yeni alanda yeniden çizilir.
+    const navBlock = !occupied, was = this.proxy[0].blocksNav;
+    let a0 = Infinity, b0 = Infinity, a1 = -Infinity, b1 = -Infinity;
+    const grow = (c) => { if (c.minX < a0) a0 = c.minX; if (c.minZ < b0) b0 = c.minZ; if (c.maxX > a1) a1 = c.maxX; if (c.maxZ > b1) b1 = c.maxZ; };
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw);
     const H = Math.max(1.2, Math.min(3.4, this.modelH || 1.6));
     for (let i = 0; i < n; i++) {
-      const c = this.proxy[i], t = -span + (2 * span * i) / (n - 1);
+      const c = this.proxy[i], t = n > 1 ? -span + (2 * span * i) / (n - 1) : 0;
+      if (was) grow(c);
       const x = this.pos.x + fx * t, z = this.pos.z + fz * t;
       c.x = x; c.z = z; c.minY = this.pos.y - 0.3; c.maxY = this.pos.y + H;
-      c.blocksSight = !occupied; c.blocksBullets = !occupied;
+      c.blocksSight = !occupied; c.blocksBullets = !occupied; c.blocksNav = navBlock;
       P.move(c, x - r, z - r, x + r, z + r);
+      if (navBlock) grow(c);
     }
+    if (nav && (was || navBlock)) nav.rebuildArea(a0 - 0.6, b0 - 0.6, a1 + 0.6, b1 + 0.6);
   }
 }
 
