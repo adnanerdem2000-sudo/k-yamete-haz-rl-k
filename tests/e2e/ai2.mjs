@@ -55,6 +55,9 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     for (const z of S.zombies.list.values()) z.dead = true;
     window.__step(5);
     const zb = S.zombies.spawn('normal', pl.pos.x + 14, pl.pos.z + 2, {}); zb.state = 'idle'; zb.target = null; zb.alert = 0;
+    // zombi oyuncuya sırtı dönük: doğuşta yönü rastgele (görüş konisi ±1,25 rad), oyuncuya bakarsa sesten önce onu görüp
+    // kovalıyordu (kovalayan zombi 8 m'den uzak sesleri yok sayar) — denetim sesin araştırılmasını ölçer
+    zb.yaw = Math.atan2(zb.x - pl.pos.x, zb.z - pl.pos.z);
     S.inventory.addStack(makeStack('empty_bottle', 2));
     const slot = S.inventory.slots.findIndex((s) => s && s.id === 'empty_bottle');
     S.selectHotbar(slot);
