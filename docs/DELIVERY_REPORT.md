@@ -4,7 +4,9 @@ Sekiz aşama 1 Kasım 2026'da uygulandı ve teslim edildi, ama **istemin bütün
 Teslimden sonra yapılan bağımsız eksiksizlik denetimi (§10, `docs/DENETIM_NL2.md`): istemdeki 253 somut talebin 101'i
 tam, 126'sı kısmi, 26'sı yapılmadı; kısmi/yok olanların 100'ü bu raporda önceden yazmıyordu ve denetim kodda düzeltilmemiş
 hatalar da buldu. Kabul kriterlerinin durumları (§7) bu denetime göre düzeltildi. Test edilemeyen sistemler §6'da,
-son test sonuçları §8'de, kalan sorunlar §9–10'da ve `KNOWN_ISSUES.md`'de.
+son test sonuçları §8'de, kalan sorunlar §9–10'da ve `KNOWN_ISSUES.md`'de. Sonraki özellik turu (her binaya giriş,
+açılan dolaplar, kullanılabilir araçlar, gündüz yağma / gece zombi, yer altı sığınakları), bağımsız incelemesi ve son
+tam test koşusu §11'de.
 
 İstemin 18. bölümündeki başlıklar: başlangıç mimarisi §1 · tespit edilen / düzeltilen sorunlar §2–3 · değiştirilen
 dosyalar ve eklenen sistemler §4 · karakterler ve animasyonlar §5 Aşama 2 · fizik Aşama 3 · harita ve çevre Aşama 4 ·
@@ -459,6 +461,7 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
 | 18 | Ana menü ve oyun içi butonlar gerçek tıklamayla çalışır | Büyük ölçüde | `ui-clicks`: ana menünün altı ekranı + geri, ayar sekmeleri ve kalite seçimi, Tek Oyna → Oyuna Başla, oyunda günlüğün altı sekmesi, duraklat → Ayarlar/Nasıl Oynanır?/Devam Et gerçek fare tıklamasıyla; diğer paneller (inşa, takım, depo, tüccar) işlevleri doğrudan çağıran senaryolarla, yıkıcı düğmeler tıklanmadı |
 
 ## 8. Test sonuçları (son koşu, Aşama 8 kodu)
+Özellik turundan sonraki son koşu (32 senaryo) §11'de.
 - **Birim testleri (`npm test`):** 47/47 (9 dosya; dosya başına kapsam `TEST_REPORT.md`'de). Turun başında 31.
 - **Uçtan uca (`node tools/e2e.mjs`, 27 senaryo, sırayla, yazılım GPU'su):** 27/27. Tam koşuda (92 dk) 26/27:
   `benchmark` yalnız yeni eklenen iptal sonrası denetiminde düştü (yeni oyunda fiziğin 3 sn içinde ilerlemesi
@@ -530,3 +533,56 @@ denemesinden geçti. Ayrıntı ve tam liste: `docs/DENETIM_NL2.md`.
 - **Süreç:** istem ayrı bir geliştirme dalı istiyordu; bütün iş GitHub Pages'ten doğrudan yayınlanan tek dalda yapıldı,
   her ara aşama canlıya gitti.
 
+## 11. Özellik turu (1–2 Kasım 2026): binalar, dolaplar, araçlar, gündüz/gece, yer altı sığınakları
+İstek: "Her binaya girebilelim. Dolapları çekmeceleri açtığımızda fiziksel olarak da açıldığını görebilelim. Araçlar
+kullanılabilir olsun. Gündüz vakti sadece loot yapalım, zombiler gece olunca ortaya çıksın, gündüz başka sorunlar olsun.
+Sığınaklar olsun, yer altlarında oralara girebilelim." Her özellik ayrı commit olarak gönderildi (`42085cf` ve `84d9c08`
+araçlar, `bbe2743` binalar, `41302af` dolaplar, `dbe115f` gündüz/gece, `5fb38f7` sığınaklar), ardından bağımsız
+inceleme düzeltmeleri (`7a45173`, `d2eb253` ve `6c1fe8b`).
+
+| İstek | Durum | Ne yapıldı | Kanıt (otomatik test) |
+|---|---|---|---|
+| Her binaya girilebilsin | Karşılandı (kulelerde yalnız zemin kat) | 11 MegaKit kulesinin zemin katı, 5 dekor ev ve cami girilebilir bina oldu (toplam 86); verandasız kapılardaki eşik basamağı hatası (yalnız zıplayarak giriliyordu) düzeltildi; kapı pervazları yol ızgarasında kapıyı kapatmıyor, zombi/bot/NPC her binanın içine yol buluyor | `buildings`: 86 binanın her birine dış kapıdan yürüyerek giriliyor; kulelerde kamera tavan altında; eski kapı/pencere kimlikleri kaymıyor |
+| Dolap/çekmece fiziksel açılsın | Karşılandı (kapaklar görsel) | Gardırop/dolap kanatları, buzdolabı/fırın kapakları, ecza dolabı, kasa, içecek dolabı, tezgâh, sandık kapakları, alet dolabı çekmeceleri arama ve depo paneli sırasında menteşesinden açılıyor; aranmış dolap aralık kalıyor; kullanım çok oyunculuda ve host göçünde eşitleniyor; fizikli çekmeceler mobilyanın gerçek ön yüzüne oturuyor | `fronts` (12 türde aç/kapa/aralık, kilitli kasa, başkasının kullanımı, çekmece yön/yükseklik); `multiplayer-local` (istemcinin açtığı dolap host'ta açık) |
+| Araçlar kullanılabilsin | Karşılandı | Yoldaki 23 terk edilmiş araba binilip sürülen gerçek araç (az yakıt, bazılarında patlak lastik/bitik akü, bagaj yağması); iki yandan binme; çok oyunculuda host'un kendi aracını sürememesi, yolcunun aracı hareketsiz görmesi ve park hâlindeki araçların eşitlenmemesi düzeltildi; park etmiş araç mermiyi ve görüşü kesiyor | `vehicles3`, `vehicles2`, `multiplayer-local` (host sürüşü) |
+| Gündüz yağma, gece zombi, gündüz başka sorunlar | Karşılandı | Doğal zombiler alacakaranlıkta (20.30) topraktan çıkıyor, şafakta (06.00) toprağa dönüyor; gündüz olay zombileri geceye erteleniyor; gündüz yağmacı devriyeleri, başıboş köpek sürüleri, güneş çarpması; gece açıkta uyku yavaş (×8), sığınakta ya da korunaklı üste hızlı (×40); hasar uyandırır | `daynight` (öğlen 0 zombi; alacakaranlıkta yakında çıkış; şafakta hepsi döner, ölü sayılmaz; devriye, köpek, sıcak çarpması, açıkta uyku, alacakaranlıkta uyku yavaşlar, hasar uyandırır ve oyu geri çeker) |
+| Yer altı sığınakları | Karşılandı (iniş kararmalı ışınlama) | 8 sığınak (şehir, hastane, askerî, çiftlik, orman mağarası, fener, maden galerisi, laboratuvar B1); kilit (levye/maymuncuk, anahtar kartı), jeneratörle ışık, ganimet, yatak, güvenli uyku; zombiler ve hayvanlar inemez, toprağın öbür yanını algılayamaz; patlama/zehir/ateş katlar arasında geçmez; takipçi botlar ve eskort NPC'ler iner/çıkar; ev sığınağı aynı sisteme bağlandı | `shelters` (8 sığınağa iniş, odalarda yürüme, bütün odalara/konteynerlere/çıkışa/jeneratöre erişim, E ile inip çıkma, kilitler, kamera, yağmur ve deniz gizli, zombi algısı, ışık, ganimet, uyku, kayıt, ev sığınağı, bot) |
+
+### Bağımsız inceleme
+Beş özelliğin her biri ayrı bir inceleyiciye verildi (kodu ve testleri okuyup hata arayan); her aday bulguyu ikinci bir
+doğrulayıcı commit `7a45173` üzerinde çürütmeye çalıştı.
+
+| Alan | Aday | Doğrulanan | Çürütülen | Önemli doğrulanan bulgular (hepsi düzeltildi) |
+|---|---|---|---|---|
+| Dolaplar ve çekmeceler | 6 | 5 | 1 | yarıda kalan bot araması dolabı oturum boyunca "kullanımda" bırakıyordu; host göçünde açık dolaplar herkeste açık kalıyordu; her arama başka oyuncuların kapaklarını kapatıp çekmece sesi çalıyordu |
+| Binalar | 8 | 8 | 0 | küçük kulelerin kapı eşiğinde yürünebilir zemin yoktu (zombi/NPC zeminin altına düşüyor, botlar takılıyor); yol bulma hiçbir kulenin içine ulaşamıyordu; kamera tezgâhtayken tavana giriyordu; kule içinde yağmur yağıyordu; camide ayakkabılık hiç çıkmıyordu, kitaplıklar minberin içindeydi, köy camisinin mihrabı kıbleye bakmıyordu |
+| Araçlar | 8 | 8 | 0 | yolcu olan istemci aracının hareketini görmüyordu; park hâlindeki araçların konumu eşitlenmiyordu; geç katılan dolu koltukları boş görüyordu; eski kayıtlarda terk edilmiş araba bagajları yeniden doluyordu (ganimet çoğalması); terk edilmiş arabalar mermiyi, görüşü ve yol ızgarasını kesmiyordu; oturum başına ~45 araç denetleyicisi sızıyordu |
+| Gündüz/gece | 10 | 10 | 0 | 20.30'dan önce uyuyanlar için bütün gece ×40 hızla geçiyordu; köpekler sığınaktaki oyuncuyu ısırıyordu; sabah host göçünde zombiler toprağa dönmüyordu; yeni host eski planı oynatıp gündüz sürü doğuruyordu; hasarla uyanınca uyku oyu geri çekilmiyordu; alacakaranlık/şafak duyuruları büyük kare adımında atlanıyordu |
+| Yer altı sığınakları | 11 | 11 | 0 | yüzey ortam ışığı her karede 0,85'ten 0,35'e düşürülüyordu (bütün oyun karanlık); kurt, ayı, domuz ve köpekler 9–12 m kayanın içinden algılayıp ısırıyordu; patlama ve zehir bulutları sığınaktakileri etkiliyordu; sığınakta atılan molotof yüzeyde yanıyordu; botlar tavanın üstündeki zombilerle dövüşüyordu; ağ protokol sürümü artırılmamıştı |
+| **Toplam** | **43** | **42** | **1** | |
+
+- Çürütülen tek aday: kapak çiziminde kare başına küçük bellek ayırma ve 0,5 sn'de bir renk/matris yeniden yüklemesi.
+  Doğrulayıcı olguları doğruladı ama ölçülebilir bir etki, yanlış davranış ya da sızıntı bulmadı (en fazla 6 × 32 KB
+  matris tamponu, saniyede iki kez); düzeltilmedi.
+- Doğrulayıcıların düzeltme notları da son commit'te uygulandı: açıkta uyku uyarısı ilk oyda da çıkıyor; darbeyle yere
+  düşen uyuyanın oyu geri çekiliyor; sığınaktaki oyuncu yüzeydeki hayvanı yakın dövüşle vuramıyor ve yer altındaki
+  oyuncunun çevresinde hayvan doğmuyor; duvara çarpan molotof havada değil dibindeki zeminde yanıyor; yer altındaki
+  hiçbir çarpıştırıcı yüzey yol ızgarasına basılmıyor; ateş ve yapı ışıkları bulundukları kata göre seçiliyor; tuzak ve
+  alarm başka kattaki zombiye tepki vermiyor.
+- Ertelenen olay zombilerinin "kovala" hedefi taşınmıyor: topraktan çıkan zombi zaten hedefsiz başlıyor (çıkış
+  animasyonu hedefi siliyor), oyuncuyu algılayınca kovalıyor.
+
+### Test sonuçları (bu turun son kodu)
+Tam regresyon (32 senaryo, sırayla) `6c1fe8b` üzerinde koşuyor; sonuçlar bu alt bölüme işlenecek. Şimdiye kadar:
+birim testleri 47/47; değişen sistemlere dokunan `daynight`, `shelters`, `ai`, `buildings` hatasız. `ai2` testin yalıtım
+eksiği yüzünden düştü (takipçi botlar testin zombileriyle dövüşüyordu), `edc311d`'de düzeltildi ve üç koşuda geçti.
+
+### Bu turun sınırlamaları (ayrıntı `KNOWN_ISSUES.md`)
+- Kulelerin yalnız zemin katı girilebilir; üst katlar dış kabuk.
+- Dolap kapakları görseldir (çarpışma almaz); yalnız oda kapıları ve fizikli çekmeceler fizik nesnesi.
+- Yanmış arabalar dekor; terk edilmiş arabaların yakıtı/arızası tohumla aynı.
+- Sığınaklara iniş/çıkış kararmalı ışınlama; odalar prosedürel kutular; sığınaklara yapı kurulamaz.
+- Botlar yalnız "Takip et" emrindeyken sığınağa iner; sığınak içinde uzak odalara giderken duvara takılabilirler.
+- Eski sürümle açık kalmış sekmeler yeni host'a katılamaz (protokol 6): sayfa yenilenmeli.
+- Bitki yerleşimi kısmen değişti: orman sığınağının girişi bitki dağılımının rastgele sayı sırasını kaydırdı; Aşama 8'e
+  göre ağaçların %87,4'ü, çimenlerin %52,9'u aynı yerde (oynanışa ve kayıtlara etkisi yok).

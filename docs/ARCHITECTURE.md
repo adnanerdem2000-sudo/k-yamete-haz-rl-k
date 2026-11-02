@@ -314,7 +314,27 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   `Bots.followZone` (takipçi bot iner/çıkar), `Build` (ev sığınağı bölge `ev`), `Endings` (kızıl sis/sığınak finali).
   Kilit (levye/maymuncuk ya da anahtar kartı), jeneratör ve "görüldü" durumu host-otoriter `shelter` eylemiyle
   eşitlenir; kayıtta ve hoş geldin paketinde `shelters` alanı. Bitki saçılımı girişlerin 5–6 m çevresini boş bırakır
-  (`Vegetation.exclude`, rastgele sayı sırasını değiştirmeden).
+  (`Vegetation.exclude`; dışlama kendisi rastgele sayı tüketmez). Not: `Vegetation.scatter` bütün haritayı tek bir
+  `RNG('veg')` dizisiyle tarar ve bir hücrede `blocked()` sonucu değişince o hücrenin sayıları tüketilmez; bu yüzden
+  orman/açık araziye eklenen her çarpıştırıcı tarama sırasında sonraki orman ağaçlarının ve (aynı diziyi kullanan)
+  çimenlerin yerini değiştirir. Bu turda orman sığınağının girişi: Aşama 8'e göre ağaçların %87,4'ü, çimenlerin
+  %52,9'u aynı yerde. Ağaç durumu kaydedilmediği için kayıtlar etkilenmez.
+- **Kat ayrımı** (`Session.levelOf(x,y,z)` → yüzey için `null`, yer altında bölge kimliği; `sameLevel(a,b)`): yalnız
+  yatay mesafeye bakan sistemler toprağın iki yanını karıştırmasın diye — patlama (`PhysProps`), şişko/zehir bulutu
+  (`Zombies`), botların hedefi ve kaldırması (`Bots`), oyuncunun hayvana yakın dövüşü (`NPCs.meleeHit`), ateş ve yapı
+  ışıklarının `zone` alanı (`Effects.fire`, `Build`). Hayvanlar `NPCs.playerAnchors()` içindeki `under` bayrağıyla yer
+  altındaki oyuncuyu algılamaz, ısırmaz, çevresinde doğmaz. Molotof şişenin değdiği noktanın altındaki zeminde yanar
+  (`groundHeight(x, z, y + 0.5)`), ateş alanı ±2,5 m yükseklikte etkiler. `NavGrid.rasterize` arazinin 2 m altındaki
+  çarpıştırıcıları yüzey ızgarasına basmaz; çarpıştırıcı başına `navPad` (kapı pervazlarında 0).
+- **Araç eşitlemesi:** sürücüsüz araçları host simüle eder; `Vehicles.restSnapshot()` anlık görüntüde `vh` alanıyla
+  değişen araçları (3 sn'de bir hepsini) gönderir, istemci `applyRest` ile kinematik hedefe çeker. Hoş geldin paketinde
+  koltuk doluluğu (`vseats`). Park etmiş araç `updateProxy()` ile CollisionWorld'de 2–3 daire vekil (`noPhysics`, tür
+  `vehicle`; boşken mermi/görüş/yol ızgarasını keser) taşır; `dispose` Rapier araç denetleyicisini ve vekilleri
+  kaldırır. Ağ protokolü 6.
+- **Göç ve uyku:** yeni host `Loot.users/inUse`'u temizler (açık kalmış dolaplar kapanır), zombilerin gece/gündüz
+  durumunu (`_wasNight`) devralır, gündüzse `dawn()` ile toprağa döndürür; ertelenmiş olay planı gündüz ateşlenmez.
+  Uyku hızı oy değişince ve uyurken alacakaranlık/şafak dönünce (`_sleepNight`) yeniden hesaplanır; hasar uyandırır
+  ve oyu geri çeker.
 
 ## Hikâye, zaman çizelgesi ve hikâye dünyası
 - `src/data/story.js`: takvim (30 gün), 45 olay (koşullar: gün aralığı, gece, `requires: flag:/noflag:/quest:/npc:`),

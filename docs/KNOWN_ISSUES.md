@@ -98,12 +98,20 @@
   yalnız menteşeli oda kapıları ve fizikli çekmeceler fizik nesnesidir. Kapaklar oyuncuya ≈56 m içinde çizilir (en
   yakınlar öncelikli); daha uzaktan bir pencereden bakılırsa buzdolabı kapaksız görünebilir.
 - **Araçlar:** yanmış terk edilmiş arabalar hâlâ dekordur (binilemez). Terk edilmiş arabaların yakıtı ve arızası her
-  yeni oyunda aynı tohumla belirlenir.
+  yeni oyunda aynı tohumla belirlenir. Sürücüsüz araçları yalnız host simüle eder; konumları istemcilere 0,1 sn'de bir
+  (değişenler) ve 3 sn'de bir (hepsi) gönderilir: istemci park etmiş bir arabaya çarptığında itme host'ta hesaplanır ve
+  kısa bir gecikmeyle görünür. Zombi, mermi, görüş ve yol ızgarası için park etmiş araç 2–3 daireyle temsil edilir
+  (köşelerde birkaç santim pay; içinde biri varken mermi ve görüşü kesmez).
+- **Kapı pervazları** yol ızgarasında pay almaz (yoksa 1 m'lik kapılar ızgarada tamamen kapanıyordu): zombi, bot ve
+  NPC'ler kapıdan pervaza sürtünerek geçer, kapı kenarında kısa takılma görülebilir.
 - **Gündüz/gece:** doğal zombiler yalnız 20.30–06.00 arasında doğar (final sırasında ve çılgınlık olayında saatten
   bağımsız). Hikâye olaylarının gündüz istediği zombiler ve sürüler o gecenin alacakaranlığına ertelenir. Yağmacı devriyeleri
   ve başıboş köpekler yalnız oda sahibinde üretilir (istemciler anlık görüntüyle görür); oyuncu üssündeyken ya da bir
   sığınaktayken başlamaz, dışarıda yağmalarken çıkar. Şafakta toprağa dönmesi
-  ertelenen (savaştaki) zombiler en geç 90 sn sonra döner.
+  ertelenen (savaştaki) zombiler en geç 90 sn sonra döner. Geceye ertelenen olay zombileri kovalama hedefini taşımaz:
+  topraktan hedefsiz çıkar, oyuncuyu algılayınca kovalar.
+- **Uyku:** gece açıkta uyunursa zaman ×8 akar (sığınakta ya da savunması ≥ 20 üste ×40); 20.30'dan önce uyuyanlar
+  için hız alacakaranlıkta yeniden hesaplanır. Hasar uyandırır ve uyku oyunu geri çeker; uyku oyu çoğunluk ister.
 - **Sığınaklara iniş/çıkış kararmalı ışınlamadır** (merdivenden inme animasyonu yok). Sığınak odaları prosedürel
   beton/kaya kutularıdır (model değil); mağara ve maden odalarında düzensiz kaya yüzü ve ahşap destekler var.
 - **Zombiler sığınaklara hiç inmez** ve yüzeydeki zombi yer altındaki oyuncuyu ne görür ne duyar; yer altındaki
@@ -111,10 +119,21 @@
 - **YZ arkadaşlar** yalnız "Takip et" emrindeyken oda sahibinin peşinden sığınağa iner ve çıkar (eskort edilen NPC'ler de
   liderleriyle iner); sığınak içinde yol bulma yüzey ızgarasını kullandığı için uzak odalara giderken duvara
   takılabilirler (yakın takipte sorun yok).
-- Sığınağa araçla girilemez ve sığınaklara yapı kurulamaz (tuzak, alarm, yapı ışığı ve yol ızgarası yüzeye göre
-  çalıştığı için); sığınaklarda yatak ve depo zaten var.
+- Sığınağa araçla girilemez ve sığınaklara yapı kurulamaz (yol ızgarası yalnız yüzeyi kapsar); sığınaklarda yatak
+  ve depo zaten var. Kat ayrımı (`Session.levelOf` ya da yükseklik farkı) alan hasarına, hayvanlara, botların
+  hedeflerine, ateş/yapı ışıklarına, tuzak ve alarma uygulanır; yer altındaki silah sesi yine yüzeyde duyulur
+  (bilinçli).
+- **Sürüm uyumu:** ağ protokolü 6'ya çıktı; eski sürümle açık kalmış bir sekme yeni host'a katılamaz ("Oyun sürümleri
+  farklı" uyarısı) — sayfa yenilenmeli. Eski kayıtlar yüklenir: eski "araç bagajı" konteynerlerinin durumu aynı yerdeki
+  terk edilmiş arabanın bagajına taşınır.
 - Deniz seviyesinin altına inen sığınaklarda deniz/göl yüzeyleri yer altındayken gizlenir; yüzeye çıkınca yeniden
   görünür.
+- **Bitki yerleşimi kısmen değişti:** ağaç/çalı/çimen dağılımı tek bir rastgele sayı dizisiyle üretildiği için orman
+  sığınağının girişinin yerindeki ağaç düşünce, tarama sırasında ondan sonra gelen orman ağaçları ve haritadaki çimenlerin
+  yaklaşık yarısı Aşama 8'e göre başka yerde çıkıyor (yeni camide de çevresi değişti). Ölçüm: 3.434 ağacın %87,4'ü ve
+  çimenlerin %52,9'u aynı yerde; görsel testteki orman sahnesinin çevresindeki 120 ağacın yalnız 45'i aynı yerde
+  kaldığı için o görüntü farklı, taban yenilendi. Oynanışa ve kayıtlara etkisi yok (ağaç durumu kaydedilmez); ileride
+  orman/açık araziye eklenecek her çarpıştırıcı dağılımı yine kaydırır (hücre başına bağımsız dizi düşünülebilir).
 
 ## Teslimden sonraki denetimin bulduğu hatalar (düzeltilmeyenler)
 Bu turda düzeltilenler (`42085cf`): direksiyon simidi sürücü tarafında ve kollu, dönüşü görünüyor; patinaj (kayma)
@@ -128,5 +147,6 @@ Ayrıntı ve kanıt: `docs/DENETIM_NL2.md`.
 - Host göçünden sonra gün kilitli görevler (ör. laboratuvar görevi) başlamayabilir; botların çantası ve silahları
   varsayılana döner.
 - Kişilik kıpırdanması için iki ayrı zamanlayıcı ve zemin türü için iki ayrı sınıflayıcı var (biri kaldırılmalı).
-- Uçtan uca senaryoların 16'sı yalnız çökme/zaman aşımıyla başarısız olabilir (değer denetimi yok).
+- 32 uçtan uca senaryonun 15'i yalnız çökme/zaman aşımıyla başarısız olabilir (değer denetimi yok; bu turda eklenen
+  beş senaryonun hepsinde ve `multiplayer-local`'de denetim var).
 
