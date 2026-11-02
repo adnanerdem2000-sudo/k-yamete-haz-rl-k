@@ -14,6 +14,14 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     for (let i = 0; i < 3 && g.ui.isBlocking(); i++) g.ui.closePanel && g.ui.closePanel();
     window.__step = (frames, keys = [], each = null) => { const inp = g.input; for (let i = 0; i < frames; i++) { inp.down.clear(); for (const k of keys) inp.down.add(k); S.update(1 / 60); if (each) each(i); inp.endFrame(); } };
     S.dayThreats.t = 1e9; // gündüz tehditleri (yağmacı devriyesi, başıboş köpek) bu senaryonun konusu değil: daynight denetler
+    // botlar bütün yaralarından arınır (bot adımlarından önce: önceki adımlardaki ısırık ve kanama emri bozmasın)
+    window.__healBots = () => { for (const bt of S.bots.list) { const down = bt.stats.downed; bt.stats.revive(bt.stats.maxHealth || 100); bt.stats.cond.infection = 0; bt.stats.cond.poisoned = 0; if (down) { bt.mode = 'ground'; bt.downT = 0; } } };
+    // 1–3. adımlar yalnız zombi davranışını ölçer: takipçi botlar zombilerle dövüşüp sonucu bozmasın diye 60+ m
+    // uzakta beklesin (su ve bina dışında bir yer)
+    const pl = S.local;
+    let spot = null;
+    for (let k = 0; k < 16 && !spot; k++) { const a = (k / 16) * Math.PI * 2, x = pl.pos.x + Math.cos(a) * 75, z = pl.pos.z + Math.sin(a) * 75; if (!S.world.terrain.isWater(x, z) && !S.world.buildingAt(x, z)) spot = { x, z }; }
+    S.bots.list.forEach((bt, i) => { if (spot) { const x = spot.x + i * 2, z = spot.z; bt.pos.set(x, S.world.physics.groundHeight(x, z, S.world.terrain.heightAt(x, z) + 2), z); bt.path = null; } S.applyAction('bot_order', { id: bt.id, order: 'stay' }, S.localId); });
   });
   // 1) ayrışma: 12 zombi aynı noktaya doğar, 3 sn sonra en yakın çift ≥ 0,45 m
   const sep = await evalJS(page, () => {
@@ -66,7 +74,7 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     const S = window.__game.session, b = S.bots.list[0];
     if (!b) return { err: 'bot yok' };
     for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id); // önceki testlerin zombileri botlara saldırmasın
-    for (const bt of S.bots.list) if (bt.stats.downed) { bt.stats.revive(60); bt.mode = 'ground'; bt.downT = 0; }
+    window.__healBots();
     const home = S.world.home;
     const c = S.world.containers.find((q) => q.building === 'home' && !(S.loot.state.get(q.id) || {}).searched && q.type !== 'safe' && home.roomAt(q.x, q.z));
     if (!c) return { err: 'ev konteyneri yok' };
@@ -89,7 +97,7 @@ export default async ({ page, url, wait, evalJS, log, errors }) => {
     const S = window.__game.session, b = S.bots.list[0];
     if (!b) return { err: 'bot yok' };
     for (const id of [...S.zombies.list.keys()]) S.zombies.removeZombie(id);
-    for (const bt of S.bots.list) if (bt.stats.downed) { bt.stats.revive(60); bt.mode = 'ground'; bt.downT = 0; }
+    window.__healBots();
     const home = S.world.home, fr = home.frame;
     // evin önünde geçerli bir yer: birkaç aday dene (bahçe, yol kenarı değil)
     let st = null, p = null, y = 0;
