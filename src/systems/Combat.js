@@ -212,7 +212,10 @@ export class Combat {
       const dir = _d.clone();
       dir.x += (Math.random() - 0.5) * spread * 2; dir.y += (Math.random() - 0.5) * spread * 2; dir.z += (Math.random() - 0.5) * spread * 2;
       dir.normalize();
-      const res = this.raycastTargets(_o, dir, g.range);
+      // ışın kameradan çıkar; kamera araçların ve ağaçların içinden geçebildiği için oyuncunun arkasında kalan araç/ağaç
+      // atışı kesmesin: dünya engelleri oyuncunun ışın üzerindeki izdüşümünün 0,5 m önünden itibaren sayılır
+      const near = Math.max(0, (pl.pos.x - _o.x) * dir.x + (pl.pos.y + 1.4 - _o.y) * dir.y + (pl.pos.z - _o.z) * dir.z - 0.5);
+      const res = this.raycastTargets(_o, dir, g.range, near);
       lastHit = res;
       const end = res.point;
       if (k < 3) S.fx.tracer(mx, my, mz, end.x, end.y, end.z);
@@ -244,9 +247,11 @@ export class Combat {
   }
 
   /** Işın: dünya + zombi silindirleri + düşman NPC'ler */
-  raycastTargets(o, d, range) {
+  raycastTargets(o, d, range, near = 0) {
     const S = this.s;
-    const hit = S.world.physics.raycast(o.x, o.y, o.z, d.x, d.y, d.z, range, (c) => c.blocksBullets && c.kind !== 'floor');
+    // near: ışının ilk near metresindeki dünya engelleri yok sayılır (kamera ile oyuncu arası)
+    const hit = S.world.physics.raycast(o.x + d.x * near, o.y + d.y * near, o.z + d.z * near, d.x, d.y, d.z, Math.max(0.01, range - near), (c) => c.blocksBullets && c.kind !== 'floor');
+    if (hit) hit.dist += near;
     let best = hit ? hit.dist : range;
     let res = { dist: best, collider: hit ? hit.collider : null, point: hit ? hit.point : { x: o.x + d.x * range, y: o.y + d.y * range, z: o.z + d.z * range } };
     // oyuncunun kendi gövdesini atlamak için kameradan başlayan ışında en az 1.5 m

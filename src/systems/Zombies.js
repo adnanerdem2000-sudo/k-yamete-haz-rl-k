@@ -621,14 +621,22 @@ export class Zombies {
     const S = this.s;
     const nav = S.world.nav;
     zb.repath -= dt;
+    if (zb.noPathT > 0) zb.noPathT -= dt;
     const direct = dist(goal.x, goal.z, zb.x, zb.z) < 4 || nav.lineClear(zb.x, zb.z, goal.x, goal.z, false);
     let wx = goal.x, wz = goal.z;
     if (!direct) {
-      if ((!zb.path || zb.repath <= 0) && this.pathBudget > 0) {
+      // yolu biten/bulunamayan zombi kısa bir bekleme sonra yeniden arar: hedef ulaşılamazsa (park etmiş araçlarla ya da
+      // engellerle kapanmış alan) findPath en yakın noktaya kısmi yol verir; o yol bitince arama her karede yinelenip
+      // kare başına yol bütçesini öbür zombilerden çalıyordu
+      if (((!zb.path && !(zb.noPathT > 0)) || zb.repath <= 0) && this.pathBudget > 0) {
         this.pathBudget--;
         zb.repath = 1.2 + this.rng.next() * 0.8;
         zb.path = nav.findPath(zb.x, zb.z, goal.x, goal.z, { allowBreak: true, maxNodes: 6000 });
         zb.pathI = 1;
+        // kısmi yol: hedefe ulaşılamadı, en yakın noktaya gidiliyor (ulaşılabilir hedefin yolu bitince hemen yeniden aranır)
+        const last = zb.path && zb.path[zb.path.length - 1];
+        zb.pathPartial = !last || dist(last.x, last.z, goal.x, goal.z) > 1.5;
+        if (!zb.path) zb.noPathT = 0.8;
       }
       if (zb.path && zb.pathI < zb.path.length) {
         const wp = zb.path[zb.pathI];
@@ -641,7 +649,7 @@ export class Zombies {
           }
           zb.pathI++;
         }
-      } else if (zb.path && zb.pathI >= zb.path.length) zb.path = null;
+      } else if (zb.path && zb.pathI >= zb.path.length) { zb.path = null; if (zb.pathPartial) zb.noPathT = 0.8; }
     }
     const dx = wx - zb.x, dz = wz - zb.z;
     const d = Math.hypot(dx, dz) || 1;
