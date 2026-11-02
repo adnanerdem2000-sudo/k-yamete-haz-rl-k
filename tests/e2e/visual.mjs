@@ -166,6 +166,11 @@ export default async ({ page, url, evalJS, log, errors, wait }) => {
       // görsel durum sabit: hasarsız gövde (araçlar rastgele hasarla doğar; oyun sırasında tohumlanmamış rastgelelik
       // göçük/çatlak cam/boya durumunu koşudan koşuya değiştiriyordu)
       if (v.visuals) { v.health = v.maxHealth; v.visuals.resetBody(); v.visuals.applyDamage(1); }
+      // ayrıntı düzeyi (kabin, kapı/bagaj kanatları, far camları, stop lambaları) oyunda her karede kameraya göre seçilir;
+      // döngü durdurulduğu için kamera arabaya taşınınca ayrıntılar elle açılır (yoksa 40 m ötedeki oyuncunun
+      // konumundaki son seçim kalır: kabin gizli)
+      if (v.visuals) v.visuals.group.visible = true;
+      if (v.tailMeshes) for (const m of v.tailMeshes) m.visible = true;
       v.root.updateMatrixWorld(true);
       const W = v.def.wid, Lh = v.def.len, sy = Math.min(0.85, Math.max(0.32, (v.modelH || 1.5) * 0.25));
       const loc = (x, y, z) => v.root.localToWorld(new THREE.Vector3(x, y, z));
