@@ -108,7 +108,13 @@
   uçlarının dış kenarı dairelerin dışında kalır (ölçülen en kötü: binek araçta ~0,45 m, askerî kamyon ve zırhlı
   minibüste ~0,6 m), ama aracı enine kesen her çizgi bir daireye çarpar. İçinde biri varken mermi ve görüşü kesmez. Park etmiş (boş) araç yol ızgarasında engeldir:
   zombi ve botlar onu dolanarak yol planlar, zombi araç içinde doğmaz; sürülen ya da içinde biri olan araç ızgarada
-  yer almaz (değen zombi/bot çarpışmayla dışarı itilir).
+  yer almaz (değen zombi/bot çarpışmayla dışarı itilir). Vekil daireler aracın tam yüksekliğindedir: park etmiş
+  arabanın kaputunun üstünden de ateş edilemez (araç siper olarak tam duvar sayılır). Mermi kameradan çıkar, ama
+  kamera ile oyuncu arasındaki araç ve ağaçlar atışı kesmez.
+- **Bot koltukları (eski sorun, düzeltilmedi):** araçta yere düşen botun koltuğu dolu kalır (kalkana ya da lider
+  araçtan inene kadar); botların koltuk değişikliği ağla eşitlenmez, sonradan katılan ya da göçte host olan istemcide
+  bot koltuğu kalıcı dolu kalabilir. Koltuğu dolu görünen araç o sürede yol ızgarasına girmez, mermi ve görüşü kesmez,
+  o koltuğa binilemez.
 - **Kapı pervazları** yol ızgarasında pay almaz (yoksa 1 m'lik kapılar ızgarada tamamen kapanıyordu): zombiler kapalı
   kapıyı zorlayarak, botlar yalnız açık kapıdan binaya yol bulur (botlar kapı açmaz) ve pervaza sürtünerek geçer, kapı
   kenarında kısa takılma görülebilir. NPC'ler yol ızgarası kullanmaz, hedefe düz yürür.

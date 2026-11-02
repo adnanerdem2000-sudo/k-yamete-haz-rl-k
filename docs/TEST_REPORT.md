@@ -1,7 +1,8 @@
-# Test Raporu — "Next Level 2.0" turu sonu
+# Test Raporu — "Next Level 2.0" ve 1–2 Kasım özellik turu
 
-Tarih: 1 Kasım 2026 · Ortam: Linux (4 çekirdek), Node 22, başsız Chromium (Playwright 1.63) + SwiftShader yazılım
-GPU'su · Oyun kodu `5a3c517` (sonrasında yalnız test ve belge değişti), testler `ed1b805`
+Tarih: 2 Kasım 2026 · Ortam: Linux (4 çekirdek), Node 22, başsız Chromium (Playwright 1.63) + SwiftShader yazılım
+GPU'su · Tam koşu oyun kodu `6c1fe8b` (özellikler + bağımsız inceleme düzeltmeleri); belge doğrulamasının kod
+düzeltmeleri (`ad189ef`) etkilenen 10 senaryoyla ayrıca koşuldu; test düzeltmeleri `edc311d`, `8ee993e`, `a69e949`
 
 Bu rapordaki bütün sayılar son koşulardan alınmıştır. Yazılım GPU'sunda ölçülen kare hızları gerçek ekran kartı
 performansı **değildir**; yalnız kalite seviyelerinin yükünü (çizim çağrısı, üçgen, ek geçişler) karşılaştırmak için
@@ -11,9 +12,9 @@ kullanılır.
 | Katman | Kapsam | Sonuç |
 |---|---|---|
 | Birim testleri (`npm test`) | 47 test, 9 dosya | 47/47 |
-| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 27 senaryo (11'inde değer denetimi var) | 27/27 hatasız (tam koşuda 26/27; `benchmark` test denetimi düzeltilip yeniden koşuldu); 16 senaryo denetimsiz² |
-| Görsel regresyon (`visual`) | istemdeki 12 sahne, 14 görüntü, Orta kalite | Aşama 7 → 8 karşılaştırması: fark %0–0,07, araç dışı Aşama 7'de siyah kare (düzeltilen hata); tam koşuda Aşama 8 tabanına göre ≤ %0,06 |
-| CI (`.github/workflows/ci.yml`) | her gönderimde birim + `smoke-menu` + `ui-clicks` | son koşu yeşil (GitHub Actions, run 37) |
+| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 32 senaryo (17'sinde değer denetimi var; bu turda 5 yeni senaryo: `buildings`, `daynight`, `fronts`, `shelters`, `vehicles3`) | Tam koşu 30/32 (74 dk); düşen `multiplayer-6` test kırılganlığıydı, düzeltilip geçti; `visual` beklenen farklar, taban yenilendi. Belge doğrulamasının kod düzeltmelerinden sonra etkilenen 10 senaryo: 8/10, `ai2`'nin şişe denetimi düzeltildi ve düzeltilmiş senaryo art arda dört koşuda geçti; 15 senaryo denetimsiz² |
+| Görsel regresyon (`visual`) | istemdeki 12 sahne, 14 görüntü, Orta kalite | Aşama 8 tabanına göre 13 görüntüde fark %0–2,43; orman sahnesi %48,13 (bitki yerleşimi kaydı, aşağıda); taban yenilendi |
+| CI (`.github/workflows/ci.yml`) | her gönderimde birim + `smoke-menu` + `ui-clicks` | bu turun gönderimlerinde yeşil (GitHub Actions); Pages yayını başarılı |
 
 ## Birim testleri
 | Dosya | Test | Kapsam |
@@ -31,50 +32,102 @@ kullanılır.
 ## Uçtan uca senaryolar (son tam koşu)
 | Senaryo | Kapsam | Süre | Sonuç |
 |---|---|---|---|
-| `ai` | Zombi türleri ve hayvan YZ (çığlıkçı, zırhlı, şişko patlaması, kurt sürüsü, Karabaş) | 0 dk 50 sn | hatasız koştu (denetimsiz)² |
-| `ai2` | Sürü ayrışması, oyuncunun içinden geçmeme, şişeyle dikkat dağıtma, bot yağma/inşaat emirleri | 1 dk 03 sn | geçti |
-| `audio` | Ses bağlamı + HRTF, zemine göre ayak sesi, iç mekân yankısı, oklüzyon, savaş teması | 0 dk 49 sn | hatasız koştu (denetimsiz)² |
-| `benchmark` | Performans testi dört kalitede; araç reddi, duraklatma, ertelenen kayıt, iptal ve sonrasında yeni oyun | 11 dk 29 sn | geçti (yeniden koşu)¹ |
-| `carry` | Nesne taşıma: al, taşı, bırak, fırlat | 1 dk 27 sn | hatasız koştu (denetimsiz)² |
-| `carry-mp` | İki sekmede taşıma eşitlemesi, aynı kutuyu iki kişi alamama, taşıyan çıkınca bırakma | 4 dk 56 sn | geçti |
-| `ending` | 30. gün Son Işık, sığınak finali, sonuç ekranı, menüye dönüş | 1 dk 39 sn | hatasız koştu (denetimsiz)² |
-| `gameplay` | Yağma, tüketim, üretim, inşa, savaş, araç, gece/uyku, olay kartı, kayıt, taşıma | 3 dk 56 sn | hatasız koştu (denetimsiz)² |
-| `host-migration` | İki sekme + geç katılan: host göçü, kapı/envanter korunur, geç katılan listede | 10 dk 08 sn | geçti |
-| `host-migration3` | Üç sekme: göç, zombi durumu ve yağmalanmış envanter korunur, ikinci istemci yeni host'a bağlanır | 14 dk 26 sn | geçti |
-| `interact` | Etkileşim hizası: hedefe dönme, eğilme anında alma, kapı kolu zamanlaması | 2 dk 30 sn | geçti |
-| `lineup` | Altı karakter farklı animasyon durumlarında (görsel kontrol) | 0 dk 56 sn | hatasız koştu (denetimsiz)² |
-| `living` | Karga sürüleri ve duman, gürültüyle ürkme | 1 dk 00 sn | hatasız koştu (denetimsiz)² |
+| `ai` | Zombi türleri ve hayvan YZ (çığlıkçı, zırhlı, şişko patlaması, kurt sürüsü, Karabaş) | 0 dk 35 sn | hatasız koştu (denetimsiz)² |
+| `ai2` | Sürü ayrışması, oyuncunun içinden geçmeme, şişeyle dikkat dağıtma, bot yağma/inşaat emirleri | 0 dk 49 sn | geçti (ilk bölümde düştü, yeniden koşuldu)¹ |
+| `audio` | Ses bağlamı + HRTF, zemine göre ayak sesi, iç mekân yankısı, oklüzyon, savaş teması | 0 dk 43 sn | hatasız koştu (denetimsiz)² |
+| `benchmark` | Performans testi dört kalitede; araç reddi, duraklatma, ertelenen kayıt, iptal ve sonrasında yeni oyun | 4 dk 54 sn | geçti |
+| `buildings` | 86 girilebilir binanın her birine dış kapıdan yürüyerek giriş, kulelerde kamera tavan altında, yeni binalarda konteyner, eski kapı/pencere kimlikleri aynı | 1 dk 26 sn | geçti |
+| `carry` | Nesne taşıma: al, taşı, bırak, fırlat | 1 dk 16 sn | hatasız koştu (denetimsiz)² |
+| `carry-mp` | İki sekmede taşıma eşitlemesi, aynı kutuyu iki kişi alamama, taşıyan çıkınca bırakma | 4 dk 15 sn | geçti (ilk bölümde düştü, yeniden koşuldu)¹ |
+| `daynight` | Öğlen zombi yok, alacakaranlıkta topraktan çıkış, şafakta dönüş (ölü sayılmaz), yağmacı devriyesi, köpek sürüsü, sıcak çarpması, açıkta uyku ×8, akşamüstü uyku yavaşlar, hasar uyandırır | 0 dk 48 sn | geçti |
+| `ending` | 30. gün Son Işık, sığınak finali, sonuç ekranı, menüye dönüş | 1 dk 12 sn | hatasız koştu (denetimsiz)² |
+| `fronts` | 12 dolap türünde kapak aç/kapa/aralık, kilitli kasa, başka oyuncunun kullanımı, çekmece yönü ve yüksekliği | 0 dk 58 sn | geçti |
+| `gameplay` | Yağma, tüketim, üretim, inşa, savaş, araç, gece/uyku, olay kartı, kayıt, taşıma | 2 dk 58 sn | hatasız koştu (denetimsiz)² |
+| `host-migration` | İki sekme + geç katılan: host göçü, kapı/envanter korunur, geç katılan listede | 8 dk 28 sn | geçti |
+| `host-migration3` | Üç sekme: göç, zombi durumu ve yağmalanmış envanter korunur, ikinci istemci yeni host'a bağlanır | 11 dk 03 sn | geçti |
+| `interact` | Etkileşim hizası: hedefe dönme, eğilme anında alma, kapı kolu zamanlaması | 1 dk 36 sn | geçti |
+| `lineup` | Altı karakter farklı animasyon durumlarında (görsel kontrol) | 1 dk 03 sn | hatasız koştu (denetimsiz)² |
+| `living` | Karga sürüleri ve duman, gürültüyle ürkme | 0 dk 38 sn | hatasız koştu (denetimsiz)² |
 | `mobs` | Bütün zombi türleri ve hayvanlar (görsel kontrol) | 0 dk 43 sn | hatasız koştu (denetimsiz)² |
-| `motion` | Eylem klipleri, zombi görünümleri, ayak IK'sı yamaçta, kıpırdanma | 0 dk 55 sn | hatasız koştu (denetimsiz)² |
-| `multiplayer-6` | 6 oyunculu ortam (2 sekme + 4 sahte eş), 7. oyuncu reddi, hayvan/tüccar/eylem eşitlemesi | 4 dk 49 sn | geçti |
-| `multiplayer-local` | İki sekme: oda, katılım, eşitleme, istemci eylemi, zombi anlık görüntüsü, sohbet | 4 dk 54 sn | hatasız koştu (denetimsiz)² |
-| `nature` | Bitki örtüsü görünümleri, çizim/üçgen/kare süresi ölçümü | 0 dk 49 sn | hatasız koştu (denetimsiz)² |
-| `physics` | Hareket ölçümleri: hız, zıplama, düşme hasarı, basamak, eğim, eşya düşürme | 1 dk 21 sn | hatasız koştu (denetimsiz)² |
-| `physics2` | Menteşeli kapı, kilit, kırılma, su kaldırma kuvveti, çarpışma sesleri, çekmece | 5 dk 00 sn | geçti |
-| `regions` | Bölge turu (görsel kontrol) | 0 dk 32 sn | hatasız koştu (denetimsiz)² |
-| `smoke-menu` | Ana menü ve menü ekranları | 2 dk 09 sn | hatasız koştu (denetimsiz)² |
-| `smoke-single` | Tek oyunculu başlangıç, HUD, paneller, hareket | 2 dk 59 sn | hatasız koştu (denetimsiz)² |
-| `story` | Hikâye: NPC/belge yerleşimi, santral, fener, pist enkazı çekme, paket, düşen uçak, Kanlı Ay, uçak finali | 3 dk 01 sn | hatasız koştu (denetimsiz)² |
-| `ui-clicks` | Gerçek fare tıklaması: ana menü ekranları, ayarlar, Tek Oyna, günlük sekmeleri, duraklat menüsü | 3 dk 46 sn | geçti |
-| `vehicles2` | Kabin, kapı, bagaj, far, zemine göre sürüş, çarpışma hasarı, göçük normalleri, kapıya çarpma | 1 dk 03 sn | geçti |
-| `visual` | Görsel regresyon, 14 görüntü (Orta kalite) | 5 dk 50 sn | geçti |
+| `motion` | Eylem klipleri, zombi görünümleri, ayak IK'sı yamaçta, kıpırdanma | 0 dk 46 sn | hatasız koştu (denetimsiz)² |
+| `multiplayer-6` | 6 oyunculu ortam (2 sekme + 4 sahte eş), 7. oyuncu reddi, hayvan/tüccar/eylem eşitlemesi | 4 dk 53 sn | tam koşuda düştü (test kırılgandı); test düzeltildi, yeniden koşu geçti¹ |
+| `multiplayer-local` | İki sekme: oda, katılım, eşitleme, istemci eylemi, zombi anlık görüntüsü, sohbet; istemcinin açtığı dolap host'ta açık, host kendi aracını sürer ve istemci hareketi görür | 4 dk 50 sn | geçti |
+| `nature` | Bitki örtüsü görünümleri, çizim/üçgen/kare süresi ölçümü | 0 dk 39 sn | hatasız koştu (denetimsiz)² |
+| `physics` | Hareket ölçümleri: hız, zıplama, düşme hasarı, basamak, eğim, eşya düşürme | 1 dk 03 sn | hatasız koştu (denetimsiz)² |
+| `physics2` | Menteşeli kapı, kilit, kırılma, su kaldırma kuvveti, çarpışma sesleri, çekmece | 4 dk 05 sn | geçti |
+| `regions` | Bölge turu (görsel kontrol) | 0 dk 29 sn | hatasız koştu (denetimsiz)² |
+| `shelters` | 8 sığınağa E ile iniş/çıkış, bütün odalara/konteynerlere/jeneratöre yürüyerek erişim, kilitler, kamera, yağmur/deniz gizli, zombi ve hayvan algısı, ışık, ganimet, uyku, kayıt, ev sığınağı, takipçi bot, kızıl sis | 0 dk 50 sn | geçti |
+| `smoke-menu` | Ana menü ve menü ekranları | 2 dk 03 sn | hatasız koştu (denetimsiz)² |
+| `smoke-single` | Tek oyunculu başlangıç, HUD, paneller, hareket | 2 dk 08 sn | hatasız koştu (denetimsiz)² |
+| `story` | Hikâye: NPC/belge yerleşimi, santral, fener, pist enkazı çekme, paket, düşen uçak, Kanlı Ay, uçak finali | 2 dk 10 sn | hatasız koştu (denetimsiz)² |
+| `ui-clicks` | Gerçek fare tıklaması: ana menü ekranları, ayarlar, Tek Oyna, günlük sekmeleri, duraklat menüsü | 2 dk 46 sn | geçti |
+| `vehicles2` | Kabin, kapı, bagaj, far, zemine göre sürüş, çarpışma hasarı, göçük normalleri, kapıya çarpma | 0 dk 37 sn | geçti |
+| `vehicles3` | Terk edilmiş arabalar: gerçek araç, bagaj, arıza/onarım, az yakıt, iki yandan binme, sürüş, far havuzu, göçük, boya, park uykusu, yakıt verimi, zombi araç içinden geçmez, eski kayıt | 0 dk 36 sn | geçti |
+| `visual` | Görsel regresyon, 14 görüntü (Orta kalite) | 2 dk 49 sn | farklar incelendi, taban yenilendi³ |
 
-² Bu 16 senaryoda değer denetimi (`check`/`[assert]`) yok: yalnız sayfa hatası, çökme ya da bekleme zaman aşımıyla
+¹ Tam koşu iki bölümde yapıldı: ilk arka plan komutu 30 dk zaman sınırına takılıp `host-migration` sonrasında durdu,
+kalan 22 senaryo (düşen ikisiyle birlikte) aynı oyun koduyla yeniden koşuldu. Düşen senaryoların nedenleri:
+- `ai2`: testin yalıtım eksiği. Takipçi botlar zombi denetimlerinin ortasında testin zombileriyle dövüşüyor, ısırılıp
+  kanayan bot inşaat adımında düşebiliyordu. Botlar zombi adımlarında 75 m ötede bekliyor, bot adımlarından önce tam
+  iyileşiyor (`edc311d`); düzeltilmiş senaryo üç yoklamada ve yeniden koşuda geçti. Sonraki bir koşuda şişe denetimi
+  zombinin rastgele doğuş yönü yüzünden düştü (oyuncuya bakarsa sesten önce onu görüp kovalıyor); zombi oyuncuya
+  sırtı dönük doğuyor (`a69e949`), düzeltilmiş senaryo art arda dört koşuda geçti.
+- `carry-mp`: ikinci sekme 150 sn içinde menüye ulaşamadı; o sırada paralel bir bitki karşılaştırma yoklaması da
+  tarayıcı çalıştırıyordu (4 çekirdekte üç tarayıcı). Oyun kodu değişmeden tek başına yeniden koşuldu: geçti.
+- `multiplayer-6`: uzak avatar ilk gördüğü eylemi süresi dolmuşsa bilerek oynatmaz; bu koşuda host karesi ~2 sn
+  sürdü (sahte eşlerin anlık görüntü aralığı 2.071 ms) ve 2,5 sn'lik arama eylemi istemciye ulaştığında bitmiş
+  sayıldı. Test önce kısa bir ısınma eylemi bekliyor (`8ee993e`); yeniden koşuda eylem 1,19 sn ofsetle oynatıldı.
+
+² Bu 15 senaryoda değer denetimi (`check`/`[assert]`) yok: yalnız sayfa hatası, çökme ya da bekleme zaman aşımıyla
 başarısız olabilirler. "Hatasız koştu" davranışın doğru olduğunu kanıtlamaz; bir kısmı (lineup, mobs, regions, living,
-nature) görsel kontrol için ekran görüntüsü üretir. Değer denetimi olan 11 senaryo: ai2, benchmark, carry-mp,
-host-migration, host-migration3, interact, multiplayer-6, physics2, ui-clicks, vehicles2, visual. `motion`
-senaryosunun yamaç (ayak IK'sı) bölümü yalnız günlüğe yazar. Ayrıntı: `docs/DENETIM_NL2.md`.
+nature) görsel kontrol için ekran görüntüsü üretir. Değer denetimi olan 17 senaryo: ai2, benchmark, buildings,
+carry-mp, daynight, fronts, host-migration, host-migration3, interact, multiplayer-6, multiplayer-local, physics2,
+shelters, ui-clicks, vehicles2, vehicles3, visual. `motion` senaryosunun yamaç (ayak IK'sı) bölümü yalnız günlüğe yazar.
 
-¹ Tam koşuda `benchmark` yalnız yeni eklenen bir denetimde düştü: iptalden sonra açılan yeni oyunda fiziğin ilerlemesi
-3 sn içinde bekleniyordu, oysa yazılım GPU'sunda yeni dünyanın ilk kareleri ~7 sn sürüyor (fizik kare döngüsünde
-adımlanır). Denetim "en fazla 3 dk içinde 30 adım" oldu; yeniden koşuda yeni oyun 37 sn'de 30 fizik adımı attı
-(5 kare). Oyun kodu değişmedi.
+³ `visual`: aşağıdaki "Görsel regresyon (1–2 Kasım özellik turu)" bölümü.
 
-Tam koşu: 27 senaryo sırayla, toplam 92 dk (`benchmark` yeniden koşusu hariç); her senaryonun tam çıktısı
-`/tmp/e2e-<ad>.log`. Başarısız senaryonun denetim hataları artık özet satırının altına basılır (CI günlüğünde neden
-görünsün).
+Tam koşu: 32 senaryo sırayla, toplam 74 dk (iki bölüm); her senaryonun tam çıktısı `/tmp/e2e-<ad>.log`.
 
-## Görsel regresyon (Aşama 7 → Aşama 8)
+### Belge doğrulamasının kod düzeltmelerinden sonra (`ad189ef`)
+Park etmiş araçların yol ızgarasına girmesi, araç vekillerinin sıklaşması ve botun kat denetimi zombi, bot, araç ve
+çok oyunculu yollarına dokunduğu için etkilenen 10 senaryo yeni kodla koşuldu: `vehicles2`, `vehicles3`, `ai`,
+`multiplayer-local`, `gameplay`, `shelters`, `buildings`, `multiplayer-6` geçti; `visual` yalnız beklenen orman farkıyla
+düştü; `ai2` şişe denetiminde düştü (zombinin rastgele yönü, yukarıda ¹). Ayrıca bir yoklama: park etmiş 43 kara
+aracının hepsi ızgarada engel; binince hücre boşalıyor, inince yeniden engel; araç merkezinde istenen 8 zombinin hiçbiri
+araç içinde doğmadı; sığınaktaki bot yüzeydeki düşmüş bota yönelmiyor.
+
+## Görsel regresyon (1–2 Kasım özellik turu)
+Aynı test (`tests/e2e/visual.mjs`: Orta kalite, döngü durdurulmuş, saat/hava/rastgelelik ve ortam ışığı sabit, araçlar
+hasarsız) bu turun koduyla Aşama 8 tabanına karşı koşuldu. Ölçüt: kanal farkı 40/255'i aşan piksel oranı; eşik %2,5
+(menü sahnelerinde %4, envanterde %3).
+
+| Görüntü | Fark | Açıklama |
+|---|---|---|
+| 01 ana menü | %0,38 | |
+| 02 karakter seçimi (altı karakter) | %0,18 | |
+| 03a özelleştirme vitrini | %0,13 | |
+| 03b oyun içi yüz yakın plan | %1,28 | karakterin yanında çiçek öbeği (bitki yerleşimi) ve kafa duruşunda birkaç piksellik kayma |
+| 04 başlangıç mahallesi | %0,66 | |
+| 05 şehir merkezi | %0,21 | |
+| 06 orman | **%48,13** | bitki yerleşimi kaydı: sahnenin çevresindeki 120 ağacın 45'i aynı yerde (aşağıda) |
+| 07 bina içi | %0,96 | |
+| 08a araç dışı | %0,76 | arka plandaki çiçek/çimen öbekleri (bitki yerleşimi) |
+| 08b araç içi | %0,08 | direksiyon simidi artık sürücü tarafında görünüyor |
+| 09 zombi yakın plan | %2,43 | başka zombi görünümü seçiliyor (görünüm doğma sırasına bağlı; gündüz zombi doğmadığı için sıra değişti) |
+| 10 gece üs savunması | %0,02 | |
+| 11 envanter | %0 | |
+| 12 çok oyunculu lobi | %0,17 | |
+
+- Orman sahnesi: bitki dağılımı tek bir rastgele sayı dizisiyle taranıyor; orman sığınağının girişinin yerindeki ağaç
+  düşünce tarama sırasında sonra gelen orman ağaçları ve çimenlerin yaklaşık yarısı başka yerde çıkıyor. Aşama 8 koduyla
+  karşılaştırıldı: 3.434 ağacın %87,4'ü, çimenlerin %52,9'u aynı yerde. Oynanışa ve kayıtlara etkisi yok.
+- İlk koşuda bulunan iki sorun düzeltildi: inceleme öncesi kodda (`7a45173`) yüzeyde ortam ışığı 0,85 yerine 0,35'e
+  çekiliyordu (ana menü %3,55, özelleştirme %5,3 farklıydı; düzeltildi, şimdi %0,38 ve %0,13). Görsel test araç
+  sahnelerinde ayrıntı düzeyini kameraya göre yenilemiyordu (gösterge paneli ve kapı kanatları gizli kalıyordu); test
+  düzeltildi (`8ee993e`).
+- Taban (`tests/visual/baseline/`) bu turun görüntüleriyle yenilendi (`VISUAL_BASELINE=1 node tools/e2e.mjs visual`).
+
+## Görsel regresyon (önceki tur: Aşama 7 → Aşama 8)
 Aynı test (`tests/e2e/visual.mjs`: Orta kalite, döngü durdurulmuş, saat/hava/rastgelelik ve ortam ışığı sabit,
 araçlar hasarsız) önce Aşama 7 koduyla (`95f460b`), sonra Aşama 8 koduyla koşuldu. Ölçüt: kanal farkı 40/255'i aşan
 piksel oranı; eşik %2,5 (menü sahnelerinde %4, envanterde %3).

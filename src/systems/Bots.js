@@ -469,7 +469,9 @@ export class Bots {
     if (!direct) {
       if (!b.path || b.repath <= 0 || dist(b.pathGoal.x, b.pathGoal.z, goal.x, goal.z) > 4) {
         b.repath = 1.2;
-        b.path = nav.findPath(b.pos.x, b.pos.z, goal.x, goal.z, { allowBreak: false, maxNodes: 5000 });
+        // yol bulunamazsa (lider teknede/suda, hedefin çevresinde yürünebilir hücre yok) boş yol: arama her karede
+        // yinelenmesin, bot o sırada hedefe doğrudan yürür ve 1,2 sn sonra (ya da hedef 4 m kayınca) yeniden arar
+        b.path = nav.findPath(b.pos.x, b.pos.z, goal.x, goal.z, { allowBreak: false, maxNodes: 5000 }) || [];
         b.pathGoal = { x: goal.x, z: goal.z };
         b.pathI = 1;
       }

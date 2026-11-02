@@ -592,6 +592,20 @@ sığınakların dördünde hazır yatak yok (uyku tulumu gerekir); dolap kapakl
 çekmecelerdir; uyku için oyuncuların yarıdan fazlası gerekir; yanmış ve birkaç dekor araç binilemez; istemci park
 etmiş arabayı itemez; olay zombilerinin ertelenme saatleri (20.35, sürüler 20.55).
 
+### Araç/ızgara düzeltmesinin incelemesi
+Belge doğrulamasının kod düzeltmeleri (`ad189ef`) iki inceleyiciye (doğruluk, oyun davranışı/başarım) verildi; dört aday
+bulgunun hiçbiri bu değişikliğin getirdiği bir gerileme çıkmadı, ama ikisi eskiden beri var olan gerçek sorunlardı ve
+düzeltildi (`eada2fb`, yoklamayla eski ve yeni kod karşılaştırıldı):
+- Mermi ışını kameradan çıktığı ve kamera araçların içinden geçebildiği için sırtını park etmiş arabaya veren oyuncunun
+  atışları arkadaki arabaya takılıyordu. Dünya engelleri artık oyuncunun önünden itibaren sayılıyor. Aynı araba, 5
+  atış: araba arkadayken eski kod 0, yeni kod 102 hasar; araba öndeyken (siper) ikisinde de 0.
+- Ulaşılamayan hedefe giden zombi (park etmiş araçlarla kapanmış alan, duvarla çevrili bahçe) 6000 düğümlük yol
+  aramasını her karede yineliyor, kare başına 3 aramalık bütçeyi öbür zombilerden çalıyordu. Kısmi yol bitince 0,8 sn
+  bekleniyor: göl ortasına giden zombi 3 sn'de eski kodda 180, yeni kodda 3 arama; ulaşılabilir hedefe ilerleme aynı.
+  Botlarda da bulunamayan yol her karede yeniden aranıyordu; o da düzeltildi.
+- Kalan ikisi: botların araç koltuğu kaydı (eski sorun; `KNOWN_ISSUES.md`'ye yazıldı) ve yol ızgarasında araç
+  köşelerinin en ucu (araç başına ortalama bir 0,5 m hücre, neredeyse tamamı fizik gövdesinin dışında; ihmal edildi).
+
 ### Test sonuçları (bu turun son kodu)
 Tam regresyon (32 senaryo, sırayla) `6c1fe8b` üzerinde koşuyor; sonuçlar bu alt bölüme işlenecek. Şimdiye kadar:
 birim testleri 47/47; değişen sistemlere dokunan `daynight`, `shelters`, `ai`, `buildings` hatasız. `ai2` testin yalıtım

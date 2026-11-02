@@ -337,6 +337,13 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   değiştirince ya da doluluk değişince `NavGrid.rebuildArea` eski + yeni alanı yeniden çizer (park etmiş araç ızgarada
   engel, zombi içinde doğmaz; sürülen araç ızgarada yok). `dispose` Rapier araç denetleyicisini ve vekilleri kaldırır.
   Ağ protokolü 6.
+- **Atış ve yol araması:** mermi ışını kameradan çıkar (`Combat.fire` → `raycastTargets(o, d, range, near)`); dünya
+  engelleri oyuncunun ışın üzerindeki izdüşümünün 0,5 m önünden itibaren sayılır (kamera araçların ve ağaçların
+  içinden geçebildiği için arkadaki araç/ağaç atışı kesmesin). Zombi yol araması (`Zombies.navigate`): `findPath`
+  ulaşılamayan hedefte en yakın noktaya kısmi yol verir (`pathPartial`); kısmi yol bitince ya da yol bulunamayınca
+  0,8 sn (`noPathT`) beklenir, ulaşılabilir hedefin yolu bitince hemen yeniden aranır (kare başına 3 aramalık bütçe
+  ulaşılamayan hedeflere harcanmasın). Botlarda (`Bots.moveTo`) bulunamayan yol boş dizi olarak saklanır ve 1,2 sn
+  sonra ya da hedef 4 m kayınca yeniden aranır.
 - **Göç ve uyku:** yeni host `Loot.users/inUse`'u temizler (açık kalmış dolaplar kapanır), zombilerin gece/gündüz
   durumunu (`_wasNight`) devralır, gündüzse `dawn()` ile toprağa döndürür; ertelenmiş olay planı gündüz ateşlenmez.
   Uyku hızı oy değişince ve uyurken alacakaranlık/şafak dönünce (`_sleepNight`) yeniden hesaplanır; hasar uyandırır
