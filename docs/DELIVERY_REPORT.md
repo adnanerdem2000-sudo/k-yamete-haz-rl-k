@@ -485,7 +485,9 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
   sönmemesi 1 Kasım özellik turunda düzeltildi, §11.)
 - 1 Kasım özellik turunun sınırlamaları (§11 ve `KNOWN_ISSUES.md`): kulelerin yalnız zemin katı girilebilir; dolap
   kapakları görseldir (çarpışma almaz); yanmış arabalar dekor; sığınaklara iniş kararmalı ışınlama; botlar yalnız
-  "Takip et" emrindeyken sığınağa iner.
+  "Takip et" emrindeyken sığınağa iner ve kapı açmaz; sığınakların dördünde hazır yatak yok (uyku tulumu gerekir);
+  park etmiş araç siper olarak tam yükseklikte (kaputun üstünden ateş edilemez); botların araç koltuğu kaydı ağla
+  eşitlenmez; bitki yerleşimi Aşama 8'e göre kısmen değişti.
 - Gerçek internet üzerinden TURN bağlantısı, gerçek ekran kartında performans ve hoparlörden ses test edilemedi (§6).
 - Lobide host düşerse göç yok (oda kapanır); fizik nesnelerinin ara konumları istemcilerde yerel.
 - Çok kalabalık sürülerde (40+) zombilerin kısa takılması ölçülmedi; yol bulma bütçesi sınırlı.
@@ -607,9 +609,22 @@ düzeltildi (`eada2fb`, yoklamayla eski ve yeni kod karşılaştırıldı):
   köşelerinin en ucu (araç başına ortalama bir 0,5 m hücre, neredeyse tamamı fizik gövdesinin dışında; ihmal edildi).
 
 ### Test sonuçları (bu turun son kodu)
-Tam regresyon (32 senaryo, sırayla) `6c1fe8b` üzerinde koşuyor; sonuçlar bu alt bölüme işlenecek. Şimdiye kadar:
-birim testleri 47/47; değişen sistemlere dokunan `daynight`, `shelters`, `ai`, `buildings` hatasız. `ai2` testin yalıtım
-eksiği yüzünden düştü (takipçi botlar testin zombileriyle dövüşüyordu), `edc311d`'de düzeltildi ve üç koşuda geçti.
+- **Birim testleri:** 47/47.
+- **Uçtan uca tam koşu** (32 senaryo, sırayla, yazılım GPU'su, 74 dk; oyun kodu `6c1fe8b`): 30/32. Düşen
+  `multiplayer-6` test kırılganlığıydı (host karesi ~2 sn sürünce uzak eylem istemciye ulaştığında bitmiş sayılıyordu);
+  test düzeltildi (`8ee993e`), yeniden koşuda geçti. `visual` beklenen farklarla düştü (aşağıda), taban yenilendi ve
+  yeniden koşuda bütün görüntülerde fark %0–0,06. İlk bölümde düşen `ai2` (testin yalıtım eksiği, `edc311d`) ve
+  `carry-mp` (aynı anda koşan bir yoklamanın yüküyle zaman aşımı) yeniden koşuda geçti.
+- **Sonraki kod düzeltmelerinden sonra:** `ad189ef` (araçlar ızgarada, vekiller, bot kat denetimi) için etkilenen 10
+  senaryo 8/10 (`visual` yalnız beklenen orman farkı; `ai2` zombinin rastgele doğuş yönü yüzünden, test düzeltildi
+  `a69e949`); `eada2fb` (atış, zombi yol araması) için 7 senaryo 7/7; `ae28a16` (bot yol araması) için `ai2` ve
+  `shelters` 2/2. `ai2` düzeltilmiş hâliyle art arda beş koşuda geçti.
+- **Görsel regresyon:** Aşama 8 tabanına göre 13 görüntüde fark %0–2,43, orman sahnesi %48,13 (bitki yerleşimi kaydı);
+  görüntü başına neden `TEST_REPORT.md`'de.
+- **Denetimsiz senaryolar:** 32 senaryonun 15'inde değer denetimi yok; bunlar yalnız çökme ya da zaman aşımıyla
+  başarısız olabilir.
+- **CI ve yayın:** her gönderimde birim + `smoke-menu` + `ui-clicks` (GitHub Actions) yeşil; GitHub Pages yayını
+  başarılı. Gerçek ekran kartı, gerçek internet üzerinden çok oyunculu ve hoparlör testi bu turda da yapılamadı (§6).
 
 ### Bu turun sınırlamaları (ayrıntı `KNOWN_ISSUES.md`)
 - Kulelerin yalnız zemin katı girilebilir; üst katlar dış kabuk.

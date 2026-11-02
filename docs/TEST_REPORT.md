@@ -2,7 +2,8 @@
 
 Tarih: 2 Kasım 2026 · Ortam: Linux (4 çekirdek), Node 22, başsız Chromium (Playwright 1.63) + SwiftShader yazılım
 GPU'su · Tam koşu oyun kodu `6c1fe8b` (özellikler + bağımsız inceleme düzeltmeleri); belge doğrulamasının kod
-düzeltmeleri (`ad189ef`) etkilenen 10 senaryoyla ayrıca koşuldu; test düzeltmeleri `edc311d`, `8ee993e`, `a69e949`
+düzeltmeleri (`ad189ef`) ve incelemesinin düzeltmeleri (`eada2fb`, `ae28a16`) etkilenen senaryolarla ayrıca koşuldu;
+test düzeltmeleri `edc311d`, `8ee993e`, `a69e949`
 
 Bu rapordaki bütün sayılar son koşulardan alınmıştır. Yazılım GPU'sunda ölçülen kare hızları gerçek ekran kartı
 performansı **değildir**; yalnız kalite seviyelerinin yükünü (çizim çağrısı, üçgen, ek geçişler) karşılaştırmak için
@@ -12,7 +13,7 @@ kullanılır.
 | Katman | Kapsam | Sonuç |
 |---|---|---|
 | Birim testleri (`npm test`) | 47 test, 9 dosya | 47/47 |
-| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 32 senaryo (17'sinde değer denetimi var; bu turda 5 yeni senaryo: `buildings`, `daynight`, `fronts`, `shelters`, `vehicles3`) | Tam koşu 30/32 (74 dk); düşen `multiplayer-6` test kırılganlığıydı, düzeltilip geçti; `visual` beklenen farklar, taban yenilendi. Belge doğrulamasının kod düzeltmelerinden sonra etkilenen 10 senaryo: 8/10, `ai2`'nin şişe denetimi düzeltildi ve düzeltilmiş senaryo art arda dört koşuda geçti; 15 senaryo denetimsiz² |
+| Uçtan uca (`node tools/e2e.mjs`, sırayla) | 32 senaryo (17'sinde değer denetimi var; bu turda 5 yeni senaryo: `buildings`, `daynight`, `fronts`, `shelters`, `vehicles3`) | Tam koşu 30/32 (74 dk); düşen `multiplayer-6` test kırılganlığıydı, düzeltilip geçti; `visual` beklenen farklar, taban yenilendi. Sonraki kod düzeltmelerinden sonra etkilenen senaryolar: 8/10 (`ad189ef`; `ai2`'nin şişe denetimi düzeltildi, düzeltilmiş senaryo art arda beş koşuda geçti), 7/7 (`eada2fb`), 2/2 (`ae28a16`); 15 senaryo denetimsiz² |
 | Görsel regresyon (`visual`) | istemdeki 12 sahne, 14 görüntü, Orta kalite | Aşama 8 tabanına göre 13 görüntüde fark %0–2,43; orman sahnesi %48,13 (bitki yerleşimi kaydı, aşağıda); taban yenilendi |
 | CI (`.github/workflows/ci.yml`) | her gönderimde birim + `smoke-menu` + `ui-clicks` | bu turun gönderimlerinde yeşil (GitHub Actions); Pages yayını başarılı |
 
@@ -71,7 +72,7 @@ kalan 22 senaryo (düşen ikisiyle birlikte) aynı oyun koduyla yeniden koşuldu
   kanayan bot inşaat adımında düşebiliyordu. Botlar zombi adımlarında 75 m ötede bekliyor, bot adımlarından önce tam
   iyileşiyor (`edc311d`); düzeltilmiş senaryo üç yoklamada ve yeniden koşuda geçti. Sonraki bir koşuda şişe denetimi
   zombinin rastgele doğuş yönü yüzünden düştü (oyuncuya bakarsa sesten önce onu görüp kovalıyor); zombi oyuncuya
-  sırtı dönük doğuyor (`a69e949`), düzeltilmiş senaryo art arda dört koşuda geçti.
+  sırtı dönük doğuyor (`a69e949`), düzeltilmiş senaryo art arda beş koşuda geçti.
 - `carry-mp`: ikinci sekme 150 sn içinde menüye ulaşamadı; o sırada paralel bir bitki karşılaştırma yoklaması da
   tarayıcı çalıştırıyordu (4 çekirdekte üç tarayıcı). Oyun kodu değişmeden tek başına yeniden koşuldu: geçti.
 - `multiplayer-6`: uzak avatar ilk gördüğü eylemi süresi dolmuşsa bilerek oynatmaz; bu koşuda host karesi ~2 sn
@@ -88,13 +89,19 @@ shelters, ui-clicks, vehicles2, vehicles3, visual. `motion` senaryosunun yamaç 
 
 Tam koşu: 32 senaryo sırayla, toplam 74 dk (iki bölüm); her senaryonun tam çıktısı `/tmp/e2e-<ad>.log`.
 
-### Belge doğrulamasının kod düzeltmelerinden sonra (`ad189ef`)
+### Tam koşudan sonraki kod düzeltmeleri
 Park etmiş araçların yol ızgarasına girmesi, araç vekillerinin sıklaşması ve botun kat denetimi zombi, bot, araç ve
 çok oyunculu yollarına dokunduğu için etkilenen 10 senaryo yeni kodla koşuldu: `vehicles2`, `vehicles3`, `ai`,
 `multiplayer-local`, `gameplay`, `shelters`, `buildings`, `multiplayer-6` geçti; `visual` yalnız beklenen orman farkıyla
 düştü; `ai2` şişe denetiminde düştü (zombinin rastgele yönü, yukarıda ¹). Ayrıca bir yoklama: park etmiş 43 kara
 aracının hepsi ızgarada engel; binince hücre boşalıyor, inince yeniden engel; araç merkezinde istenen 8 zombinin hiçbiri
 araç içinde doğmadı; sığınaktaki bot yüzeydeki düşmüş bota yönelmiyor.
+
+`eada2fb` (arkadaki park etmiş araç atışı kesmiyor; ulaşılamayan hedefte zombi yol aramasını her karede yinelemiyor)
+için `ai`, `ai2`, `daynight`, `gameplay`, `story`, `vehicles3`, `shelters`: 7/7. Yoklamalar eski kodla karşılaştırıldı:
+araba oyuncunun arkasındayken 5 atış eski kodda 0, yeni kodda 102 hasar (araba öndeyken ikisinde de 0, siper çalışıyor);
+göl ortasına giden zombi 3 sn'de eski kodda 180, yeni kodda 3 yol araması (ulaşılabilir hedefe ilerleme aynı).
+`ae28a16` (botta bulunamayan yol her karede aranmıyor) için `ai2` ve `shelters`: 2/2.
 
 ## Görsel regresyon (1–2 Kasım özellik turu)
 Aynı test (`tests/e2e/visual.mjs`: Orta kalite, döngü durdurulmuş, saat/hava/rastgelelik ve ortam ışığı sabit, araçlar
