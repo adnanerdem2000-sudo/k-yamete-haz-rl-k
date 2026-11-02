@@ -12,7 +12,7 @@ export class Shelters {
     this.byId = new Map(this.list.map((sh) => [sh.def.id, sh]));
     this.state = new Map(this.list.map((sh) => [sh.def.id, { locked: sh.def.lock || 0, power: false, seen: false }]));
     // sığınak ışıkları ortam ışık havuzuna (Environment.extraLights; bölgesi olan ışık yalnız o bölgedeyken seçilir)
-    for (const sh of this.list) for (const l of sh.lights) { l.on = l.emergency ? true : false; session.env.extraLights.push(l); }
+    for (const sh of this.list) { for (const l of sh.lights) { l.on = l.emergency ? true : false; session.env.extraLights.push(l); } if (sh.mainMat) sh.mainMat.emissiveIntensity = 0; }
     const S = session;
     S.on('shelter', (p, from) => {
       const st = this.state.get(p.id);
@@ -34,6 +34,7 @@ export class Shelters {
     const sh = this.byId.get(id), st = this.state.get(id);
     if (!sh || !st) return;
     for (const l of sh.lights) if (l.main) l.on = st.power;
+    if (sh.mainMat) sh.mainMat.emissiveIntensity = st.power ? 1 : 0; // lamba gövdeleri de yanar/söner
   }
 
   /** Interact etiketleri */

@@ -407,6 +407,7 @@ export class Interact {
     const tm = this.timed(T.search, skill);
     S.audio.play('door', { at: c, vol: 0.35, rate: 1.5 });
     this.startHold(`${c.label} aranıyor…`, tm.real, () => {
+      this.lastSearch = { id: c.id, t: S.t }; // Fronts: depo paneli açılana dek kapak açık kalsın
       S.act('search_done', { id: c.id });
       if (tm.extra) S.time.advance(tm.extra);
       S.act('noise', { x: c.x, z: c.z, r: 8, src: 'search' });

@@ -137,10 +137,14 @@ export function buildBuilding(spec, ctx) {
     const ops = openings[side].sort((a, b) => a.s - b.s);
     const sg = sideGeom(side, 0, w, d, EXT_T);
     for (const op of ops) (op.door ? doorOps : winOps).push({ axis: sg.axis, c: sg.c, s: op.s, e: op.e, exterior: true });
-    buildWall(geo, side, sideLen[side], ops, { w, d, H, F, t: EXT_T, ext: true, extKey, extCol, intCol, trimCol }, (box, solidFull) => {
+    buildWall(geo, side, sideLen[side], ops, { w, d, H, F, t: EXT_T, ext: true, extKey, extCol, intCol, trimCol }, (box, solidFull, doorEdge) => {
       if (!solidFull) return;
       const wb = fr.box(box.x0, box.z0, box.x1, box.z1);
-      B.colliders.push(physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: box.y1 + F < 1.2 }));
+      const col = physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: box.y1 + F < 1.2 });
+      // kapı pervazı duvarı yol ızgarasında dolgu payı almaz: 1 m'lik kapıda 0,22 m'lik pay kapı hücresini de engel
+      // yapıyordu (zombiler kapıyı zorlamak yerine hep pencereye yöneliyor, botlar kapıdan yol bulamıyordu)
+      if (doorEdge) col.navPad = 0;
+      B.colliders.push(col);
     });
     for (const op of ops) {
       if (op.door) { createDoor(B, fr, side, op, tpl, ctx, true); addDoorstep(B, fr, side, op, tpl, geo, ctx, baseY, F); }
@@ -202,7 +206,7 @@ export function buildBuilding(spec, ctx) {
 /** Oda bölme duvarları, aralarındaki kapı/kemer açıklıkları ve iç kapılar (prosedürel ve kit kabuklu binalar ortak) */
 function interiorWalls(B, fr, tpl, geo, ctx, doorOps, { baseY, F, H, intCol, trimCol }) {
   const physics = ctx.physics;
-  const segs = interiorSegments(tpl);
+  const segs = interiorSegments(tpl, tpl.kit ? 0 : EXT_T / 2);
   const links = tpl.links || [];
   for (const seg of segs) {
     const ops = [];
@@ -219,9 +223,11 @@ function interiorWalls(B, fr, tpl, geo, ctx, doorOps, { baseY, F, H, intCol, tri
     }
     ops.sort((a, b) => a.s - b.s);
     for (const op of ops) doorOps.push({ axis: seg.axis, c: seg.c, s: op.s, e: op.e, exterior: false });
-    buildInteriorWall(geo, seg, ops, { H, F, intCol, trimCol }, (box) => {
+    buildInteriorWall(geo, seg, ops, { H, F, intCol, trimCol }, (box, doorEdge) => {
       const wb = fr.box(box.x0, box.z0, box.x1, box.z1);
-      B.colliders.push(physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: false }));
+      const col = physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY + F + box.y0, baseY + F + box.y1, { kind: 'wall', owner: B, walkable: false });
+      if (doorEdge) col.navPad = 0; // iç kapı/kemer pervazı: odalar arası geçit yol ızgarasında açık kalsın
+      B.colliders.push(col);
     });
     for (const op of ops) if (op.door) createInteriorDoor(B, fr, seg, op, ctx);
   }
@@ -313,9 +319,28 @@ function buildKitBuilding(spec, tpl, ctx, rng) {
   wall(wbox(ix1, ez0, ex1, ez1)); // sağ
   wall(wbox(ix0, ez0, ix1, iz0)); // arka
   const dx0 = K.door - 0.5, dx1 = K.door + 0.5;
-  wall(wbox(ix0, iz1, dx0, ez1)); // ön, kapının solu
-  wall(wbox(dx1, iz1, ix1, ez1)); // ön, kapının sağı
+  // ön duvarın kapı yanı parçaları: yol ızgarasında dolgu payı yok (0,22 m pay 1 m'lik boşlukta tam hücre bırakmıyordu,
+  // zombiler ve botlar kuleye yol bulamıyordu)
+  wall(wbox(ix0, iz1, dx0, ez1)); B.colliders[B.colliders.length - 1].navPad = 0; // ön, kapının solu
+  wall(wbox(dx1, iz1, ix1, ez1)); B.colliders[B.colliders.length - 1].navPad = 0; // ön, kapının sağı
   wall(wbox(dx0, iz1, dx1, ez1), baseY + K.floor + K.doorTop, yTop); // kapı üstü (lento)
+  // köşe pilastrları/kaideleri: model dış yüzeyden (K.ext) 0,2–0,55 m taşar (ölçü K.bb); köşelerde çarpıştırıcı yoksa
+  // oyuncu, zombi ve araç pilastrın içine gömülüyordu. Kapı (önün ortası) bu bölgelerin dışında kalır.
+  {
+    const [bx0, bz0, bx1, bz1] = K.bb, PW = 0.75, pTop = baseY + Math.min(K.h, 3.6);
+    for (const [cx0, cx1] of [[bx0, ex0 + PW], [ex1 - PW, bx1]]) {
+      if (bz1 > ez1 + 0.05) wall(wbox(cx0, ez1, cx1, bz1), y0, pTop); // ön köşeler
+      if (bz0 < ez0 - 0.05) wall(wbox(cx0, bz0, cx1, ez0), y0, pTop); // arka köşeler
+    }
+    for (const [cx0, cx1] of [[bx0, ex0], [ex1, bx1]]) {
+      if (cx1 - cx0 < 0.05) continue;
+      wall(wbox(cx0, ez1 - PW, cx1, ez1), y0, pTop); // yan yüzün ön köşesi
+      wall(wbox(cx0, ez0, cx1, ez0 + PW), y0, pTop); // yan yüzün arka köşesi
+    }
+  }
+  // eşik: duvar kalınlığı boyunca kapı boşluğunda zemin (iç zemin duvarın iç yüzünde biter; küçük kulede zemin 1 m yüksekte
+  // olduğu için tek noktadan zemin arayan zombi/NPC/bot eşikteki 17 cm'lik boşluğa düşüp takılıyordu)
+  { const th = wbox(dx0, iz1 - 0.05, dx1, ez1 + 0.05); B.colliders.push(physics.addFloor(th.minX, th.minZ, th.maxX, th.maxZ, B.floorY, { owner: B })); }
   // kapı önü basamakları (küçük kulede zemin 1 m yüksekte): yürünebilir, yol ızgarasını kapatmaz
   for (const [z0, z1, top] of K.steps || []) {
     const b = wbox(dx0 - 0.5, z0, dx1 + 0.5, z1);
@@ -378,14 +403,16 @@ function sideGeom(side, len, w, d, t) {
 /** Duvarı açıklıklarla parçalara ayırıp kutular üretir */
 function wallPieces(from, to, ops, H) {
   const pieces = [];
-  let cur = from;
+  let cur = from, prevDoor = false;
   for (const op of ops) {
-    if (op.s > cur) pieces.push({ a: cur, b: op.s, y0: 0, y1: H, full: true });
+    // doorEdge: yerden açılan geçide (kapı ya da kemer) bitişik tam boy parça (yol ızgarasında dolgu payı almaz)
+    const pass = op.y0 <= 0.01;
+    if (op.s > cur) pieces.push({ a: cur, b: op.s, y0: 0, y1: H, full: true, doorEdge: prevDoor || pass });
     if (op.y0 > 0.01) pieces.push({ a: op.s, b: op.e, y0: 0, y1: op.y0, full: false, sill: true });
     if (op.y1 < H - 0.01) pieces.push({ a: op.s, b: op.e, y0: op.y1, y1: H, full: false });
-    cur = Math.max(cur, op.e);
+    cur = Math.max(cur, op.e); prevDoor = pass;
   }
-  if (cur < to) pieces.push({ a: cur, b: to, y0: 0, y1: H, full: true });
+  if (cur < to) pieces.push({ a: cur, b: to, y0: 0, y1: H, full: true, doorEdge: prevDoor });
   return pieces;
 }
 
@@ -404,11 +431,11 @@ function buildWall(geo, side, len, ops, o, onCollider) {
     if (g.axis === 'x') {
       for (const [a, b, f] of ys) geo.box(o.extKey, p.a, a, outerMin, p.b, b, outerMax, o.extCol, f);
       geo.box('interior', p.a, y0, innerMin, p.b, y1, innerMax, o.intCol);
-      onCollider({ x0: p.a, x1: p.b, z0: g.c - t / 2, z1: g.c + t / 2, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01);
+      onCollider({ x0: p.a, x1: p.b, z0: g.c - t / 2, z1: g.c + t / 2, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01, p.doorEdge);
     } else {
       for (const [a, b, f] of ys) geo.box(o.extKey, outerMin, a, p.a, outerMax, b, p.b, o.extCol, f);
       geo.box('interior', innerMin, y0, p.a, innerMax, y1, p.b, o.intCol);
-      onCollider({ x0: g.c - t / 2, x1: g.c + t / 2, z0: p.a, z1: p.b, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01);
+      onCollider({ x0: g.c - t / 2, x1: g.c + t / 2, z0: p.a, z1: p.b, y0: p.y0, y1: p.y1 }, p.full || p.y0 > 0.01, p.doorEdge);
     }
   }
   // köşe pervazları ve saçak bandı
@@ -443,8 +470,8 @@ function buildInteriorWall(geo, seg, ops, o, onCollider) {
     if (seg.axis === 'x') geo.box('interior', p.a, y0, seg.c - t / 2, p.b, y1, seg.c + t / 2, o.intCol);
     else geo.box('interior', seg.c - t / 2, y0, p.a, seg.c + t / 2, y1, p.b, o.intCol);
     if (p.full || p.y0 > 0.01) {
-      if (seg.axis === 'x') onCollider({ x0: p.a, x1: p.b, z0: seg.c - t / 2, z1: seg.c + t / 2, y0: p.y0, y1: p.y1 });
-      else onCollider({ x0: seg.c - t / 2, x1: seg.c + t / 2, z0: p.a, z1: p.b, y0: p.y0, y1: p.y1 });
+      if (seg.axis === 'x') onCollider({ x0: p.a, x1: p.b, z0: seg.c - t / 2, z1: seg.c + t / 2, y0: p.y0, y1: p.y1 }, p.doorEdge);
+      else onCollider({ x0: seg.c - t / 2, x1: seg.c + t / 2, z0: p.a, z1: p.b, y0: p.y0, y1: p.y1 }, p.doorEdge);
     }
   }
   for (const op of ops) {
@@ -463,7 +490,7 @@ function buildInteriorWall(geo, seg, ops, o, onCollider) {
 }
 
 /** Odaların ortak iç kenarlarını birleştirilmiş duvar parçalarına çevir */
-function interiorSegments(tpl) {
+function interiorSegments(tpl, inset = EXT_T / 2) {
   const { w, d } = tpl;
   const map = new Map();
   const add = (axis, c, s, e) => {
@@ -488,10 +515,11 @@ function interiorSegments(tpl) {
     }
     if (cur) out.push({ axis, c, s: cur[0], e: cur[1] });
   }
-  // dış duvarlarla çakışmayı önlemek için uçları kırp
+  // dış duvarlarla çakışmayı önlemek için uçları kırp (prosedürel binada şablon kenarı duvarın ortası; kit kabukta
+  // şablon kenarı modelin iç duvar yüzü: kırpılmaz, yoksa bölme ile kabuk arasında boydan boya yarık kalıyordu)
   for (const s of out) {
     const lim = s.axis === 'x' ? w : d;
-    s.s = Math.max(s.s, EXT_T / 2); s.e = Math.min(s.e, lim - EXT_T / 2);
+    s.s = Math.max(s.s, inset); s.e = Math.min(s.e, lim - inset);
   }
   return out.filter((s) => s.e - s.s > 0.1);
 }

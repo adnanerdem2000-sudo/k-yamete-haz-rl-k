@@ -643,24 +643,30 @@ const ROOMS = {
       const z0 = r.z0 + 1.0 + k * ((D - 2.6) / 6), z1 = z0 + (D - 2.6) / 6 - 0.08;
       c.geo.box('decor', r.x0 + 0.5, c.F, z0, r.x1 - 0.5, c.F + 0.015, z1, k % 2 ? '#7b1e24' : '#8e2a2e', 4);
     }
-    const mx = (r.x0 + r.x1) / 2;
-    c.geo.box('wood', mx - 0.9, c.F, r.z0 + 0.02, mx + 0.9, c.F + 2.4, r.z0 + 0.12, '#e8dcc2'); // mihrap nişi çerçevesi
-    c.geo.box('decor', mx - 0.65, c.F + 0.1, r.z0 + 0.12, mx + 0.65, c.F + 2.1, r.z0 + 0.14, '#2f6f5e', 32 | 16);
-    protoItem(c, P, 1.0, 2.2, 2.4, (x, z, rot) => { // minber (basamaklı ahşap kürsü)
-      for (let k = 0; k < 4; k++) pbox(c, x, z, rot, -0.5, 0, -1.1 + k * 0.5, 0.5, 0.45 + k * 0.45, 1.1, 'wood', '#6e4a2e');
-      pbox(c, x, z, rot, -0.55, 0, -1.15, -0.45, 2.4, 1.15, 'wood', '#5d3f26');
-      pbox(c, x, z, rot, 0.45, 0, -1.15, 0.55, 2.4, 1.15, 'wood', '#5d3f26');
-    }, { prefer: ['B'] });
+    const mx = (r.x0 + r.x1) / 2, wi = r.z0 + 0.125; // kıble duvarının iç yüzü (dış duvar şablon kenarında ortalı)
+    c.geo.box('wood', mx - 0.9, c.F, wi, mx + 0.9, c.F + 2.4, wi + 0.1, '#e8dcc2'); // mihrap nişi çerçevesi
+    c.geo.box('decor', mx - 0.65, c.F + 0.1, wi + 0.1, mx + 0.65, c.F + 2.1, wi + 0.12, '#2f6f5e', 32 | 16);
+    // minber mihrabın sağında (cemaatin baktığı yönden), basamakları kıble duvarına doğru yükselir; duvar aralığı ayrılır
+    {
+      const x = mx + 1.75, z = wi + 0.06 + 1.15;
+      for (let k = 0; k < 4; k++) pbox(c, x, z, 0, -0.5, 0, -1.1 + k * 0.5, 0.5, 0.45 + k * 0.45, 1.1, 'wood', '#6e4a2e');
+      pbox(c, x, z, 0, -0.55, 0, -1.15, -0.45, 2.4, 1.15, 'wood', '#5d3f26');
+      pbox(c, x, z, 0, 0.45, 0, -1.15, 0.55, 2.4, 1.15, 'wood', '#5d3f26');
+      collide(c, x, z, 1.1, 2.3, 0, 2.4);
+      const B = P.sides.find((s) => s.n === 'B');
+      if (B) B.used.push([mx - 0.95, mx + 0.95], [x - 0.6, x + 0.6]);
+    }
     for (let i = 0; i < 2; i++) {
       protoItem(c, P, 1.2, 0.4, 1.6, (x, z, rot) => {
         pbox(c, x, z, rot, -0.6, 0, -0.2, 0.6, 1.6, 0.2, 'wood', '#7a5532');
         for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.55, 0.35 + k * 0.45, -0.15, 0.55, 0.62 + k * 0.45, 0.18, 'decor', ['#1f4e79', '#7b241c', '#145a32'][k]);
       }, { container: 'bookshelf', label: 'Kitaplık', prefer: ['L', 'R'] });
     }
-    protoItem(c, P, 1.8, 0.4, 1.1, (x, z, rot) => {
-      pbox(c, x, z, rot, -0.9, 0, -0.2, 0.9, 1.1, 0.2, 'wood', '#8b6a45');
-      for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.85, 0.1 + k * 0.33, 0.12, 0.85, 0.13 + k * 0.33, 0.21, 'wood', '#5d4630');
-    }, { container: 'locker', label: 'Ayakkabılık', prefer: ['F'] });
+    // ayakkabılık (0,95 m: alçak eşya sayılır, pencere altına sığar): kapı duvarında, yer yoksa yan duvarda
+    protoItem(c, P, 1.6, 0.4, 0.95, (x, z, rot) => {
+      pbox(c, x, z, rot, -0.8, 0, -0.2, 0.8, 0.95, 0.2, 'wood', '#8b6a45');
+      for (let k = 0; k < 3; k++) pbox(c, x, z, rot, -0.75, 0.1 + k * 0.28, 0.12, 0.75, 0.13 + k * 0.28, 0.21, 'wood', '#5d4630');
+    }, { container: 'locker', label: 'Ayakkabılık', prefer: ['F', 'L', 'R'] });
   },
   corridor() {},
 };

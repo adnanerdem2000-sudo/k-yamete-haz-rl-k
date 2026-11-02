@@ -104,7 +104,7 @@ export class Bots {
     this.list = [];
     this.rng = new RNG(session.seed + ':bots');
     const S = session;
-    S.on('bot_order', (p) => { const b = this.byId(p.id); if (b && b.order !== undefined) { b.order = p.order; b.anchor = p.order === 'stay' || p.order === 'loot' || p.order === 'build' ? { x: b.pos.x, z: b.pos.z } : null; b.lootDone = new Set(); b.lootTarget = null; b.say(p.order); S.emit({ k: 'bot_order_set', id: b.id, order: p.order }); } });
+    S.on('bot_order', (p) => { const b = this.byId(p.id); if (b && b.order !== undefined) { this.releaseCont(b); b.order = p.order; b.anchor = p.order === 'stay' || p.order === 'loot' || p.order === 'build' ? { x: b.pos.x, z: b.pos.z } : null; b.lootDone = new Set(); b.lootTarget = null; b.say(p.order); S.emit({ k: 'bot_order_set', id: b.id, order: p.order }); } });
     S.onEvt('bot_order_set', (e) => { const b = this.byId(e.id); if (b) b.order = e.order; const px = this.proxies && this.proxies.get(e.id); if (px) px.order = e.order; });
     S.onEvt('bot_fx', (e) => this.onFx(e));
   }
@@ -189,6 +189,7 @@ export class Bots {
     b.talkT -= dt;
     // ---- yerde
     if (st.downed) {
+      this.releaseCont(b);
       b.mode = 'downed'; b.speed = 0;
       if (b.carriedBy) {
         const c = b.carriedBy === S.localId ? { pos: S.local.pos, yaw: S.local.yaw } : (() => { const r = S.players.get(b.carriedBy); return r ? { pos: r.pos, yaw: r.anim ? r.anim.yaw || 0 : 0 } : null; })();
@@ -230,7 +231,7 @@ export class Bots {
       }
       if (b.vehicleId) {
         const v = S.vehicles.byId(b.vehicleId);
-        if (v) { b.pos.copy(v.pos); b.mode = 'seat'; b.speed = 0; v.seatPlayer(b.avatar, b.seat); b.avatar.update(dt, { mode: 'seat', speed: 0, yaw: v.yaw }); return; }
+        if (v) { this.releaseCont(b); b.pos.copy(v.pos); b.mode = 'seat'; b.speed = 0; v.seatPlayer(b.avatar, b.seat); b.avatar.update(dt, { mode: 'seat', speed: 0, yaw: v.yaw }); return; }
       }
     } else if (b.vehicleId) {
       const v = S.vehicles.byId(b.vehicleId);
@@ -243,7 +244,7 @@ export class Bots {
       b.vehicleId = null; b.mode = 'ground';
     }
     // ---- hedef seçimi
-    let goal = null, run = false, attack = null;
+    let goal = null, run = false, attack = null, searching = false;
     // 1) yere düşmüş arkadaş
     const downed = this.findDowned(b);
     if (downed) {
@@ -295,6 +296,7 @@ export class Bots {
           else {
             // arama boyunca dolap kapağı/çekmece herkeste açık görünsün
             if (b.usingCont !== c.id) { if (b.usingCont) S.applyAction('cont_use', { id: b.usingCont, on: false }, b.id); b.usingCont = c.id; S.applyAction('cont_use', { id: c.id, on: true }, b.id); }
+            searching = true;
             b.lootT = (b.lootT || 0) + dt; b.speed = 0; b.yaw = Math.atan2(c.x - b.pos.x, c.z - b.pos.z); if (b.lootT > 2.5) { b.lootT = 0; this.botLoot(b, c); }
           }
         } else if (b.anchor) fp = b.anchor;
@@ -317,6 +319,8 @@ export class Bots {
         if (fp && dist(attack.x, attack.z, fp.x, fp.z) > 26) { goal = fp; attack = null; }
       } else if (fp && dist(b.pos.x, b.pos.z, fp.x, fp.z) > 1.3) goal = fp;
     }
+    // arama yarıda kaldıysa (savaş, başka hedef, uzaklaşma, hedef bulunamadı) dolap/çekmece herkeste kapansın
+    if (b.usingCont && !searching) this.releaseCont(b);
     // ---- saldırı
     b.aim = false;
     if (attack) this.fight(b, attack, dt);
@@ -368,7 +372,7 @@ export class Bots {
   /** Konteyneri ara ve içindekileri al (host): search_done + loot_take_all → grant bot envanterine */
   botLoot(b, c) {
     const S = this.s;
-    if (b.usingCont) { S.applyAction('cont_use', { id: b.usingCont, on: false }, b.id); b.usingCont = null; }
+    this.releaseCont(b);
     (b.lootDone || (b.lootDone = new Set())).add(c.id); b.lootTarget = null;
     S.applyAction('search_done', { id: c.id }, b.id);
     const st = S.loot.state.get(c.id);
@@ -395,6 +399,7 @@ export class Bots {
       const sm = p.isLocal ? S.localStats : p.summary;
       if (!sm || !sm.downed) continue;
       const pos = p.isLocal ? S.local.pos : p.pos;
+      if (!pos || !S.sameLevel(b.pos, pos)) continue; // sığınaktaki bot yüzeydeki arkadaşı (ya da tersi) toprağın içinden kaldıramaz
       const d = dist(b.pos.x, b.pos.z, pos.x, pos.z);
       if (d < bd) { bd = d; best = { id: p.id, pos }; }
     }
@@ -411,10 +416,12 @@ export class Bots {
   nearestZombie(b, r) {
     const S = this.s;
     let best = null, bd = r * r;
+    const lv = S.levelOf(b.pos.x, b.pos.y, b.pos.z);
     for (const z of S.zombies.list.values()) {
       if (z.dead) continue;
       const d = (z.x - b.pos.x) ** 2 + (z.z - b.pos.z) ** 2;
-      if (d < bd) { bd = d; best = z; }
+      if (z.state === 'burrow') continue; // toprağa dönmekte: hedef değil
+      if (d < bd && S.levelOf(z.x, z.y, z.z) === lv) { bd = d; best = z; } // sığınaktaki bot tavanın üstündeki zombiyle dövüşmez
     }
     return best;
   }
@@ -481,12 +488,23 @@ export class Bots {
     const step = Math.min(d, sp * dt);
     const nx = b.pos.x + (dx / d) * step, nz = b.pos.z + (dz / d) * step;
     const r = S.world.physics.resolveCircle(nx, nz, 0.32, b.pos.y, b.pos.y + 1.7, 0.55, null, _res);
-    const pr = S.vehicles.pushOut(r.x, r.z, 0.35, b.pos.y);
+    let pr = S.vehicles.pushOut(r.x, r.z, 0.35, b.pos.y);
+    if (pr.x !== r.x || pr.z !== r.z) { // derin iç içe geçme: itme sonrası duvarlara karşı yeniden çöz, duvar arkasına geçirme
+      const r2 = S.world.physics.resolveCircle(pr.x, pr.z, 0.32, b.pos.y, b.pos.y + 1.7, 0.55);
+      pr = S.world.physics.raycast(r.x, b.pos.y + 0.6, r.z, r2.x - r.x, 0, r2.z - r.z, Math.hypot(r2.x - r.x, r2.z - r.z), (c) => c.kind !== 'vehicle' && !c.isFloor) ? { x: r.x, z: r.z } : { x: r2.x, z: r2.z };
+    }
     const g = S.world.physics.groundHeight(pr.x, pr.z, b.pos.y + 0.6, 0.55);
     if (g - b.pos.y > 0.7) { b.path = null; b.repath = 0; return; }
     b.pos.x = pr.x; b.pos.z = pr.z;
     b.pos.y += (g - b.pos.y) * Math.min(1, dt * 15);
     if (S.world.terrain.isWater(b.pos.x, b.pos.z)) b.pos.y = Math.max(b.pos.y, S.world.terrain.waterLevelAt(b.pos.x, b.pos.z) - 1.1);
+  }
+
+  /** Botun açık tuttuğu konteyneri bırak (host: cont_use kapalı → herkeste kapak/çekmece kapanır) */
+  releaseCont(b) {
+    if (!b.usingCont) return;
+    this.s.applyAction('cont_use', { id: b.usingCont, on: false }, b.id);
+    b.usingCont = null;
   }
 
   /** Lideri sığınağa (Z) ya da yüzeye (Z yok) izle: merdivenin dibinde, oyuncunun önünde boş bir nokta */
@@ -578,7 +596,8 @@ export class Bots {
     const S = this.s;
     for (const p of this.list) {
       if (!(p instanceof BotProxy)) continue;
-      p.pos.lerp(p.target, Math.min(1, dt * 10));
+      // ışınlanma (sığınağa iniş/çıkış, uzaktan yanına gelme): kaydırmadan atla, toprağın içinden geçerken görünmesin
+      if (p.pos.distanceToSquared(p.target) > 64 || Math.abs(p.target.y - p.pos.y) > 2.5) p.pos.copy(p.target); else p.pos.lerp(p.target, Math.min(1, dt * 10));
       if (p.vehicleId) { const v = S.vehicles.byId(p.vehicleId); if (v) { v.seatPlayer(p.avatar, 1); p.avatar.update(dt, { mode: 'seat', speed: 0, yaw: v.yaw }); continue; } }
       if (p.avatar.root.parent !== S.game.scene) S.game.scene.add(p.avatar.root);
       p.avatar.root.position.copy(p.pos);

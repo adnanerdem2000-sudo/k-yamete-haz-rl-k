@@ -143,4 +143,21 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   });
   log('açıkta uyku', sleep);
   check(sleep.gece && sleep.ff > 1 && sleep.ff <= 10, 'gece açıkta uyku yavaş geçmeli', sleep);
+
+  // 8) akşamüstü açıkta yatılırsa gündüz hızlı (×40) başlar, alacakaranlıkta yavaşlar; hasar uyandırır ve oyu geri çeker
+  const nap = await evalJS(page, () => {
+    const S = window.__game.session;
+    window.__setTime(19, 0);
+    S.trySleep(null);
+    const gunduz = S.time.ff;
+    window.__setTime(20, 31);
+    window.__step(3);
+    const gece = S.time.ff;
+    S.damageLocal(5, 'zombie');
+    window.__step(3);
+    return { gunduz, gece, uyandi: S.local.mode !== 'sleep', oy: S.sleepVotes.size, hiz: S.time.ff };
+  });
+  log('akşamüstü uyku', nap);
+  check(nap.gunduz === 40 && nap.gece > 1 && nap.gece <= 10, 'akşamüstü başlayan açık hava uykusu alacakaranlıkta yavaşlamalı', nap);
+  check(nap.uyandi && nap.oy === 0 && nap.hiz === 1, 'hasarla uyanınca uyku oyu geri çekilmeli, zaman normal akmalı', nap);
 };

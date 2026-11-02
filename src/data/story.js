@@ -204,7 +204,7 @@ export const EVENTS = {
       { text: 'Hemen tamir et (tamir seti)', cost: [['repair_kit', 1]], effects: { fixGenerator: true }, result: 'Mert usulü bir tekme ve biraz bant. Çalıştı!' },
       { text: 'Sabahı bekle', effects: { morale: -4, generatorOffHours: 8 }, result: 'Gece karanlıkta geçecek.' },
     ] },
-  horde_near: { title: 'Sürü Yaklaşıyor', img: 'horde', text: 'Gözcü uyarıyor: üssün yakınında 15-20 zombilik bir grup var ve bu tarafa geliyor!', minDay: 3, scene: 'spawn_horde',
+  horde_near: { title: 'Sürü Yaklaşıyor', img: 'horde', text: 'Gözcü uyarıyor: üssün yakınında 15-20 zombilik bir grup var ve bu tarafa geliyor!', night: true, minDay: 3, scene: 'spawn_horde',
     choices: [
       { text: 'Savunma pozisyonu al!', effects: { horde: 18 }, result: 'Sürü kapıya dayandı. Silahlarınızı hazırlayın!' },
       { text: 'Ses bombasıyla uzağa çek', cost: [['smoke_bomb', 1]], effects: { horde: 6 }, result: 'Sürünün çoğu gürültüye yöneldi. Sadece birkaç tanesi geliyor.' },
@@ -214,7 +214,7 @@ export const EVENTS = {
       { text: 'Yardıma git (görev)', effects: { quest: 'q_distress' }, result: 'Benzinliğe git ve hayatta kalanları kurtar.' },
       { text: 'Çok riskli', effects: { morale: -5 }, result: 'Telsiz bir süre sonra sustu.' },
     ] },
-  trapped_teammate: { title: 'Mahsur Kalan Arkadaş', img: 'horde', text: 'Bir takım arkadaşın markette mahsur kaldı! Kapıyı zombiler sardı.', minDay: 4, mp: true, scene: 'trap_player',
+  trapped_teammate: { title: 'Mahsur Kalan Arkadaş', img: 'horde', text: 'Bir takım arkadaşın markette mahsur kaldı! Kapıyı zombiler sardı.', night: true, minDay: 4, mp: true, scene: 'trap_player',
     choices: [{ text: 'Hemen gidiyoruz!', effects: { horde_at_player: 10 }, result: 'Koşun!' }] },
   car_theft: { title: 'Araç Hırsızları', img: 'raiders', text: 'Garajda tıkırtılar! Yağmacılar arabanızı çalmaya çalışıyor.', minDay: 6, scene: 'raiders_car',
     choices: [
@@ -256,7 +256,7 @@ export const EVENTS = {
       { text: 'Kabul et (üs savunmasına yardım ederler)', effects: { allies: 2, morale: 8, foodUpkeep: true }, result: 'Yeni yüzler, yeni umutlar. Ama daha fazla ağız doyurmak gerek.' },
       { text: 'Malzeme verip uğurla', cost: [['water_bottle', 2]], effects: { morale: 2 }, result: 'Teşekkür edip gittiler.' },
     ] },
-  security_fail: { title: 'Güvenlik Sistemi Arızası', img: 'generator', text: 'Kameralar ve alarmlar bir anda sustu. Bir şey kabloları kemiriyor…', minDay: 8, requires: 'has_security', scene: 'power_fail',
+  security_fail: { title: 'Güvenlik Sistemi Arızası', img: 'generator', text: 'Kameralar ve alarmlar bir anda sustu. Bir şey kabloları kemiriyor…', night: true, minDay: 8, requires: 'has_security', scene: 'power_fail',
     choices: [{ text: 'Kontrol et', effects: { fixPower: true, spawnNear: 3 }, result: 'Kablolarda bir zombi sıçanı! …Şaka. Ama 3 zombi vardı.' }] },
 
   // ---- genişletilmiş ada olayları
@@ -312,7 +312,7 @@ export const EVENTS = {
       { text: 'Askerlere teslim et', effects: { rel: ['military', 15], morale: -6 }, result: 'Askerler onu götürdü. Bir daha haber alınamadı.' },
       { text: 'Git buradan', effects: {}, result: 'Kaan ormana doğru koştu.' },
     ] },
-  zombie_dogs: { title: 'Kuduz Sürü', img: 'wolves', text: 'Bahçelerden hırıltılar… Gözleri kızarmış bir köpek sürüsü dişlerini göstererek size doğru koşuyor!', minDay: 9,
+  zombie_dogs: { title: 'Kuduz Sürü', img: 'wolves', text: 'Bahçelerden hırıltılar… Gözleri kızarmış bir köpek sürüsü dişlerini göstererek size doğru koşuyor!', night: true, minDay: 9,
     choices: [{ text: 'Silahlara!', effects: { dogs: 4 }, result: 'Hızlılar — kaçmaya çalışmayın, savaşın!' }] },
   harvest: { title: 'Hasat Zamanı', img: 'farm', text: 'Çiftlik köyünden bir aile tarlada mahsur kaldıklarını, hasada yardım ederseniz ürünü paylaşacaklarını söylüyor.', minDay: 5, maxDay: 22,
     choices: [

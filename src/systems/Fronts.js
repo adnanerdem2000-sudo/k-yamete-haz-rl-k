@@ -4,13 +4,15 @@
 //  • Biri konteyneri ararken ya da depo panelini açıkken (yerel oyuncu, uzak oyuncu ya da bot: Loot.inUse, host
 //    üzerinden eşitlenir) ön yüz menteşesinden tam açılır; kapanınca aranmış konteyner hafif aralık kalır (karıştırılmış
 //    görünüm; aranma durumu zaten kayıtta ve ağda). Kilitliyken kapalıdır.
-//  • Görsel: malzeme başına tek InstancedMesh (ahşap/boya, metal, cam, ayna, kulp, iç boşluk): yalnız kameraya
-//    ≈32 m içindeki konteynerler etkin, toplam birkaç çizim çağrısı. Açılınca arkada koyu "iç boşluk" görünür (KayKit
+//  • Görsel: malzeme başına tek InstancedMesh (ahşap/boya, metal, cam, ayna, kulp, iç boşluk): yalnız oyuncuya
+//    ≈56 m içindeki konteynerler etkin, toplam birkaç çizim çağrısı. Açılınca arkada koyu "iç boşluk" görünür (KayKit
 //    modellerinin gövdeye gömülü kapağının önünü kapatır). Fizikli çekmeceler ayrı (physics/Drawers.js).
 import * as THREE from 'three';
 import { damp } from '../core/util.js';
 
-const NEAR = 32, CAP = 512;
+// NEAR: iç mekân örneklerinin çizildiği mesafeye yakın (Instancer INTERIOR_DIST): uzaktan bakınca kapaksız buzdolabı ve
+// kapaksız sandık görünmesin; yuvalar uzaklığa göre dağıtılır, sığmazsa en uzaktakiler düşer
+const NEAR = 56, CAP = 768;
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4(), _w = new THREE.Matrix4(), _c = new THREE.Color();
 const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
 
@@ -116,11 +118,14 @@ export class Fronts {
 
   /** Yerel oyuncunun açık tuttuğu konteyner: arama süren ya da depo paneli açık olan */
   localUseId() {
-    const S = this.s;
-    const hold = S.interact && S.interact.hold;
-    if (hold && hold.container) return hold.container.id;
+    const S = this.s, I = S.interact;
+    const hold = I && I.hold;
+    const ls = I && I.lastSearch; // arama yeni bitti: depo paneli host'un yanıtıyla (bir gidiş-dönüş sonra) açılacak
+    if (hold && hold.container) { if (ls && ls.id !== hold.container.id) I.lastSearch = null; return hold.container.id; }
     const st = S.ui && S.ui.panels && S.ui.panels.storage;
-    if (st && st.kind === 'container' && S.ui.panel && S.ui.panel.name === 'storage') return st.id;
+    if (st && st.kind === 'container' && S.ui.panel && S.ui.panel.name === 'storage') { if (ls) I.lastSearch = null; return st.id; }
+    // aradaki birkaç karede kullanım sürer: yoksa istemci aramasında kapak herkeste bir an kapanıp yeniden açılıyordu
+    if (ls) { if (!hold && !S.ui.panel && S.t - ls.t < 1.5) return ls.id; I.lastSearch = null; }
     return null;
   }
 
@@ -130,11 +135,14 @@ export class Fronts {
     const prev = new Map(this.active.map((a) => [a.ct.id, a]));
     const next = [];
     for (const c of this.cands) {
-      const dx = c.ct.x - cam.x, dz = c.ct.z - cam.z;
-      if (dx * dx + dz * dz > NEAR * NEAR || Math.abs(c.ct.fy - cam.y) > 12) continue;
+      const dx = c.ct.x - cam.x, dz = c.ct.z - cam.z, d2 = dx * dx + dz * dz;
+      if (d2 > NEAR * NEAR || Math.abs(c.ct.fy - cam.y) > 12) continue;
       const old = prev.get(c.ct.id);
-      next.push(old || { ...c, els: c.spec.map((e) => ({ e, open: this.target(c) })) });
+      const a = old || { ...c, els: c.spec.map((e) => ({ e, open: this.target(c) })) };
+      a.d2 = d2;
+      next.push(a);
     }
+    next.sort((p, q) => p.d2 - q.d2); // yuvalar yakından uzağa: taşma olursa en uzaktakiler çizilmez
     const n = { wood: 0, metal: 0, glass: 0, mirror: 0, handle: 0, cavity: 0 };
     for (const a of next) for (const el of a.els) {
       const e = el.e;
@@ -217,7 +225,9 @@ export class Fronts {
           el.open = damp(el.open, tgt, tgt > el.open ? 5.5 : 4, dt);
           if (Math.abs(el.open - tgt) < 0.003) el.open = tgt;
           el.dirty = true;
-          if (opening && el === a.els[0] && S.audio) S.audio.play('door', { at: a.ct, vol: 0.28, rate: el.e.mat === 'metal' ? 0.85 : el.e.k === 'lid' ? 1.2 : 1.55 });
+          // aramayı başlatan yerel oyuncu için Interact zaten kapı sesini çaldı (iki ses üst üste binmesin)
+          const ownStart = a.ct.id === this.localUse && S.interact && S.interact.hold && S.interact.hold.container === a.ct;
+          if (opening && el === a.els[0] && S.audio && !ownStart) S.audio.play('door', { at: a.ct, vol: 0.28, rate: el.e.mat === 'metal' ? 0.85 : el.e.k === 'lid' ? 1.2 : 1.55 });
         }
         if (el.dirty) { this.write(a, el); el.dirty = false; touched.add(el.e.mat); if (el.hslot >= 0) touched.add('handle'); if (el.cslot >= 0) touched.add('cavity'); }
       }

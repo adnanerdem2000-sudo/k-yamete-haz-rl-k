@@ -227,7 +227,31 @@ export class NPCs {
       else if (q.pos) out.push({ id: q.id, local: false, x: q.pos.x, y: q.pos.y, z: q.pos.z, sneak: !!(q.anim && (q.anim.mode === 'crouch' || q.anim.mode === 'prone')) });
     }
     if (!out.length) out.push({ id: S.localId, local: true, x: S.local.pos.x, y: S.local.pos.y, z: S.local.pos.z, sneak: S.local.mode === 'crouch' || S.local.mode === 'prone' });
+    for (const q of out) q.under = this.isUnderground(q.x, q.y, q.z);
     return out;
+  }
+
+  /** Eskort NPC'yi liderinin bulunduğu sığınağa (Z) ya da yüzeye (Z yok) taşı: merdivenin dibinde / liderin arkasında */
+  followZone(n, Z, pl) {
+    const S = this.s;
+    if (Z) {
+      const sp = Z.spawn, c = Math.cos(sp.yaw), s = Math.sin(sp.yaw);
+      for (const [lx, lz] of [[0.9, 1.9], [-0.9, 1.9], [0, 2.8], [0, 0]]) {
+        const x = sp.x + lx * c + lz * s, z = sp.z - lx * s + lz * c;
+        if (S.world.under.zoneAt(x, sp.y + 0.5, z) !== Z || S.world.physics.overlapsBox(x - 0.3, z - 0.3, x + 0.3, z + 0.3, sp.y + 0.3, sp.y + 1.7)) continue;
+        n.pos.set(x, sp.y, z); return;
+      }
+      n.pos.set(sp.x, sp.y, sp.z);
+      return;
+    }
+    const x = pl.x - 1.6, z = pl.z - 0.8;
+    n.pos.set(x, S.world.physics.groundHeight(x, z, pl.y + 3), z);
+  }
+
+  /** Oyuncu yer altı sığınağında mı (toprağın altında): hayvanlar onu görmez, koklamaz, ısıramaz */
+  isUnderground(x, y, z) {
+    const W = this.s.world;
+    return !!(W.under && y < W.terrain.heightAt(x, z) - 2 && W.under.zoneAt(x, y + 0.5, z));
   }
 
   /** Host → istemci anlık görüntüsü: oyuncuya 170 m içindeki hayvanlar [id, tür, x, z, yön, hız, durum, bayrak, grup, sıra, can] */
@@ -562,6 +586,12 @@ export class NPCs {
       let goal = null, sp = 0;
       if (n.follow) {
         const pl = n.follow === S.localId ? S.local.pos : S.players.get(n.follow)?.pos;
+        // yer altı sığınağı: eskort lideriyle iner/çıkar (yüzeyde, sığınağın tepesinde bekleyip zombilere yem olmasın)
+        if (pl && S.world.under) {
+          const lz = S.world.under.zoneAt(pl.x, pl.y + 0.5, pl.z), nz = S.world.under.zoneAt(n.pos.x, n.pos.y + 0.5, n.pos.z);
+          if ((lz ? lz.id : null) !== (nz ? nz.id : null)) { n.zoneT = (n.zoneT || 0) + dt; if (n.zoneT > 1.5) { n.zoneT = 0; this.followZone(n, lz, pl); } }
+          else n.zoneT = 0;
+        }
         if (pl && dist(pl.x, pl.z, n.pos.x, n.pos.z) > 2.5) { goal = pl; sp = dist(pl.x, pl.z, n.pos.x, n.pos.z) > 6 ? 4.2 : 2; }
       } else if (n.id === 'hasan' || n.id === 'ayse') {
         if (!n.goal || n.t > 8) { n.t = 0; n.goal = night ? n.home : { x: n.home.x + (Math.random() - 0.5) * 8, z: n.home.z + (Math.random() - 0.5) * 6 }; }
@@ -693,11 +723,13 @@ export class NPCs {
       }
       if (!S.isHost) { this.updateRemoteAnimal(a, dt); continue; }
       // en yakın oyuncu (algı, kaybolma); saldırırken hedef oyuncu (vuran/üstüne salınan) 60 m içindeyse o
-      let p = anchors[0], npd = Infinity;
-      for (const q of anchors) { const d = dist(a.x, a.z, q.x, q.z); if (d < npd) { npd = d; p = q; } }
+      // yer altındaki (sığınaktaki) oyuncu algılanmaz; kaybolma mesafesi yine bütün oyunculara göre
+      let p = null, npd = Infinity, nAll = Infinity;
+      for (const q of anchors) { const d = dist(a.x, a.z, q.x, q.z); if (d < nAll) nAll = d; if (q.under) continue; if (d < npd) { npd = d; p = q; } }
+      if (!p) { p = { id: null, local: false, x: a.x + 999, y: a.y, z: a.z, sneak: true, under: true }; npd = 999; } // herkes yer altında: hedef yok
       let pd = npd;
-      if (a.target && a.state === 'attack') { const q = anchors.find((x) => x.id === a.target); if (q) { const d = dist(a.x, a.z, q.x, q.z); if (d < 60) { p = q; pd = d; } } }
-      if (npd > 170) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); continue; }
+      if (a.target && a.state === 'attack') { const q = anchors.find((x) => x.id === a.target); if (q && !q.under) { const d = dist(a.x, a.z, q.x, q.z); if (d < 60) { p = q; pd = d; } } }
+      if (nAll > 170) { this.group.remove(a.root); if (a.view) a.view.dispose(); this.animals.splice(i, 1); continue; }
       a.t += dt;
       a.atkCd -= dt;
       const def = a.def;
@@ -748,14 +780,14 @@ export class NPCs {
             if (a.dead) return;
             const R = def.charge ? 2.8 : 2.3, kind = a.type === 'bear' || def.charge ? 'heavy' : 'zombie';
             if (vLocal) {
-              if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < R) {
+              if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < R && !this.isUnderground(S.local.pos.x, S.local.pos.y, S.local.pos.z)) {
                 S.damageLocal(dmg, kind);
                 if (def.charge) { S.local.vel.x += Math.sin(a.yaw) * 7; S.local.vel.z += Math.cos(a.yaw) * 7; S.local.vel.y = 3; }
               }
             } else {
               // uzak oyuncu: hasar (boğa/ayıda itme) yalnız o oyuncuya olay olarak gider
               const rp = S.players.get(victim);
-              if (rp && rp.pos && dist(a.x, a.z, rp.pos.x, rp.pos.z) < R) S.emit({ k: 'dmg_player', to: victim, amount: dmg, kind, from: a.id, push: def.charge ? [Math.round(Math.sin(a.yaw) * 700) / 100, Math.round(Math.cos(a.yaw) * 700) / 100, 3] : undefined });
+              if (rp && rp.pos && dist(a.x, a.z, rp.pos.x, rp.pos.z) < R && !this.isUnderground(rp.pos.x, rp.pos.y, rp.pos.z)) S.emit({ k: 'dmg_player', to: victim, amount: dmg, kind, from: a.id, push: def.charge ? [Math.round(Math.sin(a.yaw) * 700) / 100, Math.round(Math.cos(a.yaw) * 700) / 100, 3] : undefined });
             }
           });
           // kurt saldırıdan sonra geri çekilir (vur-kaç)

@@ -59,7 +59,7 @@ export class Zombies {
       S.fx.toxic(e.x, e.y + 1, e.z);
       S.props.explosion(e.x, e.y + 0.9, e.z, 4.2);
       const p = S.local.pos;
-      if (dist(p.x, p.z, e.x, e.z) < 5.5) { S.localStats.cond.poisoned = Math.max(S.localStats.cond.poisoned || 0, 90); S.ui.toast('Şişko patladı! Zehirlendin.', 'danger'); }
+      if (dist(p.x, p.z, e.x, e.z) < 5.5 && S.sameLevel(p, e)) { S.localStats.cond.poisoned = Math.max(S.localStats.cond.poisoned || 0, 90); S.ui.toast('Şişko patladı! Zehirlendin.', 'danger'); }
     });
     S.onEvt('zfx_scream', (e) => {
       S.audio.play('scream', { at: e, vol: 1, range: 90 });
@@ -214,7 +214,7 @@ export class Zombies {
   hearNoise(x, z, r, src) {
     if (!this.s.isHost) return;
     for (const zb of this.list.values()) {
-      if (zb.dead) continue;
+      if (zb.dead || zb.state === 'burrow') continue; // toprağa dönen zombi sese dönmez
       const d = dist(zb.x, zb.z, x, z);
       if (d < r * (zb.def.hear / 26)) {
         if (zb.state === 'chase' && zb.target && zb.target.kind === 'player' && d > 8) continue;
@@ -246,8 +246,8 @@ export class Zombies {
     zb.lastHit = { kind, dir: dir || null, force: force || 0 };
     zb.stagger = Math.max(zb.stagger, kind === 'melee' ? 0.35 * (1 - (zb.def.knockResist || 0)) : 0.15);
     if (dir && kind === 'melee') { zb.kx = dir[0] * 3 * (1 - (zb.def.knockResist || 0)); zb.kz = dir[1] * 3 * (1 - (zb.def.knockResist || 0)); }
-    // saldırganı hedefle
-    if (from) { zb.target = { kind: from.startsWith('bot_') ? 'bot' : 'player', id: from }; zb.state = 'chase'; zb.alert = 1; }
+    // saldırganı hedefle (toprağa dönmekte olan zombi dönüşünü sürdürür: hasar alır, kovalamaya geçmez)
+    if (from && zb.state !== 'burrow') { zb.target = { kind: from.startsWith('bot_') ? 'bot' : 'player', id: from }; zb.state = 'chase'; zb.alert = 1; }
     this.s.emit({ k: 'zfx', id, a: 'flinch' });
     if (zb.hp <= 0) this.kill(zb, from);
   }
@@ -288,7 +288,7 @@ export class Zombies {
       S.fx.toxic(e.x, e.y + 1, e.z);
       // zehirli bulut: yakındaki oyuncu zehirlenir
       const p = S.local.pos;
-      if (dist(p.x, p.z, e.x, e.z) < 4) { S.localStats.cond.poisoned = 120; S.ui.toast('Zehirli buluta yakalandın!', 'danger'); }
+      if (dist(p.x, p.z, e.x, e.z) < 4 && S.sameLevel(p, e)) { S.localStats.cond.poisoned = 120; S.ui.toast('Zehirli buluta yakalandın!', 'danger'); }
     }
     if (e.by === S.localId) S.fx.text(e.x, e.y + 2.2, e.z, '✖', '#ff6b6b', 1.2);
   }
@@ -351,7 +351,7 @@ export class Zombies {
     for (const zb of order) {
       const nd = zb._nd, nearest = zb._nearest;
       void nearest;
-      if (zb.burrowAt && S.t >= zb.burrowAt && zb.state !== 'burrow' && zb.state !== 'emerge') { zb.state = 'burrow'; zb.burrowT = 2.6; zb.speed = 0; zb.target = null; }
+      if (zb.burrowAt && S.t >= zb.burrowAt && zb.state !== 'burrow' && zb.state !== 'emerge') { zb.state = 'burrow'; zb.burrowT = zb.burrowT ?? 2.6; zb.speed = 0; zb.target = null; }
       if (zb.state === 'emerge' || zb.state === 'burrow') { this.act(zb, dt, players); continue; }
       // uzaklaşınca havuza geri dön
       if (nd > 170 && !zb.horde) { if (zb.zone) zb.zone.pop++; this.removeZombie(zb.id); continue; }
@@ -678,7 +678,9 @@ export class Zombies {
     // oyuncu/botların içinden geçme: 0,75 m içindeyse dışarı it (saldırı menzili 1 m+ olduğundan vuruş etkilenmez)
     for (const p of this._players || []) { const dx = r.x - p.x, dz = r.z - p.z, dd = dx * dx + dz * dz; if (dd < 0.5625 && dd > 1e-6 && Math.abs((p.y || zb.y) - zb.y) < 1.6) { const d = Math.sqrt(dd), k = (0.75 - d) / d; r.x += dx * k; r.z += dz * k; } }
     // araçlar dinamik Rapier gövdesi (çarpışma dünyasında yok): park etmiş/sürülen aracın içinden geçme
-    if (S.vehicles) { const pv = S.vehicles.pushOut(r.x, r.z, zb.def.dog ? 0.3 : 0.33, zb.y, true); r.x = pv.x; r.z = pv.z; }
+    // araçlar: çarpışma dünyasında vekil daireleri var (resolveCircle); derin iç içe geçmede (araç üstüne geldi) kutudan
+    // dışarı itilir, sonra duvarlara karşı yeniden çözülür (itme bir duvarın öbür yanına geçirmesin)
+    if (S.vehicles) { const pv = S.vehicles.pushOut(r.x, r.z, zb.def.dog ? 0.3 : 0.33, zb.y, true); if (pv.x !== r.x || pv.z !== r.z) { const r2 = S.world.physics.resolveCircle(pv.x, pv.z, zb.def.dog ? 0.3 : 0.33, zb.y, zb.y + 1.7, 0.5); if (!S.world.physics.raycast(r.x, zb.y + 0.6, r.z, r2.x - r.x, 0, r2.z - r.z, Math.hypot(r2.x - r.x, r2.z - r.z), (c) => c.kind !== 'vehicle' && !c.isFloor)) { r.x = r2.x; r.z = r2.z; } } }
     const g = S.world.physics.groundHeight(r.x, r.z, zb.y, 0.55);
     if (g - zb.y > 0.6) return; // çok yüksek
     zb.x = r.x; zb.z = r.z;

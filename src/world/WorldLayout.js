@@ -213,7 +213,8 @@ export const BUILDINGS = [
   { id: 'kule10', tpl: 'kit_medium', variant: 'tools', x: 192, z: 70, rot: 1, region: 'sehir', localIds: true },
   { id: 'kule11', tpl: 'kit_small', variant: 'electronics', x: 52, z: 75, rot: 1, region: 'sehir', localIds: true },
   // Dağ köyü camisi: eskiden sahte kapılı katı kutu (kubbe ve minare RegionsExtra.village'da)
-  { id: 'cami', tpl: 'mosque', x: -640, z: -528, rot: 0, region: 'dagkoy', name: 'Köy Camisi', localIds: true },
+  // rot 2: kapı kuzeyde, mihrap (B duvarı) güneyde — kıble (Türkiye'den güney-güneydoğu) yönüne bakar
+  { id: 'cami', tpl: 'mosque', x: -640, z: -528, rot: 2, region: 'dagkoy', name: 'Köy Camisi', localIds: true },
 ];
 
 // Dekoratif (girilemeyen) yapılar: kit modelleri, ölçek ve konumla

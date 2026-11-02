@@ -142,8 +142,15 @@ export class Environment {
     const old = this.envRT;
     this.envRT = this.pmrem.fromScene(this.envScene, 0.04, 1, 1600, { size: 128 });
     this.scene.environment = this.envRT.texture;
-    this.scene.environmentIntensity = 0.85;
+    this.envBase = 0.85; // gök ortam haritası hazır: taban ortam ışığı (öncesinde Graphics'in 0,35'i)
+    this.applyEnvIntensity();
     if (old) old.dispose();
+  }
+
+  /** Ortam haritası (IBL) şiddeti: taban değer × yer altı kısması (yenileme karesinde de aynı değer, parlama olmasın) */
+  applyEnvIntensity() {
+    const want = (this.envBase ?? 0.35) * (1 - 0.8 * (this._under || 0));
+    if (this.scene.environmentIntensity !== want) this.scene.environmentIntensity = want;
   }
 
   /**
@@ -180,8 +187,8 @@ export class Environment {
     this.hemi.intensity = k.hemi * (this.envRT ? 0.45 : 1) * (1 - overcast * 0.3) + this.flash * 3;
     // yer altı: gökyüzü/güneş ışığı toprağın içine sızmasın (odanın kendi lambaları ve el feneri aydınlatır)
     this._under = (this._under || 0) + ((this.underground ? 1 : 0) - (this._under || 0)) * Math.min(1, dt * 4);
-    if (this._under > 0.001) { const u = this._under; this.hemi.intensity *= 1 - 0.88 * u; this.sun.intensity *= 1 - 0.97 * u; this.game.gfx.scene.environmentIntensity = 0.35 * (1 - 0.8 * u); }
-    else if (this.game.gfx.scene.environmentIntensity !== 0.35) this.game.gfx.scene.environmentIntensity = 0.35;
+    if (this._under > 0.001) { const u = this._under; this.hemi.intensity *= 1 - 0.88 * u; this.sun.intensity *= 1 - 0.97 * u; }
+    this.applyEnvIntensity();
     // yer altında deniz/göl düzlemleri çizilmez: deniz seviyesinin (y = 0) altına inen odaları yatay bir su yüzü kesmesin
     const wat = this.world.water, under = !!this.underground;
     if (wat && wat._under !== under) { wat._under = under; for (const m of wat.meshes) m.material.visible = !under; }
@@ -238,7 +245,7 @@ export class Environment {
     if (this.doom > 0) gr.uTint.value.lerp(_c1.set('#ffb0b0'), this.doom * 0.35);
     if (this._blood > 0.01) gr.uTint.value.lerp(_c1.set('#ff8a7a'), this._blood * 0.4);
     gr.uSaturation.value = 1.15 - overcast * 0.25;
-    this.game.gfx.renderer.toneMappingExposure = k.exposure * (1 - overcast * 0.12) + this.flash;
+    this.game.gfx.renderer.toneMappingExposure = k.exposure * (1 - overcast * 0.12) + this.flash * (1 - (this._under || 0)); // şimşek yer altına çakmaz
     // su
     this.world.water.update(t, this.sunDir, sky.uSunColor.value, this.fog.color, this.fog.density, isNight ? 0.45 : 1 - overcast * 0.3, W.rain);
     // ıslaklık
@@ -248,7 +255,7 @@ export class Environment {
     windUniforms.uTime.value = t;
     windUniforms.uWind.value = 1 + W.storm * 2.5 + W.rain * 0.8;
     // şimşek
-    if (W.storm > 0.5 && Math.random() < dt * 0.08) { this.flash = 1; this.game.audio.thunder(); }
+    if (W.storm > 0.5 && Math.random() < dt * 0.08) { this.flash = 1; if (!this.underground) this.game.audio.thunder(); }
     this.flash = Math.max(0, this.flash - dt * 3.5);
     // yağmur parçacıkları
     this.updateParticles(dt, cam);
@@ -260,7 +267,9 @@ export class Environment {
 
   updateParticles(dt, cam) {
     const W = this.weather;
-    const on = W.rain > 0.05 && !this.underground;
+    // yer altında ve tavanlı (kit kabuklu kule) binanın içinde yağmur/kar çizilmez
+    const kb = this.world.buildingAt(cam.position.x, cam.position.z, cam.position.y), covered = !!this.underground || !!(kb && kb.kit);
+    const on = W.rain > 0.05 && !covered;
     this.rain.visible = on;
     if (on) {
       const p = this.rain.geometry.attributes.position.array;
@@ -281,7 +290,7 @@ export class Environment {
       this.rain.geometry.attributes.position.needsUpdate = true;
       this.rain.material.opacity = 0.25 + W.rain * 0.3;
     }
-    const sOn = W.snow > 0.05;
+    const sOn = W.snow > 0.05 && !covered;
     this.snow.visible = sOn;
     if (sOn) {
       const p = this.snow.geometry.attributes.position.array;

@@ -95,7 +95,8 @@
 - **Kuleler:** şehir silüetindeki 11 MegaKit kulesinin yalnız zemin katı girilebilir; üst katlar dış kabuktur (merdiven
   yok). Vitrinler içeriden tahtayla kapatılmıştır ve kırılamaz.
 - **Dolap kapakları görseldir:** kanat/kapak/çekmece ön yüzleri çarpışma almaz (açık kapağın içinden geçilebilir);
-  yalnız menteşeli oda kapıları ve fizikli çekmeceler fizik nesnesidir. Kapaklar oyuncuya ≈32 m içinde canlanır.
+  yalnız menteşeli oda kapıları ve fizikli çekmeceler fizik nesnesidir. Kapaklar oyuncuya ≈56 m içinde çizilir (en
+  yakınlar öncelikli); daha uzaktan bir pencereden bakılırsa buzdolabı kapaksız görünebilir.
 - **Araçlar:** yanmış terk edilmiş arabalar hâlâ dekordur (binilemez). Terk edilmiş arabaların yakıtı ve arızası her
   yeni oyunda aynı tohumla belirlenir.
 - **Gündüz/gece:** doğal zombiler yalnız 20.30–06.00 arasında doğar (final sırasında ve çılgınlık olayında saatten
@@ -107,10 +108,11 @@
   beton/kaya kutularıdır (model değil); mağara ve maden odalarında düzensiz kaya yüzü ve ahşap destekler var.
 - **Zombiler sığınaklara hiç inmez** ve yüzeydeki zombi yer altındaki oyuncuyu ne görür ne duyar; yer altındaki
   silah sesi yine de yüzeyde gürültü olarak yayılır (zombiler girişin üstünde toplanabilir).
-- **YZ arkadaşlar** yalnız "Takip et" emrindeyken oda sahibinin peşinden sığınağa iner ve çıkar; sığınak içinde yol
-  bulma yüzey ızgarasını kullandığı için uzak odalara giderken duvara takılabilirler (yakın takipte sorun yok).
-- Sığınağa araçla girilemez. Sığınakta yapı (barikat, yatak, sandık, kamp ateşi…) kurulabilir; yapı oda zeminine oturur,
-  "yalnız üs alanında" kuralı yüzeydeki konuma göre uygulanır (ev sığınağı üs alanının altındadır).
+- **YZ arkadaşlar** yalnız "Takip et" emrindeyken oda sahibinin peşinden sığınağa iner ve çıkar (eskort edilen NPC'ler de
+  liderleriyle iner); sığınak içinde yol bulma yüzey ızgarasını kullandığı için uzak odalara giderken duvara
+  takılabilirler (yakın takipte sorun yok).
+- Sığınağa araçla girilemez ve sığınaklara yapı kurulamaz (tuzak, alarm, yapı ışığı ve yol ızgarası yüzeye göre
+  çalıştığı için); sığınaklarda yatak ve depo zaten var.
 - Deniz seviyesinin altına inen sığınaklarda deniz/göl yüzeyleri yer altındayken gizlenir; yüzeye çıkınca yeniden
   görünür.
 

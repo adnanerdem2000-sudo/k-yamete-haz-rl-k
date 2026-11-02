@@ -6,7 +6,7 @@
 // kelepçesi, iç mekân algısı, yağmur/ortam ışığı/deniz, zombi algısı) bölgeye duyarlı çalışır.
 // Kimlikler açık ve sığınağa bağlı (sh:<id>:…): dünya üretiminin başka hiçbir kimliği kaymaz.
 import * as THREE from 'three';
-import { Geo } from './Geo.js';
+import { Geo, materials } from './Geo.js';
 import * as P from './Props.js';
 import { signTexture } from './TextureFactory.js';
 import { RNG } from '../core/util.js';
@@ -201,8 +201,8 @@ function buildShelter(W, def) {
     // tavan lambası
     if (isCave(r)) { // madenci lambası: kabloyla asılı
       item(cx - 0.02, H - 0.6, cz - 0.02, cx + 0.02, H, cz + 0.02, '#1c1c1c', 'metal', false);
-      item(cx - 0.12, H - 0.82, cz - 0.12, cx + 0.12, H - 0.6, cz + 0.12, '#ffcf8a', 'emissive', false);
-    } else boxL(g, wp, cx - 0.25, H - 0.08, cz - 0.25, cx + 0.25, H, cz + 0.25, '#fff3c4', 'emissive', floorY);
+      item(cx - 0.12, H - 0.82, cz - 0.12, cx + 0.12, H - 0.6, cz + 0.12, '#ffcf8a', 'sh_main', false);
+    } else boxL(g, wp, cx - 0.25, H - 0.08, cz - 0.25, cx + 0.25, H, cz + 0.25, '#fff3c4', 'sh_main', floorY);
     const lp = wp(cx, cz);
     lights.push({ x: lp.x, y: floorY + H - 0.4, z: lp.z, color: def.cave ? 0xffb066 : 0xfff0c8, intensity: 12, range: Math.max(9, Math.hypot(w, d) * 0.7), on: false, always: true, zone: def.id, main: true });
     switch (r.kind) {
@@ -331,7 +331,7 @@ function buildShelter(W, def) {
           if (!p) continue;
           first = first || p;
           item(p[0] - 0.4, 0, p[1] - 0.45, p[0] + 0.4, 2.1, p[1] + 0.45, '#17202a', 'shiny');
-          for (let k = 0; k < 6; k++) item(p[0] - 0.3, 0.3 + k * 0.28, p[1] - 0.47, p[0] + 0.3, 0.33 + k * 0.28, p[1] - 0.45, k % 2 ? '#2ecc71' : '#3498db', 'emissive', false);
+          for (let k = 0; k < 6; k++) item(p[0] - 0.3, 0.3 + k * 0.28, p[1] - 0.47, p[0] + 0.3, 0.33 + k * 0.28, p[1] - 0.45, k % 2 ? '#2ecc71' : '#3498db', 'sh_always', false);
         }
         if (first) cont('server', first[0], first[1] - 0.75, 1.0, 'Sunucu Kabini');
         break;
@@ -366,16 +366,35 @@ function buildShelter(W, def) {
   solid(1.05, 0.7, 2.55, 1.7, 0, 1.15, { kind: 'prop', walkable: false, blocksNav: false });
   W.interactables.push({ id: `sh:${def.id}:power`, type: 'shelter_power', shelter: def.id, x: gp.x, y: floorY + 0.9, z: gp.z, name: def.name });
   const ep = wp(0, 0.6);
-  boxL(g, wp, -0.18, H - 0.1, 0.5, 0.18, H, 0.7, '#ff5a3c', 'emissive', floorY);
+  boxL(g, wp, -0.18, H - 0.1, 0.5, 0.18, H, 0.7, '#ff5a3c', 'sh_always', floorY);
   lights.push({ x: ep.x, y: floorY + H - 0.3, z: ep.z, color: 0xff6040, intensity: 5, range: 7, on: true, always: true, zone: def.id, emergency: true });
   beds.forEach((b, i) => W.interactables.push({ id: `sh:${def.id}:bed${i}`, type: 'bed', shelter: def.id, x: b.x, y: floorY + 0.5, z: b.z, name: def.name + ' — Yatak', rot: def.rot }));
   // ---------------------------------------------------------------- ağlar (sığınak başına ayrı grup: yalnız içindeyken çizilir)
   const grp = new THREE.Group();
   grp.name = 'shelter:' + def.id;
-  for (const m of g.toMeshes()) { m.receiveShadow = true; m.castShadow = false; grp.add(m); }
+  // lamba gövdeleri sokak elektriğine bağlı ortak ışıklı malzemeyi değil, sığınağın kendi malzemesini kullanır: ana
+  // lambalar jeneratörle yanar (Shelters.applyLights), acil durum ışığı ve sunucu ledleri hep yanar
+  const mainMat = shelterGlow(0), alwaysMat = shelterGlow(1);
+  for (const m of g.toMeshes()) {
+    m.receiveShadow = true; m.castShadow = false;
+    if (m.name === 'geo:sh_main') m.material = mainMat;
+    else if (m.name === 'geo:sh_always') m.material = alwaysMat;
+    grp.add(m);
+  }
   (W.underRoot || (W.underRoot = (() => { const r0 = new THREE.Group(); r0.name = 'underground'; W.root.add(r0); return r0; })())).add(grp);
   grp.visible = false;
-  return { def, zone, group: grp, entry, lights, floorY, ceilY, cols };
+  return { def, zone, group: grp, entry, lights, floorY, ceilY, cols, mainMat };
+}
+
+/** Sığınak lamba gövdesi malzemesi: köşe renkleriyle ışıyan (Geo'nun ışıklı malzemesiyle aynı gölgelendirici eki) */
+function shelterGlow(intensity) {
+  const base = materials().emissive;
+  const m = base.clone();
+  m.onBeforeCompile = base.onBeforeCompile;
+  m.customProgramCacheKey = base.customProgramCacheKey;
+  m.emissiveIntensity = intensity;
+  m.name = 'shelter_glow';
+  return m;
 }
 
 /** Yerel kutu (döndürülmüş dikdörtgen, rot 90°'nin katı) → Geo dünya kutusu; y değerleri tabana göre */

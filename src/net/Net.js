@@ -11,7 +11,7 @@ import { CHARACTERS, CHARACTER_IDS } from '../entities/CharacterFactory.js';
 import { LocalTransport, PeerTransport } from './Transport.js';
 import { Voice } from './Voice.js';
 
-export const PROTOCOL = 5; // 5: dünya yerleşimi değişti (girilebilir yeni binalar, gerçek araç olan terk edilmiş arabalar); 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
+export const PROTOCOL = 6; // 6: yer altı sığınakları (dünya yerleşimi + 'shelter' eylemi); 5: dünya yerleşimi değişti (girilebilir yeni binalar, gerçek araç olan terk edilmiş arabalar); 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
 export const MAX_PLAYERS = 6;
 const RECENT_KEY = 'kiyamet_recent_rooms';
 
@@ -270,7 +270,9 @@ export class Net {
     }
     return {
       seed: S.seed, time: S.time.serialize(), flags: S.flags, relations: S.relations, difficulty: S.cfg.difficulty,
-      loot: S.loot.serialize(), lootUse: S.loot.usageSnapshot(), ground: S.ground.serialize(), build: S.build.serialize(), shelters: S.shelters ? S.shelters.serialize() : null, vehicles: S.vehicles.serialize(), npcs: S.npcs.serialize(),
+      loot: S.loot.serialize(), lootUse: S.loot.usageSnapshot(), ground: S.ground.serialize(), build: S.build.serialize(), shelters: S.shelters ? S.shelters.serialize() : null, vehicles: S.vehicles.serialize(),
+      // koltuklar kayda girmez ama sonradan katılan dolu aracı dolu görmeli (sürücüsü uzaktaki araç ağdan izlenir)
+      vseats: S.vehicles.list.filter((v) => v.seats.some(Boolean)).map((v) => [v.id, v.seats]), npcs: S.npcs.serialize(),
       quests: S.quests.serialize(), events: S.events.serialize(), weather: S.weather.serialize(), doors: S.serializeDoors(), story: S.storyWorld.serialize(),
       env: { streetPower: S.env.streetPower, doom: S.env.doom, redMist: S.env.redMist },
       props: S.props && S.props.serializeDynamic ? S.props.serializeDynamic() : null,
@@ -392,7 +394,7 @@ export class Net {
       case 'pleave': if (this.session) this.session.removeRemotePlayer(m.id); break;
       case 'pong': this.rtt = performance.now() - m.ts; this.pingOut = 0; break;
       case 'ping': if (this.transport) this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
-      case 'pdata': if (this.session) { this.session.offlinePlayers = m.d || {}; if (m.zz) this.session.zoneState = m.zz; } break;
+      case 'pdata': if (this.session) { this.session.offlinePlayers = m.d || {}; if (m.zz) this.session.zoneState = m.zz; if (m.ev) this.session.eventsState = m.ev; } break;
       case 'migrate': this.migrateHint = m; break;
       case 'kick': this.game.ui.alert('Oda sahibi seni odadan çıkardı.'); this.backToMenu(); break;
       case 'host_left': this.game.ui.alert('Oda sahibi oyunu kapattı.'); this.backToMenu(); break;
@@ -435,6 +437,7 @@ export class Net {
     if (m.z) S.zombies.applySnapshot(m.z);
     if (m.b) S.bots.applySnapshot(m.b);
     if (m.an && S.npcs && S.npcs.applyAnimalSnapshot) S.npcs.applyAnimalSnapshot(m.an);
+    if (m.vh && S.vehicles && S.vehicles.applyRest) S.vehicles.applyRest(m.vh);
   }
 
   onHostLost(reason = 'closed') {
@@ -591,7 +594,8 @@ export class Net {
         d[this.token] = S.localData();
         for (const q of S.players.values()) if (!q.isLocal && q.token && q.saved) d[q.token] = q.saved;
         // + zombi bölge nüfusu/öldürülen sayıları: host düşerse yeni host ölenleri geri getirmez
-        this.broadcast({ t: 'pdata', d, zz: S.zombies && S.zombies.serialize ? S.zombies.serialize().zones : null });
+        // olay planı da paylaşılır: host göçünde yeni host eski (katılımdaki) planı yeniden oynatmasın
+        this.broadcast({ t: 'pdata', d, zz: S.zombies && S.zombies.serialize ? S.zombies.serialize().zones : null, ev: S.events ? { done: [...S.events.done], schedule: S.events.schedule } : null });
       }
     } else {
       this.sendT -= dt;
@@ -653,11 +657,12 @@ export class Net {
     const bots = S.bots.snapshot();
     const seq = (this.snapSeqOut = (this.snapSeqOut || 0) + 1);
     const withAn = seq % 2 === 0 && S.npcs && S.npcs.animalSnapshotFor; // hayvanlar 5/sn yeter
+    const vh = S.vehicles && S.vehicles.restSnapshot ? S.vehicles.restSnapshot() : null; // sürücüsüz araçlar (host simüle eder)
     for (const peer of this.peers.values()) {
       if (!peer.inGame) continue;
       const rec = S.players.get(peer.id);
       const pos = rec ? rec.pos : S.local.pos;
-      this.transport.send(peer.pid, { t: 'snap', n: seq, tm: Math.round(S.time.total * 100) / 100, ff: S.time.ff, pl, z: S.zombies.snapshotFor(pos.x, pos.z), b: bots, an: withAn ? S.npcs.animalSnapshotFor(pos.x, pos.z) : undefined });
+      this.transport.send(peer.pid, { t: 'snap', n: seq, tm: Math.round(S.time.total * 100) / 100, ff: S.time.ff, pl, z: S.zombies.snapshotFor(pos.x, pos.z), b: bots, an: withAn ? S.npcs.animalSnapshotFor(pos.x, pos.z) : undefined, vh: vh && vh.length ? vh : undefined });
     }
   }
 

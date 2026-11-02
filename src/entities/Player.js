@@ -476,7 +476,7 @@ export class Player {
     pivot.x += rx * shoulder; pivot.z += rz * shoulder;
     const dirX = Math.sin(yaw) * Math.cos(pitch), dirY = -Math.sin(pitch), dirZ = Math.cos(yaw) * Math.cos(pitch);
     // engel: merkez + 4 köşe ışını (yakın düzlem genişliği kadar) → en kısa mesafe
-    const filt = this._camFilt || (this._camFilt = (c) => c.blocksSight && c.kind !== 'tree' && !(c.owner && c.owner === this.inside && this.inside && c.kind === 'prop'));
+    const filt = this._camFilt || (this._camFilt = (c) => c.blocksSight && c.kind !== 'tree' && c.kind !== 'vehicle' && !(c.owner && c.owner === this.inside && this.inside && c.kind === 'prop'));
     let free = this.camDist;
     const phys = S.world.physics;
     for (const [ox, oy] of [[0, 0], [0.22, 0.14], [-0.22, 0.14], [0.22, -0.14], [-0.22, -0.14]]) {
@@ -488,8 +488,9 @@ export class Player {
     this.camFree = this.camFree === undefined ? free : free < this.camFree ? damp(this.camFree, free, 30, dt) : damp(this.camFree, free, 3.5, dt);
     const d = Math.min(this.camDist, this.camFree);
     const tx = pivot.x + dirX * d, ty = pivot.y + dirY * d, tz = pivot.z + dirZ * d;
-    const Z = this.zone;
+    const Z = this.zone, KB = this.inside && this.inside.kit ? this.inside : null;
     if (Z) this.camPos.set(tx, Math.min(Z.ceilY - 0.25, Math.max(Z.floorY + 0.35, ty)), tz);
+    else if (KB) { const gy = S.world.terrain.heightAt(tx, tz) + 0.4; this.camPos.set(tx, Math.min(KB.floorY + KB.tpl.H - 0.2, Math.max(ty, gy)), tz); } // tavanlı kule: tezgâha çıkınca kamera tavanı delmesin
     else { const gy = S.world.terrain.heightAt(tx, tz) + 0.4; this.camPos.set(tx, Math.max(ty, gy), tz); }
     cam.position.copy(this.camPos);
     if (this.camShake > 0) {

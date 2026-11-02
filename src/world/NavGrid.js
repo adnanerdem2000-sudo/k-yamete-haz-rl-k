@@ -65,7 +65,7 @@ export class NavGrid {
     }
     let type = NAV.BLOCK;
     if (c.navType) type = c.navType;
-    const pad = c.kind === 'door' || c.kind === 'window' ? 0.05 : 0.22;
+    const pad = c.navPad ?? (c.kind === 'door' || c.kind === 'window' ? 0.05 : 0.22);
     const i0 = Math.max(ci0, this.toCell(c.minX - pad)), i1 = Math.min(ci1, this.toCell(c.maxX + pad));
     const j0 = Math.max(cj0, this.toCell(c.minZ - pad)), j1 = Math.min(cj1, this.toCell(c.maxZ + pad));
     for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {

@@ -183,6 +183,8 @@ export class Events {
     for (let i = this.schedule.length - 1; i >= 0; i--) {
       const e = this.schedule[i];
       if (now < e.at) continue;
+      // gündüz zombi doğmaz: vakti gelmiş (ör. göçte devralınan eski plan) zombi/sürü girdisi bu geceye kayar
+      if ((e.kind === 'zspawn' || e.kind === 'horde') && !S.time.isNight && !S.zombies.frenzy && !(S.endings && S.endings.active)) { e.at = this.tonight(); continue; }
       this.schedule.splice(i, 1);
       if (e.kind === 'event') this.trigger(e.id);
       else if (e.kind === 'zspawn') { for (const [type, x, z, o] of e.list) S.zombies.spawn(type, x, z, { ...o, emerge: true }); }

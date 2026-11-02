@@ -418,7 +418,9 @@ export class World {
       this.container('car_trunk', x - Math.sin(rot) * 1.8, z - Math.cos(rot) * 1.8, { h: 0.7, label: 'Yanmış Araç Enkazı' });
       return;
     }
-    this.reserveContainerId(); // eski "araç bagajı" konteynerinin kimliği atlanır: sonraki w: kimlikleri kaymaz
+    // eski "araç bagajı" konteynerinin kimliği atlanır (sonraki w: kimlikleri kaymaz) ve araca bağlanır: eski kayıtta
+    // aranmış/boşaltılmış ya da içine eşya konmuş bagaj, yeni aracın bagajına taşınır (Vehicles.spawn)
+    const legacyTrunk = this.reserveContainerId();
     // geçici ayak izi: bitki/kaya/moloz saçılımı eskisi gibi bu noktayı boş bıraksın (araç ağacın içinde doğmasın);
     // gerçek araç dinamik gövde olduğu için çarpıştırıcı saçılımdan sonra, yol ızgarasından önce kaldırılır
     const c = Math.abs(Math.cos(rot)), sn = Math.abs(Math.sin(rot)), hw = 1.0 * c + 2.2 * sn, hd = 1.0 * sn + 2.2 * c, by = this.terrain.heightAt(x, z);
@@ -426,7 +428,7 @@ export class World {
     const r2 = new RNG('abandoned:' + x.toFixed(1) + ':' + z.toFixed(1));
     const type = name === 'car_sedan' && r2.next() < 0.3 ? 'sports' : ABANDONED_TYPE[name] || 'sedan';
     const n = (this._abandonedN = (this._abandonedN || 0) + 1);
-    const spec = { id: 'ab' + n, type, x, z, rot, abandoned: true, loot: 'car_trunk', fuel: +(0.05 + r2.next() * 0.25).toFixed(2), health: +(crashed ? 0.25 + r2.next() * 0.25 : 0.55 + r2.next() * 0.35).toFixed(2) };
+    const spec = { id: 'ab' + n, type, x, z, rot, abandoned: true, loot: 'car_trunk', legacyTrunk, fuel: +(0.05 + r2.next() * 0.25).toFixed(2), health: +(crashed ? 0.25 + r2.next() * 0.25 : 0.55 + r2.next() * 0.35).toFixed(2) };
     if (type !== 'taxi') spec.paint = r2.pick(DUSTY_PAINTS);
     if (crashed) {
       const f = r2.next();

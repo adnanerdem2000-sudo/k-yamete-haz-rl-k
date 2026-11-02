@@ -68,8 +68,10 @@ export class PlayerStats {
     target = clamp(target, 33, 40.5);
     const prevT = this.temp;
     this.temp += (target - this.temp) * Math.min(1, h * (env.sun ? 1.2 : 0.8));
-    if (prevT <= 38.6 && this.temp > 38.6) ev.push('heat');
-    if (prevT <= 39.5 && this.temp > 39.5) ev.push('heatstroke');
+    // uyarının sebebi: güneş mi (açıkta öğle) yoksa ateş/kalın giysi mi (metin ona göre)
+    const sunny = (env.sun || 0) > 0.05;
+    if (prevT <= 38.6 && this.temp > 38.6) ev.push(sunny ? 'heat' : 'overheat');
+    if (prevT <= 39.5 && this.temp > 39.5) ev.push(sunny ? 'heatstroke' : 'overheat2');
     // moral
     let mTarget = 55 + (env.comfort || 0) * 30 + (env.inBase ? 6 : 0) - (env.alone ? 8 : 0) - (env.night && !env.inBase ? 6 : 0);
     if (this.hunger < 25) mTarget -= 12;

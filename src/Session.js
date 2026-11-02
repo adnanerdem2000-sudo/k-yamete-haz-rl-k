@@ -233,7 +233,7 @@ export class Session {
     });
     this.onEvt('flag', (e) => { this.flags[e.flag] = e.value; this.quests.onFlag(e.flag); });
     this.onEvt('rel', (e) => { this.relations[e.faction] = clamp((this.relations[e.faction] || 0) + e.delta, -100, 100); this.quests.onFlag('rel:' + e.faction); });
-    this.onEvt('toast', (e) => this.ui.toast(e.text, e.kind || 'info', e.dur));
+    this.onEvt('toast', (e) => { if (e.to && e.to !== this.localId) return; this.ui.toast(e.text, e.kind || 'info', e.dur); }); // to: yalnız o oyuncuya
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); if (e.r > 25 && this.living) this.living.birds.scare(e.x, e.z, e.r); });
     this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (Array.isArray(e.push) && !this.localStats.downed && this.local.mode !== 'drive') { this.local.vel.x += e.push[0]; this.local.vel.z += e.push[1]; this.local.vel.y = Math.max(this.local.vel.y, e.push[2] || 0); } if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
     this.onEvt('revived', (e) => {
@@ -308,6 +308,8 @@ export class Session {
       this.tickNeeds(mins);
       this.build.tick(mins, dt);
       this.weather.update(dt, mins);
+      // uyku sürerken gece/gündüz dönerse hız yeniden hesaplanır (akşamüstü yatan takım açıkta gece ×40'ta kalmasın)
+      if (this.sleepVotes.size && this.time.isNight !== this._sleepNight) this.updateSleepRate();
     } else {
       this.time.total += dt * this.time.rate * this.time.ff;
       this.tickNeeds(dt * this.time.rate * this.time.ff);
@@ -432,6 +434,16 @@ export class Session {
     a.setIntensity(clamp(threat + (this.endings.active ? 0.6 : 0) - (inBase && threat < 0.3 ? 0.2 : 0), 0, 1));
   }
 
+  /** Noktanın "katı": yüzey (null) ya da içinde bulunduğu yer altı sığınağının kimliği. Alan hasarı, botların hedefi,
+   *  hayvanlar gibi yalnız yatay mesafeye bakan sistemler, toprağın iki yanındakileri birbirine karıştırmasın diye. */
+  levelOf(x, y, z) {
+    const U = this.world.under;
+    if (!U || y > this.world.terrain.heightAt(x, z) - 2) return null;
+    const Z = U.zoneAt(x, y + 0.5, z);
+    return Z ? Z.id : null;
+  }
+  sameLevel(a, b) { return this.levelOf(a.x, a.y, a.z) === this.levelOf(b.x, b.y, b.z); }
+
   isInBase(p) {
     const h = this.world.home;
     return p.x > h.box.minX - 22 && p.x < h.box.maxX + 12 && p.z > h.box.minZ - 42 && p.z < h.box.maxZ + 12;
@@ -461,6 +473,8 @@ export class Session {
     if (ev.includes('sick')) this.ui.toast('Hastalandın! Antibiyotik bul.', 'danger');
     if (ev.includes('heat')) this.ui.toast('☀️ Güneş çarpması riski! Gölgeye ya da bir binaya gir, su iç.', 'warn', 5);
     if (ev.includes('heatstroke')) this.ui.toast('🥵 Güneş çarptı: can kaybediyorsun! Hemen içeri gir ve su iç.', 'danger', 5);
+    if (ev.includes('overheat')) this.ui.toast('🥵 Çok ısındın: ateşten uzaklaş, kalın giysini çıkar, su iç.', 'warn', 5);
+    if (ev.includes('overheat2')) this.ui.toast('🥵 Aşırı ısındın: can kaybediyorsun! Ateşten uzaklaş, giysini çıkar, su iç.', 'danger', 5);
     // akşam uyarısı
     if (st.hunger < 15 && !this._warnHunger) { this._warnHunger = true; this.ui.toast('Çok açsın!', 'warn'); }
     if (st.hunger > 30) this._warnHunger = false;
@@ -492,7 +506,8 @@ export class Session {
     if (res.bleed) this.ui.toast('Kanıyorsun! Bandaj kullan.', 'danger');
     if (res.infected) this.ui.toast('Isırık enfekte olabilir…', 'danger');
     if (res.downed) this.onDowned();
-    if (this.local.mode === 'sleep') { this.local.mode = 'ground'; this.ui.toast('Uyandın! Saldırı altındasın!', 'danger'); }
+    // hasar uyandırır: uyku oyu da geri çekilir (yoksa dövüş hızlandırılmış zamanda sürer, uyku perdesi kalır)
+    if (this.local.mode === 'sleep') { this.wake(); this.ui.toast('Uyandın! Saldırı altındasın!', 'danger'); }
   }
 
   onLocalDamaged(amount, kind) {
@@ -707,9 +722,15 @@ export class Session {
 
   sleepVote(from, on) {
     if (on) this.sleepVotes.add(from); else this.sleepVotes.delete(from);
+    this.updateSleepRate(true);
+  }
+
+  /** Uyku hızı (host): oy çoğunluğu + gece güvenli yer kuralı. Oy değişince ve uyurken gece/gündüz dönünce hesaplanır. */
+  updateSleepRate(voteChanged = false) {
     const humans = [...this.players.values()].filter((p) => !p.isBot).length;
     const need = Math.ceil(humans / 2 + 0.01);
     const ok = this.sleepVotes.size >= need;
+    this._sleepNight = this.time.isNight;
     // gece yalnız güvenli yerde (yer altı sığınağı ya da savunması güçlü üs) hızlı geçer; açıkta uyuyanlar için gece
     // yavaş akar (zombiler gelebilir: hasar uyandırır). Gündüz şekerlemesi her yerde hızlıdır.
     let ff = ok ? 40 : 1;
@@ -723,6 +744,7 @@ export class Session {
       if (!safe) ff = 8;
       if (!safe && this.sleepState && this.sleepState.ff !== 8) this.emit({ k: 'toast', text: 'Açıkta uyuyorsunuz: gece yavaş geçecek, zombiler gelebilir. Sığınakta ya da korunaklı üste uyuyun.', kind: 'warn', dur: 6 });
     }
+    if (!voteChanged && this.time.ff === ff) return;
     this.emit({ k: 'sleep', ff, votes: this.sleepVotes.size, need });
   }
 
@@ -795,7 +817,7 @@ export class Session {
       // anlık görüntüler arasında yumuşak geçiş
       if (p.target) {
         // ışınlanma (sığınağa iniş/çıkış, yeniden doğma): uzun mesafeyi kaydırmadan atla
-        if (p.pos.distanceToSquared(p.target) > 64) p.pos.copy(p.target); else p.pos.lerp(p.target, Math.min(1, dt * 12));
+        if (p.pos.distanceToSquared(p.target) > 64 || Math.abs(p.target.y - p.pos.y) > 2.5) p.pos.copy(p.target); else p.pos.lerp(p.target, Math.min(1, dt * 12));
         p.avatar.root.position.copy(p.pos);
       }
       p.avatar.update(dt, p.anim || { mode: 'ground', speed: 0 });
@@ -814,7 +836,10 @@ export class Session {
     // gerçek zombiye dönüşür (can tam); bölge nüfusu ve öldürülen sayıları son paylaşılan değerden (pdata / hoş geldin)
     // geri yüklenir → ölenler geri gelmez, görüş dışındaki nüfus bölge kuralıyla tamamlanır
     const seen = [];
-    for (const v of this.zombies.views.values()) if (v.state && !v.state.dead && v.type) seen.push({ type: v.type, x: v.pos.x, z: v.pos.z, yaw: v.state.yaw || 0, alert: v.state.state === 'chase' || v.state.state === 'attack' });
+    // toprağa dönmekte olanlar dönmüş sayılır (yeniden canlanmaz; bölge nüfusuna eklenir)
+    const burrowing = [];
+    for (const v of this.zombies.views.values()) if (v.state && !v.state.dead && v.type && v.state.state === 'burrow') burrowing.push({ x: v.pos.x, z: v.pos.z });
+    for (const v of this.zombies.views.values()) if (v.state && !v.state.dead && v.type && v.state.state !== 'burrow') seen.push({ type: v.type, x: v.pos.x, z: v.pos.z, yaw: v.state.yaw || 0, alert: v.state.state === 'chase' || v.state.state === 'attack' });
     for (const id of [...this.zombies.views.keys()]) this.zombies.removeZombie(id);
     this.zombies.list.clear();
     this.zombies.init();
@@ -823,6 +848,12 @@ export class Session {
       const zb = this.zombies.spawn(q.type, q.x, q.z, { zone: this.zombies.zoneFor(q.x, q.z) });
       if (zb) { zb.yaw = q.yaw; if (q.alert) zb.alert = 1; }
     }
+    for (const q of burrowing) { const zn = this.zombies.zoneFor(q.x, q.z); if (zn) zn.pop++; }
+    // gündüz devralındıysa zombiler toprağa dönecek (şafak kenarı yeni host'ta görülmedi)
+    this.zombies._wasNight = this.time.isNight;
+    if (!this.time.isNight && !this.zombies.frenzy && !(this.endings && this.endings.active)) this.zombies.dawn();
+    // olay planı: son paylaşılan hâli (katılımdaki eski plan değil)
+    if (this.eventsState) { this.events.done = new Set(this.eventsState.done || []); this.events.schedule = this.eventsState.schedule || []; }
     this.promotedZombies = seen.length;
     if (this.bots && this.bots.promoteProxies) this.bots.promoteProxies();
     // ayrılan oyuncuların koltukları boşalır; sürücüsüz araçlar dinamik gövdeye döner
@@ -832,6 +863,10 @@ export class Session {
     }
     if (this.doorPhys) for (const r of this.doorPhys.doors) r.cmdT = 0;
     if (this.npcs && this.npcs.promoteAnimals) this.npcs.promoteAnimals();
+    // konteyner kullanımı (açık dolap kapakları/çekmeceler) baştan kurulur: kimin açtığı (users) yalnız eski host'taydı;
+    // yeni host'un kendi açık paneli bir sonraki karede yeniden bildirilir, yeniden bağlananlar kendi panellerini bildirir
+    this.loot.users.clear(); this.loot.inUse.clear();
+    if (this.fronts) this.fronts.localUse = null;
   }
 
   addRemotePlayer(info) {
@@ -970,6 +1005,12 @@ export class Session {
     this.build.load(w.build);
     if (this.shelters) this.shelters.load(w.shelters);
     this.vehicles.load(w.vehicles);
+    for (const [id, seats] of w.vseats || []) {
+      const v = this.vehicles.byId(id);
+      if (!v || !Array.isArray(seats)) continue;
+      for (let i = 0; i < v.seats.length && i < seats.length; i++) v.seats[i] = seats[i] || null;
+      if (v.seats[0] && v.seats[0] !== this.localId) { v.setRemote(true); v.setParked(false); }
+    }
     this.npcs.load(w.npcs);
     this.quests.load(w.quests);
     this.events.load(w.events);

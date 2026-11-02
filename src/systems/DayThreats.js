@@ -54,7 +54,7 @@ export class DayThreats {
       if (pd && dogs < 4 && this.rng.next() < pd) {
         const type = this.rng.chance(0.5) ? 'husky' : 'shiba';
         S.npcs.spawnPack(type, p, 2 + (day > 8 ? 1 : 0) + (this.rng.chance(0.3) ? 1 : 0), null, 55 + this.rng.next() * 25);
-        S.emit({ k: 'toast', text: '🐕 Uzaktan havlamalar… aç köpek sürüsü yakında dolaşıyor.', kind: 'warn', dur: 4 });
+        S.emit({ k: 'toast', to: p.id, text: '🐕 Uzaktan havlamalar… aç köpek sürüsü yakında dolaşıyor.', kind: 'warn', dur: 4 });
       }
     }
   }
@@ -77,7 +77,7 @@ export class DayThreats {
         // devriye: oyuncunun bulunduğu bölgeye doğru yürür (görünce saldırır: zombi algısıyla aynı)
         zb.target = { kind: 'pos', x: tx, z: tz }; zb.state = 'investigate'; zb.alert = 0.4;
       }
-      if (k) S.emit({ k: 'toast', text: '🔫 Yağmacı devriyesi bölgede! Görünmeden yağma, gerekirse çatış.', kind: 'warn', dur: 4 });
+      if (k) S.emit({ k: 'toast', to: p.id, text: '🔫 Yağmacı devriyesi bölgede! Görünmeden yağma, gerekirse çatış.', kind: 'warn', dur: 4 });
       return k;
     }
     return 0;
@@ -97,7 +97,10 @@ export class DayThreats {
   /** Saat duyuruları (herkese): alacakaranlıktan önce, alacakaranlıkta, şafaktan önce ve şafakta */
   announce() {
     const S = this.s;
-    const m = Math.floor(S.time.minuteOfDay);
+    // geçilen dakika aralığına bakılır: uyku hızlandırmasında bir kare bir dakikadan uzun sürse de duyuru kaçmaz
+    const tot = S.time.total, prev = this._prevTot ?? tot;
+    this._prevTot = tot;
+    if (tot - prev > 240 || tot < prev) return; // büyük atlama (yükleme/zaman ayarı): eski duyurular basılmaz
     const slots = [
       [DUSK - 30, '🌇 Güneş batıyor. Yarım saat sonra ölüler topraktan çıkacak — üsse ya da bir sığınağa dön.', 'warn'],
       [DUSK, '🌑 Gece başladı: zombiler yerden çıkıyor!', 'danger'],
@@ -105,7 +108,11 @@ export class DayThreats {
       [DAWN, '☀️ Gün doğdu: zombiler toprağa dönüyor. Yağma zamanı — ama yağmacılara, köpeklere ve öğle sıcağına dikkat.', 'good'],
     ];
     for (const [at, text, kind] of slots) {
-      if (m === at && this.lastAnnounce !== at + S.time.day * 1440) { this.lastAnnounce = at + S.time.day * 1440; S.emit({ k: 'toast', text, kind, dur: 5 }); }
+      // bu günün (ya da az önce geçilen gece yarısından önceki günün) o dakikası, önceki kare ile bu kare arasında mı
+      const dayStart = Math.floor(tot / 1440) * 1440;
+      for (const t of [dayStart + at, dayStart - 1440 + at]) {
+        if (prev < t && t <= tot && this.lastAnnounce !== t) { this.lastAnnounce = t; S.emit({ k: 'toast', text, kind, dur: 5 }); }
+      }
     }
   }
 }

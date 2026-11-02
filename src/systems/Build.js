@@ -360,6 +360,8 @@ export class Build {
     const q = rot & 1;
     const hw = (q ? d : w) / 2 - 0.05, hd = (q ? w : d) / 2 - 0.05;
     if (S.world.terrain.isWater(x, z)) return { ok: false, why: 'Suya kurulamaz' };
+    // yer altı sığınağı: tuzak/alarm/ışık/yol ızgarası yüzeye göre çalıştığı için yapı kurulmaz
+    if (S.world.under && S.world.under.zoneAt(x, y + 0.5, z)) return { ok: false, why: 'Yer altı sığınağına kurulamaz' };
     const anywhere = ['barricade_wood', 'barricade_metal', 'spike_trap', 'barbed_wire', 'campfire', 'wood_fence', 'wood_wall', 'storage_crate', 'bed', 'rain_collector', 'alarm', 'garden_plot', 'watchtower'].includes(def.id);
     if (!anywhere && !S.isInBase({ x, z })) return { ok: false, why: 'Yalnızca üs alanında' };
     if (def.walkThrough || def.trap) return { ok: true };

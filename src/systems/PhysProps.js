@@ -269,15 +269,15 @@ export class PhysProps {
     S.audio.play('explosion', { at: { x, y, z }, vol: 1 });
     if (this.pw) this.pw.impulse(x, y, z, radius * 1.6, 9);
     this.burst(x, y + 0.5, z, 'metal', 6);
-    const p = S.local.pos;
-    const dl = dist(p.x, p.z, x, z);
-    if (dl < radius) { S.damageLocal((1 - dl / radius) * 55, 'explosion'); S.local.camShake = 1; }
+    const p = S.local.pos, at = { x, y, z };
+    const dl = dist(p.x, p.z, x, z), same = S.sameLevel(p, at); // toprağın öbür yanındaki (sığınaktaki) patlamadan etkilenmez
+    if (dl < radius && same) { S.damageLocal((1 - dl / radius) * 55, 'explosion'); S.local.camShake = 1; }
     else if (dl < radius * 3) S.local.camShake = Math.max(S.local.camShake, 0.6 * (1 - dl / (radius * 3)));
     if (S.isHost) {
       for (const zb of S.zombies.list.values()) {
         if (zb.dead) continue;
         const d = dist(zb.x, zb.z, x, z);
-        if (d < radius) S.applyAction('zombie_hit', { id: zb.id, dmg: Math.round((1 - d / radius) * 220), dir: [(zb.x - x) / (d || 1), (zb.z - z) / (d || 1)], kind: 'explosion', force: 14 * (1 - d / radius) }, null);
+        if (d < radius && S.sameLevel(zb, at)) S.applyAction('zombie_hit', { id: zb.id, dmg: Math.round((1 - d / radius) * 220), dir: [(zb.x - x) / (d || 1), (zb.z - z) / (d || 1)], kind: 'explosion', force: 14 * (1 - d / radius) }, null);
       }
       S.applyAction('noise', { x, z, r: 90, src: 'explosion' }, null);
     }

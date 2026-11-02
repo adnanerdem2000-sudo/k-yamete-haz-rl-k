@@ -7,6 +7,10 @@ import { VehicleVisuals, prepareWindowMaterials } from './VehicleVisuals.js';
 import { ITEMS } from '../data/items.js';
 import { clamp, damp, dampAngle, wrapAngle, dist, uid, lerp } from '../core/util.js';
 import { G, ALL, groups, quatYaw, yawOf } from '../physics/PhysicsWorld.js';
+import { Collider } from '../world/Physics.js';
+
+// park etmiş (sürücüsüz) kara aracı: oyuncu itmesi ve patlama sonrası kayma çabuk söner
+const PARK_DAMP = 2.2, PARK_ADAMP = 2.5;
 
 /** Yüzeye göre sürüş: tutunma çarpanı, yuvarlanma direnci, toz; ıslakta çamur/kar daha kaygan */
 export const SURFACES = {
@@ -170,6 +174,9 @@ class Vehicle {
     // kabin, kapı/bagaj kanatları, far ışıması, hasar görselleri; camlar yarı saydam
     prepareWindowMaterials(m);
     try { this.visuals = new VehicleVisuals(this); this.visuals.applyDamage(this.health / this.maxHealth); } catch (e) { console.warn('Araç görselleri kurulamadı', this.id, e); this.visuals = null; }
+    // boya malzemesi olmayan (dokulu) modellerde boyanacak kabuk görsellerde klonlanır: boya ondan sonra da uygulanır
+    // (yoksa kayıttan yüklemede ve sonradan katılanda boya kayboluyordu)
+    if (this.paint && this.visuals) this.applyPaint(this.paint);
     S.game.scene.add(g);
     this.sync();
   }
@@ -221,7 +228,8 @@ class Vehicle {
     }
     const lift = d.susp ?? 0.34;
     this.body = pw.w.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(this.pos.x, this.pos.y + 0.05, this.pos.z).setRotation(q)
-      .setLinearDamping(0.04).setAngularDamping(0.85).setCcdEnabled(true).setCanSleep(true));
+      .setLinearDamping(PARK_DAMP).setAngularDamping(PARK_ADAMP).setCcdEnabled(true).setCanSleep(true));
+    this._parked = true;
     const hy = Math.max(0.22, H * 0.27);
     this.col = pw.w.createCollider(R.ColliderDesc.cuboid(d.wid * 0.46, hy, d.len * 0.47).setTranslation(0, H * 0.24 + hy, 0)
       .setMass(this.mass).setFriction(0.35).setRestitution(0.04).setCollisionGroups(groups(G.VEHICLE)), this.body);
@@ -257,6 +265,9 @@ class Vehicle {
     this.driveIdx = ws.map((w, i) => (d.drive === 'awd' || (d.drive === 'fwd' ? w.front : !w.front) ? i : -1)).filter((i) => i >= 0);
     pw.vehicleBodies = pw.vehicleBodies || new Set();
     pw.vehicleBodies.add(this.body);
+    // sürücüsüz araçları yalnız host simüle eder; istemcide kinematik gövde host'un yayımladığı konumu izler (oyuncu
+    // itmesi, çarpma, patlama her eşte farklı sonuç verip araç konumları ayrışmasın)
+    if (!this.s.isHost) this.setRemote(true);
     this.lastVel = { x: 0, y: 0, z: 0 };
   }
 
@@ -306,7 +317,46 @@ class Vehicle {
     if (this.tailMat) { this.tailMat.dispose(); this.revMat.dispose(); }
     this.s.game.scene.remove(this.root);
     const pw = this.s.game.phys;
+    // Rapier araç denetleyicisi dünyada ayrıca tutulur: gövdeyle birlikte silinmezse her oturumda birikir
+    if (pw && this.ctrl) { try { pw.w.removeVehicleController(this.ctrl); } catch { /* yoksay */ } this.ctrl = null; }
     if (pw && this.body) { try { pw.w.removeRigidBody(this.body); } catch { /* zaten silinmiş */ } if (pw.vehicleBodies) pw.vehicleBodies.delete(this.body); this.body = null; }
+    // çarpışma dünyası vekili (dünya oturumlar arasında kalır)
+    if (this.proxy) { for (const c of this.proxy) this.s.world.physics.remove(c); this.proxy = null; }
+  }
+
+  /** Sürücü binince sürüş sönümü, inince park sönümü (park etmiş araç oyuncu itmesiyle kaymaz, eş konumları ayrışmaz) */
+  setParked(parked) {
+    if (!this.body || this.water || this._parked === parked) return;
+    this._parked = parked;
+    this.body.setLinearDamping(parked ? PARK_DAMP : 0.04);
+    this.body.setAngularDamping(parked ? PARK_ADAMP : 0.85);
+  }
+
+  /** Çarpışma dünyası vekili (araç boyunca 2–3 daire): kurşun, görüş hattı, ses örtmesi ve zombi/bot/NPC çarpışması
+   *  aracı bilsin. Rapier'e aynalanmaz (gövde zaten orada). Dolu araç görüşü/kurşunu kesmez (sürücü görünür, vurulur). */
+  updateProxy() {
+    if (this.water) return;
+    const P = this.s.world.physics;
+    const occupied = this.seats.some(Boolean);
+    const L = this.def.len, W = this.def.wid, r = W * 0.46;
+    if (!this.proxy) {
+      const n = L > W * 2.2 ? 3 : 2;
+      this.proxy = [];
+      for (let i = 0; i < n; i++) { const c = new Collider({ shape: 'circle', x: this.pos.x, z: this.pos.z, r, minY: this.pos.y, maxY: this.pos.y + 1, kind: 'vehicle', walkable: false, blocksNav: false, owner: this }); c.noPhysics = true; P.add(c); this.proxy.push(c); }
+      this._px = null;
+    }
+    const q = this._px;
+    if (q && Math.abs(q.x - this.pos.x) < 0.06 && Math.abs(q.z - this.pos.z) < 0.06 && Math.abs(q.y - this.pos.y) < 0.08 && Math.abs(wrapAngle(q.yaw - this.yaw)) < 0.025 && q.occ === occupied) return;
+    this._px = { x: this.pos.x, y: this.pos.y, z: this.pos.z, yaw: this.yaw, occ: occupied };
+    const fx = Math.sin(this.yaw), fz = Math.cos(this.yaw), n = this.proxy.length, span = Math.max(0, L / 2 - r);
+    const H = Math.max(1.2, Math.min(3.4, this.modelH || 1.6));
+    for (let i = 0; i < n; i++) {
+      const c = this.proxy[i], t = -span + (2 * span * i) / (n - 1);
+      const x = this.pos.x + fx * t, z = this.pos.z + fz * t;
+      c.x = x; c.z = z; c.minY = this.pos.y - 0.3; c.maxY = this.pos.y + H;
+      c.blocksSight = !occupied; c.blocksBullets = !occupied;
+      P.move(c, x - r, z - r, x + r, z + r);
+    }
   }
 }
 
@@ -361,7 +411,9 @@ export class Vehicles {
       if (left > 0) S.emit({ k: 'grant', to: from, items: [{ ...p.stack, qty: left }], silent: true });
     });
     S.onEvt('veh_seat', (e) => this.onSeat(e));
-    S.onEvt('veh_state', (e) => { const v = this.byId(e.id); if (v && v !== this.local) this.applyState(v, e); });
+    // sürücünün yayımladığı durum: kendi sürdüğüm araç dışındaki her araca uygulanır (yolcu koltuğundaki istemci de
+    // aracın hareketini görür; eskiden 'this.local' yolcuyu da kapsadığı için araç onun ekranında yerinde kalıyordu)
+    S.onEvt('veh_state', (e) => { const v = this.byId(e.id); if (v && v.seats[0] !== S.localId) this.applyState(v, e); });
     S.onEvt('veh_set', (e) => {
       const v = this.byId(e.id); if (!v) return;
       if (e.trunkOpen !== undefined) { v.trunkOpen = !!e.trunkOpen; if (v.visuals) v.visuals.setTrunkOpen(v.trunkOpen); if (v.trunkOpen) S.audio.play('door', { at: v.pos, vol: 0.5, rate: 0.9 }); }
@@ -395,10 +447,42 @@ export class Vehicles {
     this.list.push(new Vehicle(this.s, { id: 'rv', type: 'rv', x: -224, z: -38, rot: 0.6, fuel: 0.25, health: 0.7 }));
   }
 
+  /** Host → istemci: sürücüsüz kara araçlarının konumu (anlık görüntüde). Değişenler her seferinde, hepsi ~3 sn'de bir.
+   *  Öğe: [id, x, y, z, qx, qy, qz, qw] */
+  restSnapshot() {
+    const full = (this._vhN = (this._vhN || 0) + 1) % 30 === 0, out = [];
+    for (const v of this.list) {
+      if (v.water || !v.body || v.seats[0]) continue;
+      const p = v.pos, q = v.quat, o = v._vhSent;
+      if (!full && o && Math.abs(o[0] - p.x) < 0.02 && Math.abs(o[1] - p.y) < 0.02 && Math.abs(o[2] - p.z) < 0.02 && Math.abs(o[3] - q.x) + Math.abs(o[4] - q.y) + Math.abs(o[5] - q.z) + Math.abs(o[6] - q.w) < 0.002) continue;
+      v._vhSent = [p.x, p.y, p.z, q.x, q.y, q.z, q.w];
+      out.push([v.id, Math.round(p.x * 100) / 100, Math.round(p.y * 100) / 100, Math.round(p.z * 100) / 100, Math.round(q.x * 1e4) / 1e4, Math.round(q.y * 1e4) / 1e4, Math.round(q.z * 1e4) / 1e4, Math.round(q.w * 1e4) / 1e4]);
+    }
+    return out;
+  }
+
+  /** İstemci: host'un sürücüsüz araç konumları → kinematik hedef */
+  applyRest(arr) {
+    for (const a of arr) {
+      const v = this.byId(a[0]);
+      if (!v || v.water || !v.body || v.seats[0]) continue; // sürücülü aracı sürücüsünün durumu taşır
+      v.netTarget = { x: a[1], y: a[2], z: a[3], q: new THREE.Quaternion(a[4], a[5], a[6], a[7]) };
+      v.setRemote(true);
+    }
+  }
+
   /** Dünya doğum noktasından araç; terk edilmiş arabanın bagajı eski "araç bagajı" yağma tablosundan (tohumlu) dolar */
   spawn(sp) {
     const v = new Vehicle(this.s, sp);
-    if (sp.loot && !sp.trunk && this.s.loot) {
+    const legacy = sp.legacyTrunk && this.s.loot ? this.s.loot.state.get(sp.legacyTrunk) : null;
+    if (legacy) {
+      // eski kayıt: bu arabanın yerindeki eski "araç bagajı" konteynerinin durumu bagaja taşınır (boşaltıldıysa boş
+      // kalır, içine konanlar kaybolmaz); eski kimlik kayıttan silinir
+      const items = (legacy.slots || []).filter(Boolean);
+      if (items.length > v.trunk.length) { const n0 = v.trunk.length; v.trunk.length = items.length; v.trunk.fill(null, n0); }
+      for (let i = 0; i < items.length; i++) v.trunk[i] = items[i];
+      this.s.loot.state.delete(sp.legacyTrunk);
+    } else if (sp.loot && !sp.trunk && this.s.loot) {
       try {
         const g = this.s.loot.generate({ id: 'trunk:' + sp.id, type: sp.loot, x: sp.x, z: sp.z });
         const items = g.slots.filter(Boolean);
@@ -513,8 +597,9 @@ export class Vehicles {
     v.seats[e.seat] = e.player;
     if (v.visuals && (!!e.player) !== (!!prev)) v.visuals.swingDoor(e.seat);
     if (e.seat === 0) {
-      // sürücü uzaktaysa gövde ağdan izlenir; yerel sürücü ya da boş araç dinamik
-      const remote = !!e.player && e.player !== S.localId;
+      v.setParked(!e.player);
+      // sürücü uzaktaysa gövde ağdan izlenir; yerel sürücü dinamik; boş araç host'ta dinamik, istemcide host'u izler
+      const remote = e.player ? e.player !== S.localId : !S.isHost;
       v.setRemote(remote);
       if (!remote) v.netTarget = null;
       if (e.player && v.body && !v.body.isKinematic()) v.body.wakeUp();
@@ -542,11 +627,13 @@ export class Vehicles {
     const S = this.s;
     const v = this.local;
     if (!v) return;
+    // sürücü inerken son konum/yön önce yayımlanır: diğer eşlerin kopyası aynı yerde durup park sönümüne geçer
+    if (S.local.seat === 0 && S.net.active) S.act('vehicle_state', this.stateOf(v));
     S.act('vehicle_exit', { id: v.id });
     // yanına in
     const side = S.local.seat % 2 === 0 ? 1 : -1;
     let ex = v.pos.x + Math.cos(v.yaw) * (v.def.wid * 0.5 + 0.8) * side, ez = v.pos.z - Math.sin(v.yaw) * (v.def.wid * 0.5 + 0.8) * side;
-    if (S.world.physics.overlapsBox(ex - 0.3, ez - 0.3, ex + 0.3, ez + 0.3, v.pos.y + 0.2, v.pos.y + 1.8)) { ex = v.pos.x - Math.cos(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; ez = v.pos.z + Math.sin(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; }
+    if (S.world.physics.overlapsBox(ex - 0.3, ez - 0.3, ex + 0.3, ez + 0.3, v.pos.y + 0.2, v.pos.y + 1.8, (c) => c.owner !== v)) { ex = v.pos.x - Math.cos(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; ez = v.pos.z + Math.sin(v.yaw) * (v.def.wid * 0.5 + 0.8) * side; }
     if (v.water) { const dock = S.world.interactables.find((i) => i.type === 'boat_dock'); if (dock) { ex = dock.x; ez = dock.z - 3; } }
     v.inThr = 0; v.inSteer = 0; v.inHB = false;
     S.audio.stopLoop('skid_local');
@@ -882,6 +969,7 @@ export class Vehicles {
       const dx = x - v.pos.x, dz = z - v.pos.z;
       if (Math.abs(dx) > 6 || Math.abs(dz) > 6) continue;
       if (y > v.pos.y + 1.7) continue;
+      if (y < v.pos.y - 2.5) continue; // aracın çok altındaki (yer altı sığınağındaki) karakteri itme
       // yerel kutu
       const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
       let lx = dx * c - dz * s, lz = dx * s + dz * c;
@@ -927,6 +1015,7 @@ export class Vehicles {
   update(dt) {
     const S = this.s;
     const alpha = S.game.phys ? S.game.phys.alpha : 1;
+    for (const v of this.list) v.updateProxy();
     const cam = S.game.gfx && S.game.gfx.camera ? S.game.gfx.camera.position : null;
     for (const v of this.list) {
       if (v === this.local) continue;

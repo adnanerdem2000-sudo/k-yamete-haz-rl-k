@@ -147,6 +147,7 @@ export class Combat {
     const px = pl.pos.x + fx * range * 0.8, pz = pl.pos.z + fz * range * 0.8;
     const list = S.world.physics.query(px - 0.6, pz - 0.6, px + 0.6, pz + 0.6);
     for (const c of list) {
+      if (c.minY > pl.pos.y + 2 || c.maxY < pl.pos.y) continue; // savuruşun yüksekliğinde değil (ör. sığınaktan yüzeydeki ağaç)
       if (c.kind === 'tree' && def && def.tool && def.tool.includes('axe')) {
         c.chops = (c.chops || 0) + 1;
         S.fx.hit(c.x, pl.pos.y + 1.2, c.z, 'wood');
@@ -377,7 +378,8 @@ export class Combat {
           if (S.props) S.props.burst(p.x, p.y + 0.1, p.z, 'glass', 1, [p.vx * 0.05, p.vz * 0.05]);
           S.audio.play('glass', { at: { x: p.x, y: p.y, z: p.z }, vol: 0.8, range: 40 });
         } else if (p.kind === 'fire') {
-          S.act('molotov', { x: p.x, y: S.world.terrain.heightAt(p.x, p.z), z: p.z, r: 4 });
+          // ateş şişenin düştüğü yerde (yer altı sığınağında atılan molotof yüzeyde değil, odada yanar)
+          S.act('molotov', { x: p.x, y: Math.max(p.y - 0.3, S.world.physics.groundHeight(p.x, p.z, p.y + 0.5)), z: p.z, r: 4 });
           S.act('noise', { x: p.x, z: p.z, r: 30, src: 'fire' });
           S.audio.play('glass', { at: { x: p.x, y: p.y, z: p.z }, vol: 1 });
         }
@@ -393,7 +395,7 @@ export class Combat {
       f.t -= dt;
       for (const z of S.zombies.list.values()) {
         if (z.dead) continue;
-        if (Math.hypot(z.x - f.x, z.z - f.z) < f.r) { z.hp -= 18 * dt; z.slow = 0.4; if (z.hp <= 0) S.zombies.kill(z, null); }
+        if (Math.hypot(z.x - f.x, z.z - f.z) < f.r && Math.abs((z.y ?? f.y) - f.y) < 2.5) { z.hp -= 18 * dt; z.slow = 0.4; if (z.hp <= 0) S.zombies.kill(z, null); }
       }
       if (f.t <= 0) this.fireAreas.splice(i, 1);
     }
