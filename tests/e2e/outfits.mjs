@@ -1,7 +1,9 @@
-// Nadir kıyafet kombinasyonu testi: her tabanda bütün kafa × gövde setleri (bacak/ayak gövdeyi izler) oyunun
-// CharacterFactory'siyle kurulur; boyun ve bel birleşimlerinde geometrik boşluk ölçülür (kafa parçasının en alt
-// halkası ile gövde parçasının en üst halkası arasındaki dikey açıklık) ve ızgara görüntüsü alınır.
-// Kullanım: node tools/scenario.mjs tools/dev/outfit-combos.mjs <url>  → /tmp/combos-men.png, /tmp/combos-women.png
+// Nadir kıyafet kombinasyonu testi (takımda): her tabanda bütün kafa × gövde setleri (bacak/ayak gövdeyi izler)
+// oyunun CharacterFactory'siyle kurulur. Denetimler: her kombinasyon kuruluyor ve geometrisi sonlu (NaN yok);
+// boyun ve bel birleşimlerinde görünür boşluk yok (kafa parçasının en alt halkası gövde parçasının en üst halkasının
+// 2 cm'den, gövde altı bacak üstünün 3 cm'den fazla üstünde değil); parçalar birbirinin içine aşırı gömülmüyor
+// (çakışma sınırı ölçülen dağılıma göre). Izgara görüntüsü: /tmp/combos-men.png, /tmp/combos-women.png
+// (eski yoklama tools/dev/outfit-combos.mjs bu senaryoya taşındı).
 export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 200000 });
@@ -43,7 +45,9 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
         const c = av.ch.combo, P = c.geo.attributes.position.array, part = c.part;
         const ring = (pt, side) => { let y = side > 0 ? -Infinity : Infinity; for (let k = 0; k < part.length; k++) if (part[k] === pt) y = side > 0 ? Math.max(y, P[k * 3 + 1]) : Math.min(y, P[k * 3 + 1]); return y; };
         const neck = ring(0, -1) - ring(1, +1), waist = ring(1, -1) - ring(2, +1);
-        gaps.push({ head, body, neck: +neck.toFixed(3), waist: +waist.toFixed(3) });
+        let finite = true;
+        for (let k = 0; k < P.length; k++) if (!Number.isFinite(P[k])) { finite = false; break; }
+        gaps.push({ head, body, neck: +neck.toFixed(3), waist: +waist.toFixed(3), finite, parts: new Set(part).size });
         i++;
       }
       window.__combos = list;
@@ -61,6 +65,14 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     const sample = r.gaps.slice(0, 4);
     log(gname, 'örnek ölçüler', sample);
     if (bad.length) errors.push(`[assert] ${gname}: ${bad.length} kombinasyonda boyun/bel boşluğu: ` + JSON.stringify(bad.slice(0, 6)));
+    const nan = r.gaps.filter((x) => !x.finite);
+    if (!(r.count >= 4)) errors.push(`[assert] ${gname}: kıyafet kombinasyonları kurulamadı ` + JSON.stringify({ count: r.count }));
+    if (nan.length) errors.push(`[assert] ${gname}: ${nan.length} kombinasyonda geometri sonlu değil (NaN) ` + JSON.stringify(nan.slice(0, 4)));
+    // çakışma: kafa parçası gövdenin içine, gövde bacağın içine aşırı gömülmesin (yaka/kemer örtüşmesi doğal; sınır
+    // ölçülen dağılımın çok dışı)
+    const deep = r.gaps.filter((x) => x.neck < -0.25 || x.waist < -0.25);
+    if (deep.length) errors.push(`[assert] ${gname}: ${deep.length} kombinasyonda parçalar aşırı iç içe (çakışma) ` + JSON.stringify(deep.slice(0, 4)));
+    log(gname, 'boyun aralığı', [Math.min(...r.gaps.map((x) => x.neck)), Math.max(...r.gaps.map((x) => x.neck))], 'bel aralığı', [Math.min(...r.gaps.map((x) => x.waist)), Math.max(...r.gaps.map((x) => x.waist))]);
     await shot(page, `/tmp/combos-${gname}.png`);
   }
 };
