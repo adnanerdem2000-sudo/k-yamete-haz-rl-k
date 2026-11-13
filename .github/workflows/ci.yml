@@ -1,5 +1,5 @@
 # Sürekli bütünleştirme: her dala yapılan her gönderimde birim testleri ve kısa uçtan uca duman testleri
-# (gerçek fare tıklamalı menü testi dahil) koşar. GitHub Pages "Deploy from a branch" ile doğrudan dalı
+# (gerçek fare tıklamalı menü testi ve nadir kıyafet kombinasyonu testi dahil) koşar. GitHub Pages "Deploy from a branch" ile doğrudan dalı
 # yayınladığı için bu iş akışı yayını engellemez; aynı gönderim için yeşil/kırmızı durumu verir.
 # Tam uçtan uca takım (npm run test:e2e, ~45 dk) elle (workflow_dispatch, full=true) çalıştırılır.
 name: CI
@@ -47,7 +47,7 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Duman senaryoları
         if: ${{ !inputs.full }}
-        run: node tools/e2e.mjs smoke-menu ui-clicks
+        run: node tools/e2e.mjs smoke-menu ui-clicks outfits
       - name: Tüm senaryolar
         if: ${{ inputs.full }}
         run: npm run test:e2e
