@@ -53,7 +53,8 @@
 - Tarayıcı Esc tuşunu işaretçi kilidinden çıkmak için yutar; Esc'ye basınca duraklatma menüsü açılır
   (oyuna dönmek için ekrana tıkla).
 - Karakter kıyafetlerinde kumaş dokusu/normal haritası yoktur (modüler taban UV'siz; renk ve pürüzlülük köşe
-  başınadır). 103 kafa×gövde kombinasyonunda geometrik boşluk ölçülmedi (`tools/dev/outfit-combos.mjs`).
+  başınadır). 103 kafa×gövde kombinasyonu boyun/bel boşluğu, derin iç içe geçme ve NaN için ölçülüyor
+  (`tests/e2e/outfits.mjs`, CI'da); kumaş dikişi ve doku sürekliliği görsel olarak denetlenmiyor.
 - Menteşeli kapı ve çekmece açıları her istemcide yerel simüle edilir; E ile aç/kapat ve iterek açma durumu
   eşitlenir, ara açılar istemciler arasında küçük farklar gösterebilir.
 - İç mekân duvar resimleri ve halılar mobilyadan bağımsız yerleştirilir; nadiren bir dolabın arkasına denk

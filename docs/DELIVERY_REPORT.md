@@ -199,7 +199,7 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
   yüzde hafif ten varyasyonu. Deri malzemesine köşe başına pürüzlülük (ten yarı mat, göz ıslak, kumaş mat).
 - **Kıyafet koleksiyonları:** 8 koleksiyon artık gerçek modüler set değişikliği (cinsiyete göre) + renk/aksesuar;
   yüz/saç korunur. Nadir kombinasyon testi: 63 erkek + 40 kadın kafa×gövde kombinasyonunun hepsinde boyun ve bel
-  birleşimi ölçüldü, görünür boşluk yok (`tools/dev/outfit-combos.mjs`).
+  birleşimi ölçüldü, görünür boşluk yok (`tests/e2e/outfits.mjs`; Tur 2'den beri CI'da her gönderimde koşuyor).
 - **Kişilik:** oyun içinde boş beklerken Mert anahtar kurcalar, Elif dürbünle bakar, Bora gerinir, Deniz gard alıp
   yumruk atar, Ceren saate bakar, Zülal ayak ucunda etrafı kolaçan eder (aletler eşya modelinden, elde belirir).
   Zamanlayıcı testi: 0,2 sn sonra tetiklendi, yürüyünce kesildi (`motion` senaryosu `kıpırdanma`).

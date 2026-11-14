@@ -179,7 +179,8 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   `buildFace`). Saç köklerden uçlara açılan ton ve tel tel fark; yüzde hafif ten varyasyonu. Deri malzemesi
   köşe başına pürüzlülük taşır (`aRough`: ten yarı mat, göz ıslak, kumaş mat, metal parlak) — tek malzeme.
 - **Koleksiyonlar:** cinsiyete göre gerçek modüler set + renk/aksesuar (`COLLECTIONS.outfit.{men,women}`); yüz/saç
-  korunur. Kafa × gövde setlerinin tümü boyun/bel boşluğu için ölçülür (`tools/dev/outfit-combos.mjs`).
+  korunur. Kafa × gövde setlerinin tümü boyun/bel boşluğu, derin iç içe geçme ve NaN için ölçülür (`tests/e2e/outfits.mjs`,
+  CI'da her gönderimde).
 - **Kişilik kıpırdanmaları (`Avatar.updateFidget`):** ayakta boş beklerken 12–26 sn'de bir 2,6–4,2 sn: Mert
   elindeki anahtarı kurcalar, Elif dürbünle tarar, Bora gerinir, Deniz gard alıp yumruk atar, Ceren saate
   bakar, Zülal ayak ucunda etrafı kolaçan eder (`Animations.fidget`, üst gövde maskesi, aletler eşya

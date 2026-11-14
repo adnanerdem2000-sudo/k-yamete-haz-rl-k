@@ -1,7 +1,10 @@
 // Fizik ölçüm testi: oyun döngüsü durdurulur, oturum sabit 1/60 sn adımlarla ilerletilir.
 // Ölçülenler: yürüme/koşma hızı, zıplama yüksekliği ve süresi, düşme hasarı, basamak çıkma,
 // eğik yüzeyde durma, eşya düşürme/yerleşme, fiziksel nesneler, araç hızlanma/fren/dönüş/devrilme.
-export default async ({ page, url, wait, evalJS, log, shot }) => {
+// Her ölçümün ardından denetim: değerler geniş ama anlamlı sınırlar içinde olmalı (adımlar sabit olduğundan GPU hızı
+// sonucu değiştirmez; zombi/enkaz gibi çevre etkileri için araç denetimleri bir araca tolerans tanır).
+export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
+  const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 150000 });
   await evalJS(page, () => { const g = window.__game; g.ui.menus.opts.ai = 0; return g.ui.menus.startSingle(); });
@@ -71,6 +74,10 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return { at: [f.x.toFixed(1), f.z.toFixed(1)], groundGap: +(y0 - S.world.terrain.heightAt(f.x, f.z)).toFixed(3), walk: +walk.toFixed(2), sprint: +sprint.toFixed(2), stopDist: +stop.toFixed(2), mode: pl.mode };
   });
   log('yürüme', res.walk);
+  // yürüme hedefi 4,3 m/sn × karakter hız çarpanı (0,95–1,12), depar 6,7 m/sn × çarpan; 2 sn ortalaması duruştan ivmelenmeyi içerir
+  const Wk = res.walk && typeof res.walk === 'object' ? res.walk : null;
+  check(Wk && Wk.walk > 2.5 && Wk.walk < 6 && Wk.sprint > Wk.walk * 1.2 && Wk.sprint < 9 && Wk.stopDist > -0.1 && Wk.stopDist < 1.5 && Math.abs(Wk.groundGap) < 0.2 && Wk.mode === 'ground',
+    'yürüme ve depar hızı makul olmalı (depar daha hızlı), tuş bırakılınca kısa mesafede durulmalı, oyuncu zemine basmalı', res.walk);
   // ---- zıplama
   res.jump = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -100,6 +107,10 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return { rolled, dist: +(pl.pos.x - x0).toFixed(2), stamina: +(st0 - S.localStats.stamina).toFixed(1), capsuleMin: minH, endMode: pl.mode, endHeight: pl.body.height };
   });
   log('takla', res.roll);
+  const Jp = res.jump, Rl = res.roll;
+  check(Jp && Jp.height > 0.4 && Jp.height < 1.8 && Jp.airTime > 0.25 && Jp.airTime < 1.4 && Math.abs(Jp.endGap) < 0.15 && Jp.mode === 'ground' &&
+    Rl && Rl.rolled && Rl.dist > 1.5 && Rl.stamina > 0 && Rl.capsuleMin < Rl.endHeight - 0.2 && Rl.endMode === 'ground',
+    'zıplama yüksekliği ve havada kalma süresi makul olmalı, oyuncu yere inmeli; koşarken eğilince takla atılmalı (kapsül kısalır, dayanıklılık harcanır), sonunda ayağa kalkılmalı', { ziplama: Jp, takla: Rl });
   // ---- düşme hasarı
   res.fall = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -117,6 +128,11 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return out;
   });
   log('düşme', res.fall);
+  // hasar (düşüş − 3,4 m) × 9: 2,5 m zararsız, 5 m ≈ 14, 9 m ≈ 50
+  const Fl = Array.isArray(res.fall) ? res.fall : [];
+  const canAt = (h) => { const x = Fl.find((f) => f.h === h); return x ? x.hp : NaN; };
+  check(Fl.length === 3 && canAt(2.5) >= 99 && canAt(5) < canAt(2.5) - 3 && canAt(9) < canAt(5) - 15 && canAt(9) > 5 && Fl.every((f) => Math.abs(f.gap) < 0.2),
+    'düşme hasarı yükseklikle artmalı (2,5 m zararsız, 9 m > 5 m), oyuncu her düşüşte zemine inmeli', res.fall);
   // ---- basamak / veranda: ev girişine yürü (verandaya basamak çıkma)
   res.step = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -143,6 +159,9 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return r;
   });
   log('basamak', res.step);
+  const Bs = res.step;
+  check(Bs && Bs.reachedTopOfStep2 > 0.55 && Bs.finalX > 9 && Bs.stoppedByWall && !Bs.highBlockClimbed && Bs.highBlockX < 3.2,
+    "iki basamak (0,35 m + 0,35 m) yürüyerek çıkılmalı, 1,4 m'lik duvar durdurmalı; tek seferde 0,75 m'lik blok çıkılamamalı", Bs);
   // ---- eğilme ve tavan
   res.crouch = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -164,6 +183,9 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return { crouchMode: m1, crouchH: h1, underRoof: m2, afterRoof: pl.mode, height: pl.body.height };
   });
   log('eğilme', res.crouch);
+  const Eg = res.crouch;
+  check(Eg && Eg.crouchMode === 'crouch' && Eg.crouchH < Eg.height - 0.2 && Eg.underRoof === 'crouch' && Eg.afterRoof === 'ground',
+    'eğilince kapsül kısalmalı, alçak tavan altında ayağa kalkılamamalı, tavan kalkınca kalkılmalı', Eg);
   // ---- eşya düşürme
   res.drop = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -175,10 +197,16 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     window.__step(5);
     for (const v of S.ground.items.values()) it = v;
     const y0 = it.y;
-    window.__step(400);
-    return { rest: it.rest, y: +(it.y - S.world.terrain.heightAt(it.x, it.z)).toFixed(3), fell: +(y0 - it.y).toFixed(2), bodies: S.game.phys.dynamic.size };
+    // fizik uykusu beklenir (açık arazide 24 bırakmada 103–141 adım ≈ 2 sn); oyunun yedeği 12 sn'de zorla yerleştirir,
+    // o yüzden pencere 11,5 sn: eşya bu sürede uyumazsa (hiç durmuyorsa) denetim düşer. Rastgele dönüş ve çevredeki başka
+    // bir gövdenin dürtmesi bazen 400 adımı aşabiliyordu (2 Kasım ve 14 Kasım koşuları).
+    let restAt = null;
+    for (let n = 0; n < 690 && restAt === null; n++) { window.__step(1); if (it.rest) restAt = n; }
+    return { rest: it.rest, restAt, y: +(it.y - S.world.terrain.heightAt(it.x, it.z)).toFixed(3), fell: +(y0 - it.y).toFixed(2), bodies: S.game.phys.dynamic.size };
   });
   log('eşya', res.drop);
+  const Es = res.drop;
+  check(Es && Es.rest === true && Math.abs(Es.y) < 0.2 && Es.fell > 0.3, 'bırakılan eşya düşüp zeminde fizik uykusuyla dinlenmeye geçmeli (oyunun 12 sn yedeğinden önce)', Es);
   // ---- fiziksel nesneler
   res.props = await evalJS(page, () => {
     const S = window.__game.session;
@@ -196,9 +224,24 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
       window.__step(30);
       exploded = !red.alive;
     }
-    return { count: n, kinds, exploded, debris: S.props.debris.length };
+    // canlı nesnelerden uyuyan (dinlenen) ve arazinin 1 m'den fazla altına düşmüş olanlar; dünyadan düşüp (y < −40)
+    // fizikten silinmiş gövde de düşmüş sayılır (silinmiş gövdeye erişim hata verebilir)
+    const T = S.world.terrain, canli = S.props.props.filter((p) => p.alive);
+    let uyuyan = 0, dustu = 0;
+    for (const p of canli) {
+      try {
+        if (!S.game.phys.dynamic.has(p.d)) { dustu++; continue; }
+        const t = p.d.body.translation();
+        if (t.y < T.heightAt(t.x, t.z) - 1) dustu++;
+        if (p.d.body.isSleeping()) uyuyan++;
+      } catch { dustu++; }
+    }
+    return { count: n, kinds, exploded, debris: S.props.debris.length, canli: canli.length, uyuyan, dustu };
   });
   log('nesneler', res.props);
+  const Ns = res.props;
+  check(Ns && Ns.count > 20 && (!(Ns.kinds && Ns.kinds.redbarrel) || (Ns.exploded && Ns.debris > 0)) && Ns.dustu === 0 && Ns.uyuyan >= Ns.canli * 0.6,
+    'fiziksel nesneler kurulmalı; vurulan kırmızı varil patlayıp enkaz saçmalı; nesneler zeminin altına düşmemeli, çoğu dinlenmede olmalı', Ns);
   // ---- araç
   await evalJS(page, () => { window.__carTest = () => {
     const S = window.__game.session, pl = S.local;
@@ -215,7 +258,7 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
       window.__step(60);
       S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
       window.__step(5);
-      const r = { mode: pl.mode };
+      const r = { mode: pl.mode, maxKmh: +(v.def.maxSpeed * 3.6).toFixed(1) };
       const p0 = { x: v.pos.x, z: v.pos.z };
       let t100 = -1, vmax = 0;
       window.__step(240, ['KeyW'], (i) => { const sp = Math.abs(v.speed || 0); vmax = Math.max(vmax, sp); if (t100 < 0 && sp >= 100 / 3.6) t100 = i / 60; });
@@ -267,6 +310,22 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
   }; });
   res.car = await evalJS(page, () => { try { return window.__carTest(); } catch (e) { return 'HATA ' + e.stack; } });
   log('araç', res.car);
+  // araç sonucu nesne değilse ('yok', 'alan yok', 'HATA …') o tür sınanmamış sayılır; en az 3 tür sınanmalı
+  const araclar = res.car && typeof res.car === 'object' ? Object.entries(res.car).filter(([, r]) => r && typeof r === 'object') : [];
+  // binme, temiz şeritte hızlanma (azami hızı aşmadan) ve inme her araçta; dönüş testi frenden sonra şerit dışına taşabildiği
+  // için (engel/çarpma) dönme ve dik kalma biri hariç hepsinde
+  const surulen = araclar.filter(([, r]) => r.mode === 'drive' && r.dist4s > 15 && r.vmaxKmh > 25 && r.vmaxKmh <= r.maxKmh * 1.1 && r.afterExit !== 'drive' && r.afterExit !== 'seat').map(([k]) => k);
+  const donen = araclar.filter(([, r]) => Math.abs(r.turnDeg2s) > 20 && r.upright > 0.9).map(([k]) => k);
+  check(araclar.length >= 3 && surulen.length === araclar.length && donen.length >= araclar.length - 1,
+    'araçlar sürülebilmeli: binilir, 4 sn gazda hızlanır (azami hızı aşmadan), inilir; direksiyonla döner ve devrilmez', { sinanan: araclar.map(([k]) => k), surulen, donen, car: res.car });
+  // fren ve duvar çarpması: yol üstündeki zombi/enkaz bir aracın ölçümünü bozabilir → biri hariç hepsi durmalı/hasar almalı;
+  // duvarın içinden geçmek (CCD) hiçbir araçta olmamalı
+  const frenleyen = araclar.filter(([, r]) => r.brakeTime > 0 && r.brakeDist < 45).map(([k]) => k);
+  const carpan = araclar.filter(([, r]) => r.crash && typeof r.crash === 'object');
+  const carpOk = carpan.filter(([, r]) => r.crash.atKmh > 25 && r.crash.dmg > 0 && !r.crash.passedThrough && r.crash.gapToWall > 0).map(([k]) => k);
+  const ozet = Object.fromEntries(araclar.map(([k, r]) => [k, { brakeTime: r.brakeTime, brakeDist: r.brakeDist, brakeDmg: r.brakeDmg, crash: r.crash }]));
+  check(araclar.length >= 3 && frenleyen.length >= araclar.length - 1 && carpan.length >= 3 && carpOk.length >= carpan.length - 1 && carpan.every(([, r]) => !r.crash.passedThrough),
+    'frenle araç 5 sn içinde kısa mesafede durmalı; duvara çarpan araç hasar almalı ve duvarın içinden geçmemeli', { frenleyen, carpOk, ozet });
   await evalJS(page, () => { const g = window.__game; g.gfx.render(0.016, g.time); });
   await shot(page, '/tmp/phys-end.png');
 };

@@ -1,13 +1,128 @@
-# Test Raporu — "Next Level 2.0" ve 1–2 Kasım özellik turu
+# Test Raporu — Tur 2 (14 Kasım 2026'dan) ve önceki tur ("Next Level 2.0", 1–2 Kasım özellik turu)
 
-Tarih: 2 Kasım 2026 · Ortam: Linux (4 çekirdek), Node 22, başsız Chromium (Playwright 1.63) + SwiftShader yazılım
-GPU'su · Tam koşu oyun kodu `6c1fe8b` (özellikler + bağımsız inceleme düzeltmeleri); belge doğrulamasının kod
-düzeltmeleri (`ad189ef`) ve incelemesinin düzeltmeleri (`eada2fb`, `ae28a16`) etkilenen senaryolarla ayrıca koşuldu;
-test düzeltmeleri `edc311d`, `8ee993e`, `a69e949`
+Ortam: Linux (4 çekirdek), Node 22, başsız Chromium (Playwright 1.63) + SwiftShader yazılım GPU'su.
 
 Bu rapordaki bütün sayılar son koşulardan alınmıştır. Yazılım GPU'sunda ölçülen kare hızları gerçek ekran kartı
 performansı **değildir**; yalnız kalite seviyelerinin yükünü (çizim çağrısı, üçgen, ek geçişler) karşılaştırmak için
 kullanılır.
+
+## Tur 2 — Aşama 1: test ve güvenlik (14 Kasım 2026)
+Başlangıç sürümü `d08b603` (yerel etiket `nl2-tur2-baslangic`). Geliştirme yerel `nl2-tur2-gelistirme` dalında yapılıyor;
+yalnız doğrulanmış aşamalar canlı dala (`claude/kiyametten-once-game-0yng28`) aktarılıyor. Yedeğin GitHub'a ayrıca
+gönderilmesi bu ortamın izinleriyle mümkün olmadı (etiket gönderimi HTTP 403, ikinci dal gönderimi izin denetiminde
+reddedildi); başlangıç sürümü canlı dalın geçmişinde `d08b603` olarak duruyor.
+
+### Test takımına eklenenler
+- **Değer denetimi:** önceki raporda "yalnız çökme ya da zaman aşımıyla başarısız olabilir" denen 15 uçtan uca senaryoya
+  toplam 112 denetim eklendi. Artık yanlış davranış da senaryoyu düşürüyor. Eşikler, oyunun kodundan ve çevrimdışı
+  benzetimlerden (ileri kinematik, görüş kesiti, sürü benzetimi) türetildi; her denetim başarısızlıkta ölçülen değerleri
+  yazıyor.
+
+| Senaryo | Denetim | Neyi denetliyor (özet) |
+|---|---|---|
+| `smoke-menu` | 7 | ana menü görünür, 8 tabela, kamp ateşi başında 6 modelli karakter, her tabela kendi ekranını açar ve Geri döner, karakter kartları, özelleştirme vitrini kurulup kalkar |
+| `smoke-single` | 7 | oturum 1. günde (başlangıç çantası, 2 YZ arkadaş, görev, hava), HUD dolu, W ile yürüme, günlüğün 5 sekmesi, inşa/takım/duraklatma panelleri, oyun duraklayıp sürer |
+| `ai` | 8 | çığlıkçı oyuncuyu görünce çığlık atar ve 40 m ötedeki zombiyi çağırır, mesafesini korur; çevik kuvvet yeleği kurşunu azaltır, yakın dövüşü azaltmaz; şişko patlaması yakındakini yaralar/zehirler, uzaktakine dokunmaz; kurt sürüsü sırayla saldırır; Karabaş zombiye saldırır |
+| `mobs` | 7 | 12 zombi + 6 hayvan modelli ve kadrajda, NaN yok, kovalama/çığlık/ölüm klipleri gerçekten oynuyor, hayvanlarda yürüme/dörtnal/saldırı/ölüm klipleri |
+| `living` | 4 | karga sürüleri ve duman sütunları kurulur, duman yükselir ve görünür, gürültü sürüyü ürkütüp yükseltir, kargalar kadrajda |
+| `lineup` | 8 | 6 karakterin 16 duruşta durum makinesi, baş yüksekliği oranları (çömelme, oturma, yüzüstü, ölü), yürüyüşte bacak açısı, el eşyası doğru elde, nişan karışımı, kılıç klibi; zombi duruşları |
+| `gameplay` | 10 + 2 koşullu | yağma (arama, hepsini al), yemek/üretim, barikat inşası, savaş kurulumu, araç sürme, gece uykusu ve 2. gün, olay kartı, kayıt, bot taşıma, harita ve zaman çizelgesi. Koşullu iki denetim (çatışma sonucu, araç yer değiştirmesi) yalnız yeterli benzetim süresi geçtiyse çalışır |
+| `story` | 12 | NPC ve belge yerleşimi, santral, fener + gemi + Kanlı Ay, pist enkazının halatla çekilmesi, paraşütlü paket, düşen uçak, sarsıntı, 7 olay kartı ve etkileri, kayıt sayıları, zaman çizelgesi, uçakla kaçış ve sonuç ekranı |
+| `ending` | 6 | 30. gün 19:58, Son Işık 20:00'de başlar ve son gece hızlanır, 7 kaçış planının hazırlığı, sığınak finali sonuç ekranı (kazanma, S–D derece), kaçış kaydı, Ana Menü düğmesi |
+| `regions` | 7 | 8 bölge görünümü çizilir, kare siyah/tek renk değil, bölge platosu ve yüksekliği, simge binalar, fener ve baraj, köprü tabliyesi |
+| `nature` | 6 | 20.000+ bitki örneği, 12+ tür, 13 görünüm çizilir ve boş değil, ormanda yakın ağaç, çayırda yakın çimen, uzakta ağaç kartları |
+| `audio` | 7 | ses bağlamı (HRTF, yankı, savaş teması, örnekler), çimde/asfaltta zemine göre adım, eğilerek kısık ve yavaş adım, iç mekân yankısı ve ahşap zemin, zemin sondası, duvar arkası kapanma ve HRTF, savaş teması aç/kapa |
+| `motion` | 8 | 17 eylemden en az 15'inin klibi oynuyor, tam gövde kipleri (uyku, uyanma, tırmanma, yüzüstü), basamakta ve yamaçta ayak IK'sı, kişisel hareketler (alet tutma), 8 zombi türünün klipleri, NaN kemik yok |
+| `physics` | 9 | yürüme/koşma hızları, zıplama ve takla, düşme hasarı eğrisi, basamak çıkma ve duvar, çömelme ve alçak tavan, eşya düşmesi, nesneler (patlama, uyku, zeminden düşmeme), 3+ araç türü sürüş, fren ve çarpma |
+| `carry` | 4 | kutu E ile alınır (kinematik gövde, animasyon), taşırken yürünür ve kutu göğüs hizasında kalır, fırlatılan kutu dinamikleşip önde durur |
+
+- **Yeni birim testleri** (7 dosya, 68 test): `save` (kayıt/yükleme gidiş-dönüşü, yuvalar, bozuk ve eski veri),
+  `share` (envanterler, konteyner, sandık ve bagaj arası aktarım, eşya verme, yerdeki eşya, takas), `netevents`
+  (gerçek `Net` host/istemci el sıkışması, oda kuralları, kişiye özel olaylar, yeniden katılım), `collision`
+  (çarpışma dünyası, ışın, görüş hattı, zemin yüksekliği), `navgrid` (yol ızgarası, kapı/pencere, kısmi yol),
+  `physics` (oyunun Rapier derlemesiyle sabit adım, uyuma, ışın, patlama itkisi, karakter gövdesi), `vehicles`
+  (araç vekilleri, yol ızgarası, durum anlık görüntüsü, gerçek Rapier ile yakıt ve zemin tutunması, kayıt).
+- **CI:** nadir kıyafet kombinasyonu testi (`outfits`: 63 erkek + 40 kadın kombinasyonu; NaN, boyun/bel boşluğu, derin
+  iç içe geçme) her gönderimde koşan duman senaryolarına eklendi.
+
+### Başlangıç koşusu
+- `npm test`: 115 test (önceki 47 + 68 yeni), 107 geçti, 0 başarısız, 8 atlandı (her biri aşağıdaki tablodaki bir oyun
+  hatasını belgeliyor), ~13,5 sn.
+- Değer denetimi eklenen 15 senaryo sırayla (`node tools/e2e.mjs …`, toplam 18 dk): ilk koşuda **13/15**. Düşen ikisinin
+  nedeni test kurgusuydu (aşağıda), düzeltilen testlerle yeniden koşuldu: `carry` iki koşuda, `physics` bir koşuda geçti.
+  Sonuç: **15/15**.
+
+| Senaryo | Süre | Sonuç | Öne çıkan ölçümler |
+|---|---|---|---|
+| `smoke-menu` | 120 sn | ✔ | 8 tabela; 7 ekran açılıp Geri ile dönüyor; kamp ateşinde 6 modelli karakter |
+| `smoke-single` | 128 sn | ✔ | 1. gün, 6 yığınlık başlangıç çantası, 2 bot, 2 görev; W ile 0,7 m; 5 günlük sekmesi; inşa 4 kart/7 kategori |
+| `ai` | 33 sn | ✔ | 1 çığlık, 40 m'deki zombi araştırmaya geldi; çığlıkçı oyuncuya en çok 13,7 m yaklaştı; yelek: kurşun 18, yakın dövüş 40; şişko: 1,8 m'deki zombi öldü, 28 m'deki tam can, oyuncu 83 can + zehir; kurtlar 30,4 hasar (1,5 / 7,1 / 8,7 m); Karabaş 56 hasar |
+| `mobs` | 39 sn | ✔ | 12 zombi + 6 hayvan; çizime katkı 99 çağrı |
+| `living` | 46 sn | ✔ | 6 sürü/66 karga, 156 duman pufu; duman tepesi 47,3 m, 148/156 görünür, 52'si kadrajda; ürkme 0,64, yükselme 16,6 m; karga çekiminde 6 karga |
+| `lineup` | 57 sn | ✔ | 6 karakter + 6 zombi, 28 çekim, NaN yok; çizime katkı 106 |
+| `gameplay` | 183 sn | ✔ | yağma, yemek 40→80, +2 bandaj, barikat, uyku → 2. gün, olay kartı, kayıt; araç kapalı garajda 0,44 m (koşullu denetim çalıştı); çatışma sonucu denetimi atlandı (12 sn gerçek zamanda yalnız 3,5 sn benzetim) |
+| `story` | 123 sn | ✔ | 12 belge kendi binasında; santral; gemi 1,97 m yaklaştı; Kanlı Ay 0,87; 520 kg enkaz 32 m çekildi; paket 76 m'den 10 sn'de indi (9 m sapma); uçak düştü; sarsıntı tepe 104 mm; 7/7 olay kartı kendi kartı |
+| `ending` | 74 sn | ✔ | Son Işık 30. gün 20:00, son gün 14 dk; sığınak finali (C derece); Ana Menü'ye dönüş |
+| `regions` | 27 sn | ✔ | 8 görünüm, 69–163 renk kutusu; plato yükseklikleri ve simge binalar tam; köprü tabliyesi 9,25 m |
+| `nature` | 37 sn | ✔ | 108.151 bitki örneği, 96 küme, 28 kart çeşidi; 13 görünüm boş değil |
+| `audio` | 38 sn | ✔ | 22 ses örneği; çimde 4,25, asfaltta 6,69 adım hızı; eğilerek kısık adım; duvar arkası kapalı; HRTF panner |
+| `motion` | 43 sn | ✔ | 17/17 eylem klibi; basamakta sol bilek +0,21 m (5/6 karakter); yamaçta (13°) kalça −0,08 m, ayak farkı 0,03 m (IK kapalıyken 0,13–0,17); 8 zombi türünün klipleri; 868 kemikte NaN yok |
+| `physics` | 52 sn | ✔ (yeniden) | yürüme 4,1, koşu 6,06 m/s; zıplama 0,84 m; 9 m düşüş → 49,9 can; bırakılan eşya 115. adımda uyudu; 79 nesne (75'i uykuda); araçlar sürüş/fren/çarpma |
+| `carry` | 69–72 sn | ✔ (yeniden) | kutuyla 0,51 m yürüyüş, kutu 0,7 m önde 1 m yukarıda; fırlatılan kutu 4,3 m öne düştü |
+
+- **İlk koşuda düşen iki senaryo (test kurgusu):**
+  - `carry`: oyuncu verandada eve bakarak doğuyor; taşınan kutu 0,2 m sonra ev kapısına dayanıyordu (yürüme eşiği 0,3 m).
+    Oyuncu artık önce bahçeye çekilip evden uzağa dönüyor. Yeniden koşuda 0,51 m yürüdü; kutu 4,3 m öne fırlatıldı
+    (eskiden kapıya çarpıp 0,96 m'de kalıyordu).
+  - `physics`: bırakılan konserve 400 adımda (6,7 sn) fizik uykusuna geçmedi (2 Kasım koşusunda da aynıydı). Ayrı
+    yoklamalarda 24 açık arazi bırakmasında 103–141 adımda, oyuncunun 1 m önüne 12 bırakmada 109–151 adımda,
+    senaryonun kendi noktasında 4 tekrarda 108–116 adımda uyudu. Düşen koşuda sahnede bir dinamik gövde fazlaydı (89'a
+    karşı 88); büyük olasılıkla eşyayı başka bir gövde dürttü. Pencere, oyunun 12 sn'lik zorla yerleştirme yedeğinin hemen
+    altına (11,5 sn) çekildi: eşya hiç uyumazsa denetim yine düşer. Yeniden koşuda 115. adımda uyudu.
+- **Denetim değil, günlük gözlemi:** `motion` 1. ve 2. karakterde eylem klibinin bittikten sonra sürdüğünü gösteriyor
+  (hata 10; o karakterde basamak IK'sı da çalışmıyor). `ai` çığlıkçının 'scream' durumuna hiç girmediğini gösteriyor
+  (hata 18).
+
+### Testlerin bulduğu oyun hataları ve düzeltme planı
+Yeni testler ve kod okuması 22 oyun hatası buldu. Birim testle yakalananlar atlanmış (`skip`) test olarak takımda
+duruyor: hata düzeltilince açılıyor. Plan aşamalara göre; hikâye, kayıt ve çok oyunculu görünürlük hataları kabul
+ölçütü 17'yi ("mevcut hikâye, kayıtlar, görevler ve finaller korunmalı") ve 2–6 oyunculu ortak oyunu doğrudan
+etkilediği için Aşama 1'in sonunda (1b) düzeltiliyor.
+
+| # | Hata | Kanıt | Aşama |
+|---|---|---|---|
+| 1 | Aynı karede vakti gelen olay kartları birbirini sessizce kapatıyor; kapanan olay kararsız kalıp bir daha gelmiyor (zaman atlaması, uyku hızlandırması sonrası) | kod (`Events.update/show`, `UIManager.openPanel`) | 1b |
+| 2 | Aynı olay aynı gün yeniden gösterilirse seçim yok sayılıyor, bedel düşülüyor, kart kapanmıyor | kod (`Events.applyChoice`) | 1b |
+| 3 | 3./12./20. gün yağmalama olayı hikâye konteynerlerini (virüs numunesi → "Aşı İçin Umut" görevinin tek kaynağı, cephanelik anahtarı, pilot günlüğü…) ve belge tutucuları boşaltıyor, kasaların kilidini düşürüyor | birim (`share`) | 1b |
+| 4 | Konteyner, depo sandığı ve bagajda birleştirme eski yiyeceği tazeliyor (envanterdeki "eski tazelik geçerli" kuralı yok) | birim (`share`) | 1b |
+| 5 | Lobiden 3+ oyuncu başlayınca oyunu sonra yükleyen istemci önce katılanı hiç görmüyor (avatar, konum, takım listesi yok); oyun sürerken aynı anda katılanlarda da aynı boşluk | birim (`netevents`) | 1b |
+| 6 | Dosyadan içe aktarılan, ayarları (`cfg`) eksik kayıt doğrulamadan geçip yüklenirken çöküyor | kod (`SaveSystem.importFile`, `MenuScreens.loadSlot`) | 1b |
+| 7 | Eşya verilen oyuncu o arada oyundan çıkarsa eşya kayboluyor | kod (`Session` `give`) | 1b |
+| 8 | Host istemciden gelen alma miktarını doğrulamıyor (negatif miktarla konteynerde eşya çoğalıyor) | kod (`loot_take`, `store_take`) | 1b |
+| 9 | Özel içerikten, ödülden ve takastan gelen silah/aletler hiç aşınmıyor (dayanıklılık yazılmıyor) | kod (`SPECIAL_LOOT`, `grant`) | 1b |
+| 10 | Arama/sargı/tamir gibi döngülü eylem bir duygu hareketiyle (sevinç, dans) kesilirse klip sonsuza dek sürüyor; o karakterde ayak IK'sı ve kişisel hareketler kapanıyor | e2e (`motion`: 1. ve 2. karakter) | 2 |
+| 11 | Evin zemin katında ayak sesi çim olarak çalıyor (iç zemin eşiği 0,35 m, zemin kaldırma 0,30 m) | e2e (`audio`) + kod | 2 |
+| 12 | Çarpışma dünyası `isFloor`/`navType`/`navPad` seçeneklerini düşürüyor: döşeme denetimleri ölü kod; inşa hayaleti üst katlarda ve iskelede araziye düşüyor | birim (`collision`) | 3 |
+| 13 | Oyuncu yapıları (duvar, çit, barikat, kapılı duvar) yol ızgarasında kırılabilir yapı değil aşılmaz engel; zombiler savunmayı kırmak yerine etrafından yol arıyor | birim (`navgrid`) | 3 |
+| 14 | Patlama itkisi kütleden bağımsız aynı hızı veriyor (6 kg kasa ile 128 kg kasa, motosiklet ile 6 t kamyon aynı savruluyor) | birim (`physics`) | 3 |
+| 15 | Kayıt yüklenince ve oyuna katılınca kapılar sesli uygulanıyor (kapı sesi; kırık kapıda kıymık efekti ve fiziksel enkaz) | birim (`save`) | 3 |
+| 16 | Yağmur, kar ve kaygan zemin fren mesafesini uzatmıyor; kar ve kumda araç kuru asfalttan kısa duruyor | birim (`vehicles`) | 5 |
+| 17 | Yere düşmüş oyuncu araca binip sürebiliyor (host denetimi yok) | e2e (`physics`) + kod | 5 |
+| 18 | Çığlıkçı kendi çığlığını duyup "araştır" durumuna geçiyor: çığlık animasyonu hiç oynamıyor, istemcilere gitmiyor | e2e (`ai`) + kod | 6 |
+| 19 | Boştaki zombinin "dur" seçeneği her karede yeniden zarlanıyor: zombiler neredeyse hiç durmuyor | kod (`Zombies` gezinme) | 6 |
+| 20 | En yakın boş hücre araması Öklid'e göre en yakını değil, halka sırasındaki ilkini seçiyor (küçük) | birim notu (`navgrid`) | 6 |
+| 21 | İstemcilerde gün/saat/evre geri çağrıları hiç çalışmıyor; istemci zaman çizelgesinde "N. gün başladı" kayıtları yok | kod (`Session` istemci zamanı) | 7 |
+| 22 | Host bir oyuncuyu attıktan sonraki 300 ms içinde odadan çıkarsa sayfa hatası (`Net.kick`) | birim koşusu gözlemi | 7 |
+
+Ayrıca: `physics` koşusunda polis aracı fren denemesinde bir şeye çarpıp hasar aldı (şerit 72 m boş denetlenmişti; büyük
+olasılıkla zombi ya da önceki patlamanın enkazı). Tekrarlanırsa incelenecek.
+
+---
+
+# Önceki tur: "Next Level 2.0" ve 1–2 Kasım özellik turu (2 Kasım 2026)
+Aşağıdaki bölümler önceki turun tam koşusuna aittir. Tam koşu oyun kodu `6c1fe8b` (özellikler + bağımsız inceleme
+düzeltmeleri); belge doğrulamasının kod düzeltmeleri (`ad189ef`) ve incelemesinin düzeltmeleri (`eada2fb`, `ae28a16`)
+etkilenen senaryolarla ayrıca koşuldu; test düzeltmeleri `edc311d`, `8ee993e`, `a69e949`.
 
 ## Özet
 | Katman | Kapsam | Sonuç |

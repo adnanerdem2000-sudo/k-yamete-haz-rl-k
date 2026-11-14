@@ -1,6 +1,10 @@
 // Bitki örtüsü testi: orman içi (göz hizası), orman kenarı ve uzak kartlar (tepeden), çayır, tarla, dağ.
 // Her görünüm için çizim çağrısı, üçgen sayısı ve kare çizim süresi ölçülür. → /tmp/nat-*.png
-export default async ({ page, url, wait, evalJS, log, shot }) => {
+// Denetimler: bitki örtüsü kurulmuş (on binlerce örnek, ağaç/çalı/kaya/çiçek türleri, uzak ağaç kartı atlası); her
+// görünüm sonlu kamerayla çizilir (çizim çağrısı, üçgen; kare siyah/tek renk değil); orman görünümlerinde yakın ağaçlar,
+// göz hizası çayırda yakın çimen, uzak orman görünümünde ağaç kartları (impostor) çizilir. Süre ölçümü yalnız günlüğe yazılır.
+export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
+  const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
   await page.goto(url, { waitUntil: 'load' });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 300000 });
   const info = await evalJS(page, () => {
@@ -15,6 +19,11 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
     return { instances: V.instances.length, groups: V.meshes.length, impostorVariants: V.impKeys.size, kinds };
   });
   log('bitki örtüsü', info);
+  const AGACLAR = ['oak', 'oak2', 'birch', 'pine', 'pineTall', 'autumn', 'autumn2', 'dead'];
+  check(info && info.instances > 20000 && info.groups > 10 && info.impostorVariants > 0 && Object.keys(info.kinds).length >= 12
+    && AGACLAR.filter((k) => info.kinds[k] > 0).length >= 4 && ['grass', 'bush', 'rock', 'flowers'].every((k) => info.kinds[k] > 0),
+  'bitki örtüsü kurulmalı: on binlerce örnek, en az 12 tür (4+ ağaç türü, çimen, çalı, kaya, çiçek), çizim kümeleri ve ağaç kartı atlası', info);
+  const res = [];
   // [ad, x, z, kamera ofseti (x, y, z), bakış hedefi ofseti (x, y, z), saat]
   const views = [
     ['forest-eye', -235, -160, [0, 1.7, 0], [0, 1.4, -20], 11],
@@ -61,10 +70,29 @@ export default async ({ page, url, wait, evalJS, log, shot }) => {
       }
       out.vegK = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, Math.round(v / 1000)]));
       out.impostors = V.imp ? V.imp.im.count : -1;
+      // kare aynı görevde (tampon henüz sunulmadan) küçük bir tuvale örneklenir: siyah/tek renk kare yakalanır
+      const cv = document.createElement('canvas'); cv.width = 48; cv.height = 27;
+      const cx = cv.getContext('2d', { willReadFrequently: true });
+      cx.drawImage(R.domElement, 0, 0, cv.width, cv.height);
+      const d = cx.getImageData(0, 0, cv.width, cv.height).data;
+      const renk = new Set(); let maxL = 0;
+      for (let i = 0; i < d.length; i += 4) { renk.add(((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4)); maxL = Math.max(maxL, 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]); }
+      out.renk = renk.size; out.maxL = Math.round(maxL);
+      out.cam = c.position.toArray().map((v) => +v.toFixed(1));
       return out;
     }, [x, z, off, look, hour]);
     log(name, r);
+    res.push({ name, ...(r || { eksik: true }) });
     await shot(page, `/tmp/nat-${name}.png`);
   }
+  const by = Object.fromEntries(res.map((r) => [r.name, r]));
+  check(res.length === views.length && res.every((r) => r.calls > 0 && r.tris > 0 && Array.isArray(r.cam) && r.cam.every(Number.isFinite)),
+    'her görünüm sonlu kamera konumuyla çizilmeli (çizim çağrısı ve üçgen > 0)', res.map((r) => [r.name, r.calls, r.tris, r.cam]));
+  check(res.every((r) => r.renk >= 8 && r.maxL >= 24), 'çizilen kare siyah ya da tek renk olmamalı', res.map((r) => [r.name, r.renk, r.maxL]));
+  const orman = ['forest-eye', 'forest-edge', 'forest-dusk'].map((n) => by[n]);
+  check(orman.every((r) => r && r.veg > 0 && r.vegK && r.vegK['tree:near'] > 0), 'orman görünümlerinde yakın ağaçlar çizilmeli', orman.map((r) => r && [r.name, r.veg, r.vegK]));
+  const cayir = by['meadow-eye'];
+  check(cayir && cayir.vegK && cayir.vegK['grass:near'] > 0, 'göz hizasında çayırda yakın çimen çizilmeli', cayir);
+  check(by['forest-far'] && by['forest-far'].impostors > 0 && res.every((r) => r.impostors >= 0), 'uzak ormanda ağaç kartları (impostor) çizilmeli; kart sistemi her görünümde kurulu olmalı', res.map((r) => [r.name, r.impostors]));
   log('tamam');
 };
