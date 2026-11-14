@@ -140,11 +140,11 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   // eylem sonra gelir (sıra numarası değişince süresi ne olursa olsun ofsetle oynatılır).
   await evalJS(A, () => window.__game.session.local.avatar.play('pickup', 0.6));
   await until(B, (hid) => { const p = window.__game.session.players.get(hid); return !!(p && p.avatar && p.avatar._ractN !== undefined); }, aId, 60000);
-  await evalJS(B, (hid) => { const av = window.__game.session.players.get(hid).avatar; window.__offs = []; const orig = av.play.bind(av); av.play = (t, d, k, off) => { window.__offs.push([t, Math.round((off || 0) * 1000) / 1000]); return orig(t, d, k, off); }; }, aId);
+  await evalJS(B, (hid) => { const av = window.__game.session.players.get(hid).avatar; window.__offs = []; const orig = av.play.bind(av); av.play = (t, d, k, off, sq) => { window.__offs.push([t, Math.round((off || 0) * 1000) / 1000, k ?? null, sq || 0]); return orig(t, d, k, off, sq); }; }, aId); // sq: gönderenin sıra no'su (çeşit aynen oynar)
   await evalJS(A, () => window.__game.session.local.avatar.play('search', 2.5));
   const gotAct = await until(B, () => (window.__offs || []).some((o) => o[0] === 'search'), null, 60000);
   const offs = await evalJS(B, () => window.__offs);
-  log('uzak eylem (tür, ofset sn)', offs);
+  log('uzak eylem (tür, ofset sn, çeşit, sıra no)', offs);
   check(gotAct && offs.some((o) => o[0] === 'search' && o[1] > 0), 'uzak avatar eylemi başlangıç ofsetiyle oynatmalı', offs);
   await evalJS(F, () => { for (const f of window.__fakes) f.leave(); });
 };

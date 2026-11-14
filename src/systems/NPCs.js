@@ -537,11 +537,21 @@ export class NPCs {
     if (this.fishing) return;
     const bait = inv.has('bait');
     const wait = (bait ? 2.5 : 5) + Math.random() * (bait ? 3 : 6);
-    S.local.avatar.play('fish', wait + 3);
-    S.local.avatar.action.loop = true;
+    const av = S.local.avatar, before = av.action;
+    av.play('fish', wait + 3);
+    if (av.action && av.action !== before) av.action.loop = true;
     this.fishing = { spot, t: 0, bite: wait, window: 1.1, bait };
     S.ui.toast('Olta atıldı… Vurgun gelince E\'ye bas!', 'info', 3);
     S.audio.play('splash', { vol: 0.5 });
+  }
+
+  /** Balık tutmayı bırak (yürüyünce ya da yere serilince): yalnız olta eylemi biter, vurgun gelse de E bir şey vermez */
+  stopFishing() {
+    if (!this.fishing) return;
+    this.fishing = null;
+    const av = this.s.local.avatar;
+    if (av.action && av.action.type === 'fish') av.action = null;
+    this.s.ui.toast('Balık tutma iptal.', 'info', 1.5);
   }
 
   updateFishing(dt) {
@@ -549,11 +559,16 @@ export class NPCs {
     const f = this.fishing;
     if (!f) return;
     f.t += dt;
-    if (S.local.speed > 0.5) { this.fishing = null; S.local.avatar.action = null; S.ui.toast('Balık tutma iptal.', 'info', 1.5); return; }
+    // yalnız olta eylemine dokunulur: balık beklerken başlayan yeme/sargı kesilmez; sonuçta makara sarma (tutuldu)
+    // ya da boşa sarma (kaçtı) klibi oynar ve yansıtılır
+    const av = S.local.avatar;
+    const fishAct = !av.action || av.action.type === 'fish';
+    if (S.local.speed > 0.5) { this.stopFishing(); return; }
     if (f.t >= f.bite && !f.biting) { f.biting = true; S.audio.play('splash', { vol: 0.9 }); S.ui.setPrompt({ label: '🎣 VURGUN! Hemen E\'ye bas!', key: 'E', progress: 0 }); }
     if (f.biting && S.game.input.wasPressed('interact')) {
       const ok = f.t - f.bite <= f.window;
-      this.fishing = null; S.local.avatar.action = null;
+      this.fishing = null;
+      if (fishAct) av.play('fish', ok ? 2.0 : 2.2, ok ? 'reel' : 'fail');
       if (ok) {
         const pool = FISH[f.spot.water === 'sea' ? 'sea' : 'lake'];
         const name = pool[Math.floor(Math.random() * pool.length)];
@@ -564,7 +579,7 @@ export class NPCs {
         const rod = S.inventory.slots.find((s) => s && s.id === 'fishing_rod');
         if (rod && rod.dur !== undefined) { rod.dur -= 2; if (rod.dur <= 0) { S.inventory.remove('fishing_rod', 1); S.ui.toast('Olta kırıldı!', 'warn'); } }
       } else S.ui.toast('Balık kaçtı…', 'info', 2);
-    } else if (f.biting && f.t - f.bite > f.window) { this.fishing = null; S.local.avatar.action = null; S.ui.toast('Balık kaçtı…', 'info', 2); }
+    } else if (f.biting && f.t - f.bite > f.window) { this.fishing = null; if (fishAct) av.play('fish', 2.2, 'fail'); S.ui.toast('Balık kaçtı…', 'info', 2); }
   }
 
   // ======================================================================= güncelleme
@@ -783,16 +798,13 @@ export class NPCs {
           S.later(def.charge ? 0.3 : 0.26, () => {
             if (a.dead) return;
             const R = def.charge ? 2.8 : 2.3, kind = a.type === 'bear' || def.charge ? 'heavy' : 'zombie';
-            if (vLocal) {
-              if (dist(a.x, a.z, S.local.pos.x, S.local.pos.z) < R && !this.isUnderground(S.local.pos.x, S.local.pos.y, S.local.pos.z)) {
-                S.damageLocal(dmg, kind);
-                if (def.charge) { S.local.vel.x += Math.sin(a.yaw) * 7; S.local.vel.z += Math.cos(a.yaw) * 7; S.local.vel.y = 3; }
-              }
-            } else {
-              // uzak oyuncu: hasar (boğa/ayıda itme) yalnız o oyuncuya olay olarak gider
-              const rp = S.players.get(victim);
-              if (rp && rp.pos && dist(a.x, a.z, rp.pos.x, rp.pos.z) < R && !this.isUnderground(rp.pos.x, rp.pos.y, rp.pos.z)) S.emit({ k: 'dmg_player', to: victim, amount: dmg, kind, from: a.id, push: def.charge ? [Math.round(Math.sin(a.yaw) * 700) / 100, Math.round(Math.cos(a.yaw) * 700) / 100, 3] : undefined });
-            }
+            // darbe (hücum edende itme): host'un kendi oyuncusu da uzak oyuncu da aynı kuralla (Session.hitLocal) yere
+            // serilir/itilir; uzak oyuncuya yalnız ona giden olay olarak, host'unkine doğrudan
+            const hit = { amount: dmg, kind, from: a.id, push: def.charge ? [Math.round(Math.sin(a.yaw) * 700) / 100, Math.round(Math.cos(a.yaw) * 700) / 100, 3] : undefined };
+            const vp = vLocal ? S.local.pos : S.players.get(victim)?.pos;
+            if (!vp || dist(a.x, a.z, vp.x, vp.z) >= R || this.isUnderground(vp.x, vp.y, vp.z)) return;
+            if (vLocal) S.hitLocal(hit);
+            else S.emit({ k: 'dmg_player', to: victim, ...hit });
           });
           // kurt saldırıdan sonra geri çekilir (vur-kaç)
           if (def.pack) a.retreatT = 0.9;

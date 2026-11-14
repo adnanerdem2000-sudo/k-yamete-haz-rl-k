@@ -5,6 +5,7 @@ import { ROADS } from './WorldLayout.js';
 import { materials } from './Geo.js';
 
 const UP = 0.07;
+const WALK_W = 2.2; // kentsel kaldırım genişliği (şerit kenarından dışa)
 
 export function roadCenterline(road, step = 2) {
   const pts = road.pts.map(([x, z]) => new THREE.Vector3(x, 0, z));
@@ -102,15 +103,17 @@ export function buildRoads(terrain, scene, urbanTest) {
         marks.push(ribbon(terrain, line, 0.08, hw - 0.35, UP + 0.02, '#e8e4d6', 1));
         marks.push(ribbon(terrain, line, 0.08, -hw + 0.35, UP + 0.02, '#e8e4d6', 1));
       }
-      // kentsel kaldırım
-      if (urbanTest(line[Math.floor(line.length / 2)])) {
-        walks.push(ribbon(terrain, line, 1.1, hw + 1.1, UP + 0.05, '#b8b2a7', 1));
-        walks.push(ribbon(terrain, line, 1.1, -hw - 1.1, UP + 0.05, '#b8b2a7', 1));
+      // kentsel kaldırım (her iki yanda hw … hw + WALK_W bandı; roadSurfaceAt 'concrete' sayar)
+      road.walk = !!urbanTest(line[Math.floor(line.length / 2)]);
+      if (road.walk) {
+        walks.push(ribbon(terrain, line, WALK_W / 2, hw + WALK_W / 2, UP + 0.05, '#b8b2a7', 1));
+        walks.push(ribbon(terrain, line, WALK_W / 2, -hw - WALK_W / 2, UP + 0.05, '#b8b2a7', 1));
       }
     } else {
       dirt.push(ribbon(terrain, line, hw, 0, UP - 0.02, road.type === 'path' ? '#a98b62' : '#8f6f4a', 2));
     }
   }
+  ridx = null; // şeritler (road.line) yenilendi: yol dizini yeniden kurulsun
   const M = materials();
   const out = [];
   const add = (parts, mat, name) => {
@@ -133,8 +136,69 @@ export function buildRoads(terrain, scene, urbanTest) {
   return { meshes: out, roadMaterial: roadMat };
 }
 
-/** Bir noktanın herhangi bir yol üzerinde olup olmadığı (asfalt/toprak) */
+// ======================================================================= yol dizini
+// Görünen şeritlerin (road.line) parçaları 16 m'lik kovalarda: her parça, kutusu hw + RIDX_PAD genişletilerek
+// değdiği her kovaya yazılır (yol sırası, sonra parça sırası). Bir noktadan hw + pay (pay ≤ RIDX_PAD) içindeki
+// her parça o noktanın kovasındadır: onRoad'un doğrusal taramasıyla aynı aritmetik, aynı ilk yol; sorgu ~60 kat ucuz.
+const RIDX = 16, RIDX_PAD = 4;
+let ridx = null;
+function roadIndex() {
+  if (ridx) return ridx;
+  ridx = new Map();
+  for (const road of ROADS) {
+    const line = road.line || roadCenterline(road), m = road.w / 2 + RIDX_PAD;
+    for (let i = 0; i < line.length - 1; i++) {
+      const a = line[i], b = line[i + 1], s = { ax: a.x, az: a.z, vx: b.x - a.x, vz: b.z - a.z, road };
+      for (let cx = Math.floor((Math.min(a.x, b.x) - m) / RIDX); cx <= Math.floor((Math.max(a.x, b.x) + m) / RIDX); cx++) {
+        for (let cz = Math.floor((Math.min(a.z, b.z) - m) / RIDX); cz <= Math.floor((Math.max(a.z, b.z) + m) / RIDX); cz++) {
+          const k = cx * 4096 + cz;
+          let arr = ridx.get(k);
+          if (!arr) ridx.set(k, (arr = []));
+          arr.push(s);
+        }
+      }
+    }
+  }
+  return ridx;
+}
+const cellOf = (x, z) => Math.floor(x / RIDX) * 4096 + Math.floor(z / RIDX);
+/** Noktanın parçaya uzaklığının karesi (onRoad'daki aritmetiğin aynısı) */
+function segD2(s, x, z) {
+  const L2 = s.vx * s.vx + s.vz * s.vz || 1;
+  let t = ((x - s.ax) * s.vx + (z - s.az) * s.vz) / L2;
+  t = Math.max(0, Math.min(1, t));
+  const px = s.ax + s.vx * t, pz = s.az + s.vz * t;
+  return (x - px) ** 2 + (z - pz) ** 2;
+}
+
+/**
+ * Yol yüzeyi (World.surfaceAt): görünen şeridin üstünde 'asphalt' ya da 'gravel' (toprak yol, patika), kentsel asfaltın
+ * kaldırım bandında 'concrete', değilse null. Kesin geometri: 4 m'lik ızgaraya yuvarlama yok (kenarda kayma/titreme yok).
+ */
+export function roadSurfaceAt(x, z) {
+  const segs = roadIndex().get(cellOf(x, z));
+  if (!segs) return null;
+  let walk = false;
+  for (const s of segs) {
+    const d2 = segD2(s, x, z), hw = s.road.w / 2;
+    if (d2 < hw * hw) return s.road.type === 'asphalt' ? 'asphalt' : 'gravel';
+    if (s.road.walk && d2 < (hw + WALK_W) * (hw + WALK_W)) walk = true;
+  }
+  return walk ? 'concrete' : null;
+}
+
+/** Bir noktanın herhangi bir yol üzerinde olup olmadığı (asfalt/toprak): şerit yarı genişliği + margin içinde ilk yol */
 export function onRoad(x, z, margin = 0) {
+  if (margin <= RIDX_PAD) {
+    const segs = roadIndex().get(cellOf(x, z));
+    if (!segs) return null;
+    for (const s of segs) {
+      if (!s.road.line) continue; // şeridi henüz kurulmamış yol (eski davranış: yok sayılır)
+      const hw = s.road.w / 2 + margin;
+      if (segD2(s, x, z) < hw * hw) return s.road;
+    }
+    return null;
+  }
   for (const road of ROADS) {
     const line = road.line;
     if (!line) continue;

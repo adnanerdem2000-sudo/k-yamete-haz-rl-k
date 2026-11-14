@@ -1,7 +1,9 @@
 // Duman testi 1: oyun yüklenir, ana menü görünür, menü ekranları açılır.
 // Denetimler: yükleme ekranı kalkar, ana menü katmanı görünür ve bütün tabelalar var; menü arka planında kamp
 // ateşi başındaki altı karakter yüklü; her tabela kendi ekranını başlığıyla açar ve Geri ana menüye döner;
-// karakter ekranında her karakterin kartı var, özelleştirmede 3B vitrin karakteri kurulur ve çıkınca kaldırılır.
+// karakter ekranında her karakterin kartı var, özelleştirmede 3B vitrin karakteri kurulur ve çıkınca kaldırılır;
+// özelleştirmenin Kıyafet sekmesinde "Taban rengi" satırı her karakterde, "İkinci renk (gömlek / yelek)" satırı yalnız
+// gövdesinde ikinci kumaş olan karakterde (Ceren: Takım) görünür ve taban rengi seçimi kaydedilip vitrine uygulanır.
 export default async ({ page, url, shot, wait, evalJS, log, errors }) => {
   const check = (ok, msg, data) => { if (!ok) errors.push('[assert] ' + msg + ' ' + JSON.stringify(data)); };
   await page.goto(url, { waitUntil: 'load' });
@@ -58,4 +60,35 @@ export default async ({ page, url, shot, wait, evalJS, log, errors }) => {
   const ozel = by.customize;
   check(ozel && ozel.acik && ozel.acik.showcase && ozel.don && !ozel.don.showcase && Object.values(by).every((e) => e.name === 'customize' || (e.acik && !e.acik.showcase)),
     'özelleştirme ekranı 3B vitrin karakterini kurmalı, ekrandan çıkınca vitrin kaldırılmalı (diğer ekranlarda vitrin olmamalı)', { ozel });
+  // Kıyafet sekmesi: taban rengi ve ikinci renk satırları (tıklamayla; sonunda görünüm kaydı geri alınır)
+  await evalJS(page, () => { const b = [...document.querySelectorAll('.plank')].find((p) => p.textContent === 'ÖZELLEŞTİRME'); b && b.click(); });
+  await wait(1200);
+  const kiyafet = await evalJS(page, async () => {
+    const { Settings } = await import('/src/core/Settings.js');
+    const g = window.__game, out = {};
+    const tikla = (sel, text) => { const b = [...document.querySelectorAll(sel)].find((x) => (text ? x.textContent === text : true)); if (b) b.click(); return !!b; };
+    const etiketler = () => [...document.querySelectorAll('.cust-body .opt-label')].map((x) => x.textContent);
+    for (const [id, ad] of [['ceren', 'CEREN'], ['deniz', 'DENİZ']]) {
+      const ok = tikla(`.cust-char[title="${ad}"]`) && tikla('.tabs .tab', 'Kıyafet');
+      out[id] = { ok, etiket: etiketler() };
+    }
+    // Ceren: taban rengi seç (#c0392b) → kayıt + vitrin
+    tikla('.cust-char[title="CEREN"]');
+    const lbl = [...document.querySelectorAll('.cust-body .opt-label')].find((x) => x.textContent === 'Taban rengi');
+    const sw = lbl && lbl.nextElementSibling ? [...lbl.nextElementSibling.querySelectorAll('.sw')].find((b) => b.title === '#c0392b') : null;
+    if (sw) sw.click();
+    out.kayit = ((Settings.get('player.appearance') || {}).ceren || {}).soleColor || null;
+    out.vitrin = g.menu.sc && g.menu.sc.av && g.menu.sc.av.ch.look ? g.menu.sc.av.ch.look.soleColor || null : null;
+    const all = { ...(Settings.get('player.appearance') || {}) };
+    delete all.ceren; delete all.deniz;
+    Settings.set('player.appearance', all);
+    tikla('.tabs .tab', 'Koleksiyonlar');
+    const geri = [...document.querySelectorAll('.screen-head .btn')].find((x) => x.textContent.includes('Geri'));
+    if (geri) geri.click();
+    return out;
+  });
+  log('kıyafet sekmesi', kiyafet);
+  const IKINCI = 'İkinci renk (gömlek / yelek)';
+  check(kiyafet && kiyafet.ceren.ok && kiyafet.deniz.ok && kiyafet.ceren.etiket.includes('Taban rengi') && kiyafet.deniz.etiket.includes('Taban rengi') && kiyafet.ceren.etiket.includes(IKINCI) && !kiyafet.deniz.etiket.includes(IKINCI) && kiyafet.kayit === '#c0392b' && kiyafet.vitrin === '#c0392b',
+    'Kıyafet sekmesinde taban rengi satırı olmalı, ikinci renk satırı yalnız ikinci kumaşlı gövdede (Ceren) görünmeli; taban rengi seçimi kaydedilip vitrine uygulanmalı', kiyafet);
 };

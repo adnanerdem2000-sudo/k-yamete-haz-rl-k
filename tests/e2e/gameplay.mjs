@@ -38,6 +38,25 @@ export default async ({ page, url, shot, wait, evalJS, log, errors }) => {
   const bandaj = await S(() => window.__game.session.inventory.count('bandage'));
   log('bandaj', bandaj);
   check(typeof aclik0 === 'number' && aclik1 >= aclik0 + 20 && uretim && uretim.basladi === true && bandaj >= uretim.bandaj0 + 2, 'tüketim ve üretim: konserve açlığı gidermeli (+40), bezden bandaj üretilmeli (tarif 2 verir)', { aclik0, aclik1, uretim, bandaj });
+  // 3b) yere serilmişken: eşya bırakma, ifade çarkı (gerçek düğme: Gül), üretim ve yemek eylem başlatmaz, envanter değişmez;
+  // yere serilme eylemi yansıtılmış kalır (tek karede: kalkış sürerken)
+  const serilme = await S(() => {
+    const g = window.__game, S = g.session, pl = S.local;
+    S.giveLocal('cloth', 4, null); S.giveLocal('canned_food', 1, null);
+    const ok = pl.knockdown();
+    const inv0 = JSON.stringify(S.inventory.serialize());
+    S.dropSlot(S.inventory.firstSlotOf('bandage'), 1);
+    g.ui.openEmotes();
+    const btn = [...document.querySelectorAll('.wheel-item')].find((b) => /Gül/.test(b.textContent));
+    if (btn) btn.click();
+    const uret = S.crafting.craft('bandage');
+    S.useItem(S.inventory.firstSlotOf('canned_food'));
+    return { ok, btn: !!btn, act: pl.avatar.lastAct && pl.avatar.lastAct[1], eylem: pl.avatar.action && pl.avatar.action.type, ifade: pl.emote, uret, ayni: JSON.stringify(S.inventory.serialize()) === inv0, ilerleme: !!g.ui.prog, panel: g.ui.panel && g.ui.panel.name, knockT: +pl.knockT.toFixed(2) };
+  });
+  log('yere serilme', serilme);
+  check(serilme && serilme.ok && serilme.btn && serilme.act === 'knock' && serilme.eylem === 'knock' && !serilme.ifade && serilme.uret === false && serilme.ayni && !serilme.ilerleme && !serilme.panel && serilme.knockT > 1.9,
+    'yere serilmişken bırakma, ifade çarkı, üretim ve yemek eylem başlatmamalı (yere serilme sürmeli, envanter değişmemeli)', serilme);
+  await page.waitForFunction(() => !(window.__game.session.local.knockT > 0), null, { timeout: 60000 });
   // 4) inşa: yerleştirme hayaleti + doğrudan yerleştirip tamamla
   await S(() => { const S = window.__game.session; S.giveLocal('plank', 10); S.giveLocal('nails', 20); S.build.startPlacing('barricade_wood'); });
   await wait(1500); await shot(page, '/tmp/g-place.png');

@@ -42,18 +42,32 @@ const OVERLAYS = {
   kick: { clip: 'Kick_Right', re: null, w: 1 },
 };
 
-// Eylem → aktarılmış klip (Motion). dur: oyunun istediği süre; loop: eylem süresince tekrar; mask: katman
-// moving: hareket halindeyken kullanılacak (üst gövde) alternatif. Klibi olmayan eylemler prosedürel kalır.
+// Eylem → aktarılmış klip (Motion). dur: oyunun istediği süre; loop: eylem süresince tekrar; mask: katman.
+// 'tür:çeşit' anahtarları aynı eylemin çeşitleridir (ör. 'search:chest' sandık kapağı); çeşidi gönderen seçer
+// (resolveKind: hareket halinde tam gövde yerine movingKind, koşarken iniş yok), ağda eylemle gider, uzak avatar
+// kendi hızına bakmadan aynısını oynar. Çeşitte olmayan süre ayarı (fixed/minDur) temel türden gelir.
+// loopFrom/pingpong: döngü aralığı ve uçlarda geri dönme (diz çöküp onarma döngüsü ayağa kalkışı tekrarlamasın);
+// exitTo: eylem bitince klibin to…exitTo kısmı çıkış olarak oynar (diz çökmüşken ayağa kalkma). shotDur: döngüsüz
+// klibin süresi eylem süresinden ayrıysa (ardından 'then' devam klibi gelir). Klibi olmayan eylemler prosedürel kalır.
 const UAL_ACTIONS = {
   kick: { clip: 'Kick', mask: 'full', fadeIn: 0.08 },
   roll: { clip: 'Roll', mask: 'full', to: 0.92, fadeIn: 0.06, fadeOut: 0.14 },
   dodgeL: { clip: 'Dodge_Left', mask: 'full', fadeIn: 0.06 },
   dodgeR: { clip: 'Dodge_Right', mask: 'full', fadeIn: 0.06 },
   interact: { clip: 'Interact', mask: 'upper', from: 0.08, to: 0.8 },
-  pickup: { clip: 'PickUp_Kneeling', mask: 'full', from: 0.12, to: 0.82, minDur: 0.95, moving: { clip: 'PickUp_Table', mask: 'upper', from: 0.1, to: 0.9 } },
-  search: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, fadeIn: 0.25, moving: { clip: 'Interact', mask: 'upper', loop: true } },
-  searchHigh: { clip: 'Chest_Open', mask: 'upper', loop: true, fadeIn: 0.2 },
-  revive: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, fadeIn: 0.3 },
+  pickup: { clip: 'PickUp_Kneeling', mask: 'full', from: 0.12, to: 0.82, minDur: 0.95, movingKind: 'table' }, // yerden
+  'pickup:table': { clip: 'PickUp_Table', mask: 'upper', from: 0.1, to: 0.9 }, // masa/raf yüksekliğinden ya da yürürken
+  // arama: 'low' (ya da çeşitsiz) diz çöküp onarma; sandık kapağı, tezgâh, yüksek raf, dökme, ekme, hasat, levye, el işi
+  search: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, loopFrom: 0.13, to: 0.8, pingpong: true, exitTo: 1, fadeIn: 0.25, movingKind: 'high' },
+  'search:chest': { clip: 'Chest_Open', mask: 'full', loop: true, loopFrom: 0.25, to: 0.6, pingpong: true, exitTo: 1, fadeIn: 0.2 },
+  'search:mid': { clip: 'PickUp_Table', mask: 'upper', loop: true, loopFrom: 0.2, to: 0.5, pingpong: true, fadeIn: 0.2 },
+  'search:high': { clip: 'Interact', mask: 'upper', loop: true, loopFrom: 0.22, to: 0.6, pingpong: true, fadeIn: 0.2 },
+  'search:pour': { clip: 'Farm_Watering', mask: 'upper', loop: true, loopFrom: 0.17, to: 0.83, pingpong: true, fadeIn: 0.25 },
+  'search:plant': { clip: 'Farm_PlantSeed', mask: 'full', from: 0.03, to: 0.97, fadeIn: 0.15 },
+  'search:harvest': { clip: 'Farm_Harvest', mask: 'full', from: 0.03, to: 0.97, fadeIn: 0.15 },
+  'search:pry': { clip: 'Fixing_Kneeling', mask: 'full', loop: true, loopFrom: 0.13, to: 0.8, pingpong: true, rate: 1.4, exitTo: 1, fadeIn: 0.25 },
+  'search:hands': { clip: 'Bandage_Loop', mask: 'upper', loop: true, fadeIn: 0.2 },
+  revive: { clip: 'Fixing_Kneeling', mask: 'full', loop: true, loopFrom: 0.13, to: 0.8, pingpong: true, exitTo: 1, fadeIn: 0.3 },
   bandage: { clip: 'Bandage_Loop', mask: 'upper', loop: true, fadeIn: 0.2 },
   consume: { clip: 'Consume', mask: 'upper', fadeIn: 0.15 },
   drink: { clip: 'Drink', mask: 'upper', from: 0.1, to: 0.85, fadeIn: 0.15 },
@@ -67,24 +81,46 @@ const UAL_ACTIONS = {
   no: { clip: 'Idle_No_Loop', mask: 'upper', fadeIn: 0.2 },
   surprise: { clip: 'Surprise', mask: 'upper', to: 0.7, fadeIn: 0.1 },
   push: { clip: 'Push_Loop', mask: 'full', loop: true, fadeIn: 0.25 },
-  fish: { clip: 'Fish_Cast', mask: 'full', fadeIn: 0.2, then: { clip: 'Fish_Cast_Idle_Loop', mask: 'full', loop: true, fadeIn: 0.4 } },
+  // olta: atış kendi hızında (shotDur; eskiden bütün bekleme süresine yayılıp ağır çekim oynuyordu), sonra bekleme döngüsü
+  fish: { clip: 'Fish_Cast', mask: 'full', fadeIn: 0.2, shotDur: 1.8, then: { clip: 'Fish_Cast_Idle_Loop', mask: 'full', loop: true, fadeIn: 0.4 } },
+  'fish:reel': { clip: 'Fish_Reel', mask: 'full', fadeIn: 0.15 }, // balık tutuldu
+  'fish:fail': { clip: 'Fish_Reel_Failed', mask: 'full', fadeIn: 0.15 }, // balık kaçtı
   jump: { clip: 'Jump_Start', mask: 'full', from: 0.08, to: 0.3, fadeIn: 0.04, fadeOut: 0.12, fixed: 0.24 },
   land: { clip: 'Jump_Land', mask: 'full', from: 0.06, to: 0.5, fadeIn: 0.04, fadeOut: 0.18, fixed: 0.45, still: true },
+  // sert iniş (3,4–6 m düşüş, dururken): derin çömelip yavaş doğrulma
+  'land:hard': { clip: 'Jump_Land', mask: 'full', from: 0.05, to: 0.88, fadeIn: 0.04, fadeOut: 0.22, fixed: 0.8 },
+  // yere serilme (hücum eden hayvan, ağır darbe, patlama, yüksek düşüş): sırtüstü düşüp yerde kalır, 1 sn'de sıçrayarak
+  // kalkar (KipUp aynı yatış pozundan başlar); then.at: devam klibinin başladığı an, then.dur: süresi
+  knock: { clip: 'Hit_Knockback', mask: 'full', from: 0.06, to: 1, shotDur: 0.75, hold: true, fixed: 1.95, fadeIn: 0.05, then: { clip: 'KipUp', mask: 'full', fadeIn: 0.12, at: 1.0, dur: 0.95 } },
   vault: { clip: 'SafetyVault', mask: 'full', fadeIn: 0.05, fadeOut: 0.1 },
   climbUp: { clip: 'ClimbUp_1m', mask: 'full', fadeIn: 0.05, fadeOut: 0.12 },
   climbUp2: { clip: 'ClimbUp_2m', mask: 'full', fadeIn: 0.05, fadeOut: 0.15 },
   ladderIn: { clip: 'Climb_Enter', mask: 'full', from: 0.1, to: 0.95, fadeIn: 0.08, fadeOut: 0.2 },
   ladderOut: { clip: 'Climb_Exit', mask: 'full', from: 0.05, to: 0.9, fadeIn: 0.06, fadeOut: 0.25 },
 };
+// gövdeyle oynayan (eylem değil, hareket) klipler: süren eylemi bitirmez
+const MOVE_KEYS = new Set(['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'roll', 'kick', 'dodgeL', 'dodgeR']);
+// isabet tepkisi klipleri; ağda dizinle gider (her istemcide aynı klip)
 const HIT_CLIPS = ['Hit_Chest', 'Hit_Head', 'Hit_Stomach', 'Hit_Shoulder_L', 'Hit_Shoulder_R'];
-// kişilik → kıpırdanma türleri (Animations.fidget) ve elde beliren alet (eşya modeli)
-const FIDGETS = {
-  relaxed: ['tinker', 'tinker', 'stretch'], observer: ['binoculars', 'binoculars', 'peek'], heavy: ['stretch'], confident: ['boxing', 'stretch'],
-  calm: ['watch'], formal: ['watch'], agile: ['peek'], default: ['stretch'],
+// Kıpırdanma türleri (kişilik havuzu Motion PERSONA.fidgets'te). pose: Animations.fidget üst gövde pozu; clip: Motion
+// bekleme çeşidi (setIdleVariant); prop/hold: elde beliren eşya ve tutuşu; arms: kolları meşgul eder (elde eşya varken
+// seçilmez); night: yalnız gece; cycles: klip tur sayısı [en az, en çok]; needs: yalnız bu aksesuarı takan karakterde
+// (saati olmayan bileğine bakmasın: kol saati tek aksesuar yuvasında, ör. Ceren'de steteskop var)
+export const FIDGETS = {
+  tinker: { pose: 'tinker', prop: 'wrench', hold: 'melee1', arms: true },
+  binoculars: { pose: 'binoculars', prop: 'binoculars', hold: 'binoculars', arms: true },
+  stretch: { pose: 'stretch' }, watch: { pose: 'watch', arms: true, needs: 'watch' }, boxing: { pose: 'boxing', arms: true }, peek: { pose: 'peek' },
+  lookAround: { clip: 'Idle_LookAround_Loop', cycles: [1, 1] },
+  foldArms: { clip: 'Idle_FoldArms_Loop', cycles: [2, 3], arms: true },
+  radio: { clip: 'Idle_TalkingPhone_Loop', prop: 'radio', hold: 'small', cycles: [1, 2], arms: true },
+  lantern: { clip: 'Idle_Lantern_Loop', prop: 'flashlight', hold: 'flashlight', cycles: [2, 2], arms: true, night: true },
 };
-const FIDGET_PROPS = { tinker: 'wrench', binoculars: 'binoculars' };
-// ağda uzak oyunculara yansıtılan eylemler (takla ve ifadeler anim durumunda ayrıca taşınır)
-const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'jump', 'land', 'interact', 'push', 'stop']);
+// bot anlık görüntüsünde kıpırdanma kodu (1 tabanlı dizin; 0: yok)
+export const FIDGET_KEYS = Object.keys(FIDGETS);
+// ağda uzak oyunculara yansıtılan eylemler (takla ve el sallama/sevinç/dans ifadeleri anim durumunda ayrıca taşınır;
+// gülme/gösterme ifadesi, gitar, kıpırdanma ve yere serilme eylem olarak gider). İsabet tepkisi eylem yuvasını kullanmaz:
+// anim durumunun kendi alanında (hit: [sayaç, klip dizini]) gider — hemen önce yazılan serilme/durdurma/basılı tutmayı ezmesin
+const REPLICATED = new Set(['melee', 'kick', 'reload', 'throw', 'pickup', 'search', 'revive', 'bandage', 'drink', 'consume', 'hammer', 'chop', 'fish', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'jump', 'land', 'interact', 'push', 'stop', 'laugh', 'point', 'guitar', 'fidget', 'knock']);
 
 // Poz sözlüğü ↔ iskelet maskeleri
 const VSPINE = ['Spine', 'Chest', 'UpperChest', 'Neck', 'Head'].map((n) => BONES.indexOf(n));
@@ -99,6 +135,16 @@ const MASKS = {
   armsSpine: { v: [...ARMS_MASK, ...VSPINE], r: [...RIG_MASK.arms, ...RIG_MASK.spine] },
   rhand: { v: VRHAND, r: RIG_MASK.rhand },
 };
+
+// yerinde dönüş klipleri (kök dönüşü yok, adımlar from…to aralığında; dur: oynatma süresi) ve kök yönünün dönüş
+// profili (klip ilerleyişinin k0…k1 aralığında yumuşak)
+const TURNS = {
+  90: { L: 'Turn90_L', R: 'Turn90_R', from: 0.03, to: 0.56, dur: 0.6, k0: 0.12, k1: 0.85 },
+  180: { L: 'Turn180_L', R: 'Turn180_R', from: 0, to: 1, dur: 0.85, k0: 0.08, k1: 0.9 },
+};
+// eklemeli duruş: bel eğilmesinin karın/gövde/göğüs payları (RIG dizinleri 2/3/4) ve üst kol kemikleri
+const SPINE_BEND = [[2, 0.45], [3, 0.35], [4, 0.2]];
+const UPPER_ARM_L = RIG_BONES.indexOf('UpperArmL'), UPPER_ARM_R = RIG_BONES.indexOf('UpperArmR');
 
 const LOCO = ['Idle', 'Walk', 'Run', 'Run_Back', 'Run_Left', 'Run_Right'];
 const FULL_MODES = new Set(['drive', 'seat', 'downed', 'sleep', 'climb', 'prone', 'carried', 'swim']);
@@ -299,18 +345,42 @@ export class Avatar {
     }
   }
 
-  /** Bir eylem animasyonu başlat */
-  play(type, dur = 0.6, kind = null, off = 0) {
+  /**
+   * Bir eylem animasyonu başlat. kind: çeşit ('search' için 'chest'/'mid'/'pour'…, 'hit' için klip dizini);
+   * off: uzak eylemde başlangıçtan geçen süre; seq > 0: ağdan gelen eylem (gönderenin sıra numarası);
+   * n: yakın dövüş sırası (gönderenin vuruş sayacı: ağdan gelen eylemde act[4], botta bot_fx olayı; yoksa kendi sayacı).
+   */
+  play(type, dur = 0.6, kind = null, off = 0, seq = 0, n = 0) {
     // ağ eşitlemesi: yerel eylemler sıra numarasıyla anim durumuna yazılır, uzak avatar aynısını oynar;
-    // başlangıç zamanı (actT: geçen süre) da gider → uzak avatar klibi ağ gecikmesi kadar ileriden başlatır
-    if (REPLICATED.has(type)) { this.lastAct = [((this.lastAct && this.lastAct[0]) || 0) + 1, type, Math.round(dur * 100) / 100, kind]; this.lastActAt = performance.now(); }
+    // başlangıç zamanı (actT: geçen süre) da gider → uzak avatar klibi ağ gecikmesi kadar ileriden başlatır.
+    // Çeşit gönderende çözülür (hareket halinde üst gövde çeşidi vb.): uzak avatar kendi hızına bakmadan aynısını oynar
+    const net = seq > 0;
+    if (!net && this.motion) kind = this.resolveKind(type, kind);
+    // isabet tepkisi: eylemi bölmez, eylem yuvasına yazılmaz; kendi sayacıyla anim durumunun hit alanında gider (klip dizini
+    // gönderende seçilir: her istemcide aynı klip)
+    if (type === 'hit') {
+      const idx = Number.isInteger(kind) && kind >= 0 && kind < HIT_CLIPS.length ? kind : Math.floor(Math.random() * HIT_CLIPS.length);
+      if (!net) this.lastHit = [((this.lastHit && this.lastHit[0]) || 0) + 1, idx];
+      this.flinch(1, idx);
+      return;
+    }
+    // yakın dövüş sırası (yumruk direkt/kroşe, kılıç A/B): yalnız vuruşla artan sayaçtan — araya giren isabet, zıplama,
+    // kıpırdanma, durdurma sırayı bozmaz; sayaç eylemle (act[4]) gider, her istemcide ve geç katılanda aynı klip
+    const mn = type !== 'melee' ? 0 : n > 0 ? n : net ? seq : (this.meleeN = (this.meleeN || 0) + 1);
+    if (REPLICATED.has(type) && !net) {
+      const d = Math.round(dur * 100) / 100, sn = ((this.lastAct && this.lastAct[0]) || 0) + 1;
+      this.lastAct = mn ? [sn, type, d, kind, mn] : [sn, type, d, kind];
+      this.lastActAt = performance.now(); this._actT = this.t;
+    }
     if (off > 0 && type !== 'stop' && off > dur + 0.25) return; // uzak eylem çoktan bitmiş
-    if (this.motion && this.playMotion(type, dur, kind, off)) return;
+    // kıpırdanma (kind: tür): eylem değildir, süren eylemi bölmez; uzakta geçen süre kadar ileriden başlar
+    if (type === 'fidget') { if (!(off > 0 && off >= dur)) this.startFidget(kind, dur, off); return; }
+    if (this.motion && this.playMotion(type, dur, kind, off, mn)) return;
     if (type === 'bandage') type = 'search';
     else if (type === 'drink') type = 'consume';
     switch (type) {
       case 'melee':
-        if (!this.heldId) { this.punchSide = !this.punchSide; this.overlay(this.punchSide ? 'punchR' : 'punchL', dur * 1.25, { replace: ['punchR', 'punchL'] }); }
+        if (!this.heldId) this.overlay(mn & 1 ? 'punchR' : 'punchL', dur * 1.25, { replace: ['punchR', 'punchL'] });
         else this.overlay('slash', dur * 1.15, { fadeIn: 0.05 });
         return;
       case 'wave': this.overlay('wave', Math.max(1.2, dur)); return;
@@ -320,19 +390,73 @@ export class Avatar {
       case 'jump': case 'land': case 'vault': case 'shoot': return; // fizik/duruşla yönetilir
       default: break;
     }
+    // klibi olmayan (prosedürel) eylem süren klip eyleminin yerini alır: onun klipleri de söner (uzakta da)
+    this.endMotionAct(null, false); this._mAct = null; this._stopDue = false;
     this.action = { type, t: Math.max(0, Math.min(off, dur * 0.9)), dur, kind };
   }
 
-  flinch(dir = 1) {
-    if (this.motion && this.motion.play(HIT_CLIPS[Math.floor(Math.random() * HIT_CLIPS.length)], { mask: 'upper', w: dir < 0 ? 0.6 : 0.95, fadeIn: 0.03, fadeOut: 0.16, group: 'hit' })) return;
-    this.overlay(Math.random() < 0.5 ? 'hit' : 'hit2', 0.45, { w: dir < 0 ? 0.6 : 1, fadeIn: 0.04 });
+  /**
+   * Eylemin bittiğini yansıt ('stop'). Son 0,25 sn içinde başka bir eylem yazıldıysa (zıplama, iniş… aynı karede de
+   * olabilir) onu ezmesin: alıcılara ulaşana dek bekletilir; arada yeni eylem başlarsa (eskisinin yerini uzakta da
+   * alır) durdurma gereksizleşir ve iptal edilir. İsabet tepkisi eylem yuvasını kullanmadığı için durdurmayı geciktirmez.
+   */
+  queueStop() {
+    if (!this.lastAct) return;
+    if (this.t - (this._actT ?? -1e9) >= 0.25) this.writeStop(); else this._stopDue = true;
   }
+  writeStop() { this.lastAct = [this.lastAct[0] + 1, 'stop', 0, null]; this.lastActAt = performance.now(); this._actT = this.t; this._stopDue = false; }
+
+  /**
+   * Gönderen tarafta eylem çeşidini çöz: hareket halindeyken tam gövde klibi yerine movingKind çeşidi (yürürken
+   * masadan alma, yüksek raf), koşarken iniş klibi yok ('skip'). Çeşit ağda gider; uzak avatar yeniden çözmez.
+   */
+  resolveKind(type, kind) {
+    const d = UAL_ACTIONS[type];
+    if (!d) return kind;
+    const moving = this.speedSm > 0.6;
+    if (d.still && moving) return 'skip';
+    const k = (kind && UAL_ACTIONS[type + ':' + kind]) || d;
+    return moving && d.movingKind && k.mask === 'full' ? d.movingKind : kind;
+  }
+
+  /** El sallama: ifade alanının yükselen kenarında bir kez (2,4 sn; yerelde ve uzakta aynı süre, yeniden başlamaz) */
+  waveEdge(a) {
+    const wv = a.emote === 'wave';
+    if (wv && !this._wave && !this.overlays.some((o) => o.name === 'wave')) this.overlay('wave', 2.4);
+    this._wave = wv;
+  }
+
+  /** İsabet tepkisi. idx: HIT_CLIPS dizini (ağdan gelir: her istemcide aynı klip); yoksa rastgele */
+  flinch(dir = 1, idx = null) {
+    const i = Number.isInteger(idx) && idx >= 0 && idx < HIT_CLIPS.length ? idx : Math.floor(Math.random() * HIT_CLIPS.length);
+    if (this.motion && this.motion.play(HIT_CLIPS[i], { mask: 'upper', w: dir < 0 ? 0.6 : 0.95, fadeIn: 0.03, fadeOut: 0.16, group: 'hit' })) return;
+    this.overlay(i % 2 ? 'hit2' : 'hit', 0.45, { w: dir < 0 ? 0.6 : 1, fadeIn: 0.04 });
+  }
+
+  /**
+   * Süren klip eyleminin (this.action ve this._mAct) çekimlerini sönümle bitir: yeni eylem başka grupta olsa da
+   * ('emote', devam klibi 'act2') eskisi yetim kalıp sonsuza dek dönmesin. keep: yeni eylemin çekimi;
+   * exit: döngünün çıkış kısmı (diz çökmüşken ayağa kalkma) oynasın.
+   */
+  endMotionAct(keep = null, exit = false) {
+    const M = this.motion;
+    if (!M) return;
+    for (const x of [this.action, this._mAct]) {
+      if (!x || !x.motion) continue;
+      if (x.shot && x.shot !== keep) M.stopShot(x.shot, exit);
+      if (x.next && x.next !== keep) M.stopShot(x.next, false);
+    }
+  }
+
+  /** Durdurulan döngünün çıkış klibi oynayabilir mi (ayakta, dururken; ölü/uyuyan/yürüyen değil) */
+  canExit() { return !this._dead && !this._sleep && this._mode === 'ground' && this.speedSm < 0.9; }
 
   /**
    * Eylemi aktarılmış klip olarak oynat (Motion). false: bu eylemin klibi yok → prosedürel/eski yol.
    * Etkileşim/onarım gibi süreli eylemler this.action'da izlenir (dış sistemler action'ı null yaparak bitirir).
+   * mn: yakın dövüş sırası (yalnız vuruşla artan sayaç; tek: direkt yumruk / kılıç A, çift: kroşe / kılıç B).
    */
-  playMotion(type, dur, kind, off = 0) {
+  playMotion(type, dur, kind, off = 0, mn = 0) {
     const M = this.motion;
     // uzak eylem: klibi geçen süre kadar ileriden başlat (giriş sönümü atlanır)
     const adv = (shot) => {
@@ -341,25 +465,31 @@ export class Avatar {
     };
     if (type === 'melee') {
       const o = { mask: 'upper', group: 'attack', fadeIn: 0.05, fadeOut: 0.16 };
-      if (!this.heldId) { this.punchSide = !this.punchSide; return !!adv(M.play(this.punchSide ? 'Punch_Jab' : 'Punch_Cross', { ...o, dur: dur * 1.25 })); }
-      this.swingN = ((this.swingN || 0) + 1) % 2;
-      return !!adv(M.play(this.swingN ? 'Sword_Regular_A' : 'Sword_Regular_B', { ...o, dur: dur * 1.15, from: 0.02 }));
+      const odd = (mn & 1) === 1;
+      if (!this.heldId) return !!adv(M.play(odd ? 'Punch_Jab' : 'Punch_Cross', { ...o, dur: dur * 1.25 }));
+      return !!adv(M.play(odd ? 'Sword_Regular_A' : 'Sword_Regular_B', { ...o, dur: dur * 1.15, from: 0.02 }));
     }
     let key = type;
-    if (type === 'stop') { if (this.action && this.action.motion) { M.stopShot(this.action.shot); if (this.action.next) M.stopShot(this.action.next); } this.action = null; this._mAct = null; return true; }
+    if (type === 'stop') { this.endMotionAct(null, this.canExit()); this.action = null; this._mAct = null; return true; }
     if (type === 'reload') { if (this.holdKind !== 'pistol') return false; key = 'reloadPistol'; }
     const d = UAL_ACTIONS[key];
     if (!d) return false;
-    const moving = this.speedSm > 0.6;
-    if (d.still && moving) return true; // koşarken iniş: klip yok (adım devam eder)
-    const def = d.moving && moving ? d.moving : d;
-    const o = { mask: def.mask, from: def.from, to: def.to, fadeIn: def.fadeIn, fadeOut: def.fadeOut, loop: !!def.loop, group: d.emote ? 'emote' : 'act', rate: def.rate };
-    const total = d.fixed ?? Math.max(dur, d.minDur || 0);
-    if (!def.loop) { o.dur = total; delete o.rate; }
-    if (['jump', 'land', 'vault', 'climbUp', 'climbUp2', 'ladderIn', 'ladderOut', 'roll', 'kick', 'dodgeL', 'dodgeR'].includes(key)) { o.group = 'move'; return !!adv(M.play(def.clip, o)); }
+    if (kind === 'skip') return true; // gönderen koşuyordu: iniş klibi yok (adım devam eder)
+    const def = (kind && UAL_ACTIONS[key + ':' + kind]) || d;
+    const o = { mask: def.mask, from: def.from, to: def.to, fadeIn: def.fadeIn, fadeOut: def.fadeOut, loop: !!def.loop, group: d.emote ? 'emote' : 'act', rate: def.rate, loopFrom: def.loopFrom, pingpong: def.pingpong, exitTo: def.exitTo, hold: def.hold };
+    const total = def.fixed ?? d.fixed ?? Math.max(dur, def.minDur ?? d.minDur ?? 0);
+    if (!def.loop) { o.dur = def.shotDur ?? total; delete o.rate; }
+    if (MOVE_KEYS.has(key)) {
+      o.group = 'move';
+      const sh = adv(M.play(def.clip, o));
+      if (key === 'land' && sh) this._landShot = sh; // koşmaya başlayınca kesilir (updateMotion)
+      return !!sh;
+    }
     const shot = adv(M.play(def.clip, o));
     if (!shot) return false;
-    this.action = { type, t: off > 0 ? Math.min(off, total * 0.9) : 0, dur: total, kind, shot, motion: true, then: def.then || d.then || null, loop: false, loopish: !!def.loop };
+    this.endMotionAct(shot, false); // önceki eylem başka grupta ('emote'/'act2') olsa da söner
+    this._stopDue = false; // bekleyen durdurma gereksiz: yeni eylem eskisinin yerini uzakta da alır
+    this.action = { type, t: off > 0 ? Math.min(off, total * 0.9) : 0, dur: total, kind, shot, motion: true, then: def.then || null, loop: false, loopish: !!def.loop, full: def.mask === 'full' };
     this._mAct = this.action;
     return true;
   }
@@ -383,12 +513,22 @@ export class Avatar {
     // uzak oyuncunun eylemi (sıra numarası değişince bir kez), başlangıç zamanıyla: klip, gönderenin paketi yolladığı anda
     // geçmiş süre (actT) kadar ileriden başlar → aynı paketteki konumla eş zamanlı (konum da gecikmeli gösterilir; ağ
     // gecikmesi ayrıca eklenmez). İlk görüşte eylem hâlâ sürüyorsa kaldığı yerden oynar; bitmiş eylem oynatılmaz
+    // Sıra numarası da geçer: çeşit gönderenin seçtiği gibi oynar; yumruk/kılıç sırası gönderenin vuruş sayacından (act[4])
     if (a.act && a.act !== this.lastAct) {
       if (this._ractN === undefined) {
         this._ractN = a.act[0];
-        if (a.actT !== undefined && a.act[1] !== 'stop' && a.actT < (a.act[2] || 0)) this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT));
-      } else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT || 0)); }
+        if (a.actT !== undefined && a.act[1] !== 'stop' && a.actT < (a.act[2] || 0)) this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT), a.act[0], a.act[4]);
+      } else if (a.act[0] !== this._ractN) { this._ractN = a.act[0]; this.play(a.act[1], a.act[2], a.act[3], Math.max(0, a.actT || 0), a.act[0], a.act[4]); }
     }
+    // uzak oyuncunun isabet tepkisi (hit: [sayaç, klip dizini]): sayaç değişince bir kez, aynı klip. İlk görüşte (yeni avatar,
+    // geç katılan) eski isabet oynatılmaz; kendi anim durumu (aynı dizi) ve bu alanı taşımayan durum (bot, NPC) atlanır
+    if (a.hit !== undefined && a.hit !== this.lastHit) {
+      const hn = a.hit ? a.hit[0] : 0;
+      if (this._rhitN === undefined) this._rhitN = hn;
+      else if (hn !== this._rhitN) { this._rhitN = hn; if (a.hit) this.flinch(1, a.hit[1]); }
+    }
+    // yeni avatar (uzak oyuncu, bot, NPC): ilk karede bakış yönüne otur — 0'dan dönerek gelmesin
+    if (a.yaw !== undefined && !this._yawSeen) { this.visYaw = this.lastYaw = a.yaw; this._yawSeen = true; }
     if (this.motion) { this.updateMotion(dt, a, mode, s, dead); return; }
     // ---- prosedürel tam gövde modları
     const full = FULL_MODES.has(mode);
@@ -477,7 +617,7 @@ export class Avatar {
         wFull = Math.max(wFull, this.blend.air * 0.85);
       }
       if (a.emote && a.emote !== 'wave') { A.emote(p, a.emote, this.t); wFull = 1; this.rig.autoGround = true; }
-      else if (a.emote === 'wave' && !this.overlays.some((o) => o.name === 'wave')) this.overlay('wave', 1.6);
+      this.waveEdge(a);
     }
     for (let i = 0; i < wts.length; i++) wts[i] = wFull;
     if (wFull > 0) anyProc = true;
@@ -544,6 +684,7 @@ export class Avatar {
         case 'throw': { const kk = k < 0.4 ? k / 0.4 : 1 - (k - 0.4) / 0.6; pu.set('RightArm', (-150 * kk + 40 * (1 - kk)) * D, 0, 40 * D); pu.set('RightForeArm', 0, 40 * kk * D, 0); setMask('rarm', Math.max(0, env), pu); break; }
         case 'cheer': case 'dance': case 'laugh': case 'point': A.emote(tmp, act.type, this.t); p.blend(tmp, 1); for (let i = 0; i < wts.length; i++) wts[i] = Math.max(wts[i], Math.max(0, env)); anyProc = true; this.rig.autoGround = true; break;
         case 'fish': pu.set('RightArm', -70 * D, 0, 50 * D); pu.set('RightForeArm', 0, 40 * D, 0); pu.set('LeftArm', -60 * D, 0, -50 * D); pu.set('LeftForeArm', 0, -50 * D, 0); setMask('arms', 1, pu); break;
+        case 'guitar': A.guitar(pu, this.t); setMask('armsSpine', Math.max(0, env), pu); break;
         default: break;
       }
       if (act.t >= act.dur && !act.loop) this.action = null;
@@ -593,39 +734,79 @@ export class Avatar {
       else { M.stop('sleep'); M.play('LayToIdle', { group: 'wake', dur: 1.15, fadeIn: 0.05, fadeOut: 0.25 }); }
       this._sleep = sleep;
     }
+    this._mode = mode;
+    // sevinç/dans: ifade alanının yükselen kenarında (yerelde ve uzakta aynı yol, aynı süre); el sallama ayrıca
     const em = a.emote && UAL_ACTIONS[a.emote] && UAL_ACTIONS[a.emote].emote ? a.emote : null;
     if (em !== this._emote) {
       if (em && !(this.action && this.action.type === em)) this.playMotion(em, 2.6);
       this._emote = em;
-    } else if (a.emote === 'wave' && !this.overlays.some((o) => o.name === 'wave')) this.overlay('wave', 1.6);
-    // elde kutu/kasa taşıma: üst gövde taşıma döngüsü (bacaklar hareket katmanından)
-    if (!!a.carryBox !== !!this._carryBox) {
-      if (a.carryBox) M.play('Walk_Carry_Loop', { mask: 'upper', loop: true, group: 'carry', fadeIn: 0.2, fadeOut: 0.2 });
+    }
+    this.waveEdge(a);
+    // elde kutu/kasa taşıma: üst gövde taşıma döngüsü (bacaklar hareket katmanından). 1: hafif, 2: ağır yük (büyük kasa,
+    // fıçı: döngü daha ağır tempoda; geriye yaslanma posture()'da); tür değişirse döngü yeniden başlar
+    const cb = a.carryBox === 2 ? 2 : a.carryBox ? 1 : 0;
+    if (cb !== (this._carryBox || 0)) {
+      if (cb) M.play('Walk_Carry_Loop', { mask: 'upper', loop: true, group: 'carry', fadeIn: 0.2, fadeOut: 0.2, rate: cb === 2 ? 0.8 : 1 });
       else M.stop('carry');
-      this._carryBox = !!a.carryBox;
+      this._carryBox = cb;
     }
-    // dış sistem eylemi bitirdiyse (action = null) döngüdeki klibi durdur
+    // durdurulan döngünün çıkış klibi (ayağa kalkma) yalnız ayakta dururken: yürürken, ölünce, uyurken kesilir
+    const exitOK = !dead && !sleep && mode === 'ground' && s < 0.9;
+    if (!exitOK) M.stopExits();
+    // iniş klibi (tam gövde, 'move' grubu) koşmaya başlayınca sürmez — tam gövde döngü eylemleriyle aynı kural: sert inişin
+    // kısa kilidi (0,3 sn) bitip oyuncu koşarken bacaklar iniş pozunda donup kaymasın. Hız ağda da gider: uzakta da aynı
+    const ld = this._landShot;
+    if (ld) { if (s > 0.9) M.stopShot(ld, false); if (ld.out || !M.shots.includes(ld)) this._landShot = null; }
+    // dış sistem eylemi bitirdiyse (action = null) döngüdeki klibi durdur; uzaktaki kopyası hâlâ sürüyorsa (döngü,
+    // devam klibi ya da süresi dolmamış eylem: basılı tutma erken bitti/iptal edildi) durdurma da yansıtılır
     if (this._mAct && this.action !== this._mAct) {
-      M.stopShot(this._mAct.shot); if (this._mAct.next) M.stopShot(this._mAct.next);
-      if (this._mAct.loopish && this.lastAct) this.lastAct = [this.lastAct[0] + 1, 'stop', 0, null];
+      const old = this._mAct;
       this._mAct = null;
+      M.stopShot(old.shot, exitOK); if (old.next) M.stopShot(old.next, false);
+      if (old.loopish || old.loop || old.next || old.t < old.dur - 0.1) this.queueStop();
     }
+    if (this._stopDue && this.t - (this._actT ?? -1e9) >= 0.25) this.writeStop();
     const act = this.action;
     if (act && act.motion) {
       act.t += dt;
-      if (act.then && !act.next && act.shot && act.t >= (act.shot.to - act.shot.from) / Math.max(1e-3, act.shot.rate) - 0.25) {
-        const T = act.then;
-        act.next = M.play(T.clip, { mask: T.mask, loop: !!T.loop, fadeIn: T.fadeIn, group: 'act2' });
+      if (act.then && (dead || sleep || FULL_MODES.has(mode))) {
+        // devam klipli eylem (yere serilme, olta) tam gövde kipinde sürmez: yaralı düşen, taşınan, yüzen, sürüş/koltuktaki,
+        // uyuyan ya da ölen karakter kalkış klibi oynamasın. İki klip çıkışsız söner, devam klibi başlamaz (havada kesilmez:
+        // hücum itişi kurbanı kısa süre kaldırabilir). Kip ağda da gider: uzak avatar aynı kuralı uygular, durdurma yazılmaz
+        M.stopShot(act.shot, false); if (act.next) M.stopShot(act.next, false);
+        this.action = null; this._mAct = null;
+      } else {
+        if (act.then && !act.next && act.shot && act.t >= (act.then.at ?? (act.shot.to - act.shot.from) / Math.max(1e-3, act.shot.rate) - 0.25)) {
+          const T = act.then;
+          act.next = M.play(T.clip, { mask: T.mask, loop: !!T.loop, fadeIn: T.fadeIn, group: 'act2', dur: T.dur, from: T.from, to: T.to });
+          // uzak eylem geç başladıysa devam klibi de geçen süre kadar ileriden
+          const late = T.at !== undefined ? act.t - T.at : 0;
+          if (act.next && late > 0.02 && !T.loop) { act.next.t = Math.min(act.next.to - 1e-3, act.next.t + late * act.next.rate); act.next.age = Math.max(act.next.age, Math.min(late, T.fadeIn || 0.12)); }
+        }
+        // sonda bekleyen (hold) ilk klip, devam klibi tam girince bırakılır: devam klibi sonunda sönerken alttaki yatış pozu
+        // yeniden görünmesin (serilmede KipUp ile kalkıp yeniden sırtüstü düşüyordu). Tam maskeli devam klibi sönümü örter
+        if (act.next && act.shot && act.shot.hold && !act.shot.out && act.next.age >= (act.next.fadeIn || 0)) M.stopShot(act.shot, false);
+        if (act.t >= act.dur && !act.loop) { M.stopShot(act.shot, exitOK); if (act.next) M.stopShot(act.next, false); this.action = null; this._mAct = null; }
+        else if (act.loopish && act.full && s > 0.9) {
+          // tam gövde döngü eylemi/ifade (diz çökme, dans) yürürken sürmez (kayarak dans etmesin): hız ağda da gittiği
+          // için uzak avatar aynı kuralı uygular; sahibi ayrıca durdurmayı yansıtır
+          M.stopShot(act.shot, false); if (act.next) M.stopShot(act.next, false);
+          this.action = null; this._mAct = null;
+          this.queueStop();
+        }
       }
-      if (act.t >= act.dur && !act.loop) { M.stopShot(act.shot); if (act.next) M.stopShot(act.next); this.action = null; this._mAct = null; }
     }
     // ---- 1) temel katman + eylem klipleri
     const ms = this._ms || (this._ms = {});
     ms.mode = dead || sleep || mode === 'carried' ? 'ground' : mode;
     ms.speed = mode === 'carried' || dead ? 0 : s; ms.moveAngle = this.angSm; ms.vy = a.vy || 0; ms.tired = !!a.tired; ms.talk = !!a.talk;
-    ms.turn = this.yawRate || 0;
+    // eller meşgul (eşya, kutu, sırtta arkadaş): kollarını kavuşturan kişilik beklemesi yerine serbest bekleme (idleFree)
+    ms.busy = !!this.heldId || !!a.carryBox || !!a.carrying;
+    // yerinde dönüş klibi oynarken Motion'ın yan adım dönüşü devre dışı (kök dönüşü zaten prosedürel)
+    ms.turn = this.turn ? 0 : this.yawRate || 0;
     const prevPh = this.cycle;
     M.update(dt, ms);
+    this.updateStopStep(dt, a, mode, s, act, M);
     const ph = M.phase[M.state] ?? 0;
     this.cycle = ph;
     if (s > 0.4 && (mode === 'ground' || mode === 'crouch') && this.game.session && this.game.session.onAvatarStep) {
@@ -678,6 +859,7 @@ export class Avatar {
         case 'reload': { const r = Math.sin(k * Math.PI); pu.set('LeftArm', (-55 * r) * D, 0, (-60 + 25 * r) * D); pu.set('LeftForeArm', 0, -95 * r * D, 0); pu.set('Head', 18 * r * D, 0, 0); setMask('larm', r, pu); break; }
         case 'laugh': case 'point': A.emote(tmp, act.type, this.t); setMask('armsSpine', env, tmp); break;
         case 'throw': { const kk = k < 0.4 ? k / 0.4 : 1 - (k - 0.4) / 0.6; pu.set('RightArm', (-150 * kk + 40 * (1 - kk)) * D, 0, 40 * D); pu.set('RightForeArm', 0, 40 * kk * D, 0); setMask('rarm', env, pu); break; }
+        case 'guitar': A.guitar(pu, this.t); setMask('armsSpine', env, pu); break; // gitar çalma: sol el sapta, sağ el tel vurur
         default: break;
       }
       if (act.t >= act.dur && !act.loop) this.action = null;
@@ -687,6 +869,8 @@ export class Avatar {
     if (M.fullW > 0) for (let i = 0; i < wts.length; i++) wts[i] *= 1 - M.fullW;
     if (anyProc) this.rig.apply(p, wts);
     if (!dead && !a.aim && a.pitch && !carried && mode !== 'sleep') this.lookPitch(-(a.pitch || 0) * 0.45 * (1 - M.fullW));
+    // duruş: kişilik eki, hızlanma/yavaşlama ve yokuş eğilmesi, ağır yükte geriye yaslanma (eklemeli, klip pozunun üstüne)
+    this.posture(dt, a, mode, s, dead, M);
     // ---- 3) koltuk: kalça koltuk noktasına (kök + 0.1 m), klibin oturma yüksekliğinden bağımsız
     const m = this.ch.model;
     if (mode === 'drive' || mode === 'seat') {
@@ -711,39 +895,76 @@ export class Avatar {
   }
 
   /**
-   * Kişilik kıpırdanması zamanlayıcısı: 12–26 sn'de bir, 2,6–4,2 sn süren üst gövde pozu (oyun içinde de
-   * görünür; uzak oyuncularda her istemci kendi rastgele zamanlamasıyla oynar — kozmetik, ağ verisi yok).
+   * Kişilik kıpırdanmaları — TEK zamanlayıcı (Motion'ın kendi zamanlayıcısı yok; o yalnız bekleme çeşidini oynatır).
+   * Ayakta boş beklerken 12–26 sn'de bir kişilik havuzundan ağırlıklı tür seçilir (elde eşya varken kolu meşgul eden,
+   * gündüz feneri, klibi olmayan tür süzülür; son tür ×0,25). Sahibi başlatır ve yansıtır: oyuncu 'fidget' eylemiyle
+   * (ağda act), host'taki bot anlık görüntüyle (a[16]); uzak avatar hiç zamanlamaz, gelen türü oynar. Poz türü üst gövdeye
+   * Animations.fidget pozu, klip türü bekleme çeşidi (kolunu kavuşturma, etrafa bakınma, telsiz, fener) olarak oynar.
    */
   updateFidget(dt, a, mode, s, dead, act, setMask, pu, M) {
-    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 10 + Math.random() * 14, prop: null });
-    const calm = !dead && mode === 'ground' && s < 0.15 && !act && !a.aim && !a.talk && !a.carrying && !a.carryBox && !a.emote && M.fullW < 0.05 && M.upperW < 0.05 && !this.overlays.length;
+    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 10 + Math.random() * 14, prop: null, last: null });
+    const calm = !dead && mode === 'ground' && s < 0.15 && !act && !a.aim && !a.talk && !a.carrying && !a.carryBox && !a.emote && !this.turn && M.fullW < 0.05 && M.upperW < 0.05 && !this.overlays.length;
+    this._calm = calm;
     if (F.kind) {
       F.t += dt;
-      if (!calm || F.t >= F.dur) { this.endFidget(); return; }
+      const def = FIDGETS[F.kind];
+      // elde eşya belirince kolu meşgul eden ya da aletli kıpırdanma biter (kollarını kavuşturmuşken silah çekince kol çözülür,
+      // telsiz/fener eldeki eşyayla aynı elde kalmaz); eldeki eşya ağda da gider, uzak avatar aynı kuralı uygular
+      if (!calm || F.t >= F.dur || (this.heldId && (def.arms || def.prop))) { this.endFidget(); return; }
       const env = Math.max(0, Math.min(1, F.t * 3, (F.dur - F.t) * 3));
-      pu.reset(); A.fidget(pu, F.kind, F.t / F.dur, this.t);
-      setMask('upper', env, pu);
-      if (F.prop) F.prop.visible = env > 0.3;
+      if (def.pose) { pu.reset(); A.fidget(pu, def.pose, F.t / F.dur, this.t); setMask('upper', env, pu); }
+      // klip türünde eşya, el bekleme çeşidinde yerine oturunca belirir (geçişte havada asılı kalmasın)
+      if (F.prop) F.prop.visible = def.clip ? M.idle.cur === def.clip && M.idle.x > 0.6 && F.dur - F.t > 0.35 : env > 0.3;
       return;
     }
     if (!calm) { F.next = Math.max(F.next, 2.5); return; }
-    F.next -= dt;
-    if (F.next > 0) return;
-    const persona = (this.ch && this.ch.look && this.ch.look.persona) || 'default';
-    const kinds = FIDGETS[persona] || FIDGETS.default;
-    this.startFidget(kinds[Math.floor(Math.random() * kinds.length)]);
+    if (this.opts.remote) return; // uzak avatar zamanlamaz: tür ağdan gelir (oyuncu: eylem, bot: anlık görüntü)
+    if ((F.next -= dt) > 0) return;
+    const kind = this.pickFidget(M);
+    if (kind) this.play('fidget', this.fidgetDur(kind, M), kind); else F.next = 8;
   }
-  /** Kıpırdanmayı hemen başlat (test ve kişilik önizlemesi için de) */
-  startFidget(kind) {
-    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 0, prop: null });
+  /** Kişilik havuzundan ağırlıklı kıpırdanma türü (elde eşya, gece, klip varlığı, takılı aksesuar süzülür; son tür ×0,25); yoksa null */
+  pickFidget(M = this.motion) {
+    const P = M && M.persona, F = this.fidget || {}, acc = this.ch && this.ch.look ? this.ch.look.accessory : null;
+    const tm = this.game && this.game.session && this.game.session.time;
+    const night = !!(tm && tm.isNight);
+    const pool = [];
+    let tot = 0;
+    for (const [k, w0] of (P && P.fidgets) || []) {
+      const d = FIDGETS[k];
+      if (!d || (d.arms && this.heldId) || (d.night && !night) || (d.clip && !M.has(d.clip)) || (d.needs && acc !== d.needs)) continue;
+      const w = w0 * (k === F.last ? 0.25 : 1);
+      pool.push([k, w]); tot += w;
+    }
+    if (tot <= 0) return null;
+    let r = Math.random() * tot;
+    for (const [k, w] of pool) if ((r -= w) <= 0) return k;
+    return pool[pool.length - 1][0];
+  }
+  /** Kıpırdanma süresi (sn, 2 basamak: ağdan giden süreyle aynı): klip türünde klip süresi × tur + geçiş, pozda 2,6–4,2 */
+  fidgetDur(kind, M = this.motion) {
+    const d = FIDGETS[kind];
+    let dur = 2.6 + Math.random() * 1.6;
+    if (d && d.clip) {
+      const s = M && M.sampler(d.clip), [lo, hi] = d.cycles || [1, 1];
+      dur = (s ? s.dur : 2.5) * (lo + Math.floor(Math.random() * (hi - lo + 1))) + 0.6;
+    }
+    return Math.round(dur * 100) / 100;
+  }
+  /** Kıpırdanmayı hemen başlat (oynatma, ağdan gelen tür ve testler). dur: süre (yoksa türüne göre); off: geçen süre */
+  startFidget(kind, dur = null, off = 0) {
+    const F = this.fidget || (this.fidget = { kind: null, t: 0, dur: 0, next: 0, prop: null, last: null });
     if (F.kind) this.endFidget();
-    if (FIDGET_PROPS[kind] && this.heldId) kind = 'stretch'; // elde eşya varken aletli kıpırdanma yok
-    F.kind = kind; F.t = 0; F.dur = 2.6 + Math.random() * 1.6; F.next = 12 + Math.random() * 14;
-    const item = FIDGET_PROPS[kind];
+    let def = FIDGETS[kind];
+    if (!def) return;
+    if (def.prop && this.heldId) { kind = 'stretch'; def = FIDGETS.stretch; } // elde eşya varken aletli kıpırdanma yok
+    F.kind = kind; F.last = kind; F.t = Math.max(0, off || 0); F.dur = dur ?? this.fidgetDur(kind); F.next = 12 + Math.random() * 14;
+    if (def.clip && this.motion) this.motion.setIdleVariant(def.clip, F.t);
+    const item = def.prop;
     if (item && this.game.itemModels && ITEMS[item]) {
       try {
         const obj = this.game.itemModels.make(item);
-        const h = HOLDS[kind === 'binoculars' ? 'binoculars' : 'melee1'];
+        const h = HOLDS[def.hold] || HOLDS.small;
         const holder = new THREE.Group();
         holder.position.set(...h.pos); holder.rotation.set(...h.rot);
         obj.position.x = h.fwd * 0.6;
@@ -761,8 +982,21 @@ export class Avatar {
     const F = this.fidget;
     if (!F) return;
     if (F.prop) { F.prop.parent && F.prop.parent.remove(F.prop); F.prop = null; }
+    if (F.kind && FIDGETS[F.kind] && FIDGETS[F.kind].clip && this.motion) this.motion.setIdleVariant(null);
     F.kind = null; F.t = 0;
     F.next = Math.max(F.next, 12 + Math.random() * 14);
+  }
+  /**
+   * Bot vekili (istemci): kıpırdanma türü anlık görüntüden. Yükselen kenarda başlar (yalnız son karede sakinse: titreme
+   * olmasın; süre host'un bitirmesine dek), düşen kenarda kısa sönümle biter.
+   */
+  netFidget(kind) {
+    kind = kind && FIDGETS[kind] ? kind : null;
+    if (kind === (this._netFid ?? null)) return;
+    this._netFid = kind;
+    const F = this.fidget;
+    if (kind) { if (this._calm !== false) this.startFidget(kind, 60); }
+    else if (F && F.kind) F.dur = Math.min(F.dur, F.t + 0.35);
   }
 
   /** Tutuş pozları (silah/yakın dövüş/el feneri), üst gövdeye maskeli */
@@ -799,11 +1033,70 @@ export class Avatar {
     }
   }
 
+  /**
+   * Depardan duruş adımı: son 0,5 sn içinde 5 m/sn üstünde koşarken hız 1,4 m/sn altına düşünce Sprint_Exit'in fren
+   * adımı düşük ağırlıkla (0,4: klibin tamamı derin çömelir) tam gövdeye karışır; tam gövde ağırlığına sayılmaz (tutuş
+   * pozları ve ayak IK'sı sürer). Eylem, nişan, taşıma, ifade, tam gövde klibi varken başlamaz; yeniden hızlanınca ya da
+   * eylemde kesilir. Hızdan türetilir (ağda da aynı).
+   */
+  updateStopStep(dt, a, mode, s, act, M) {
+    this._fastT = s > 5.0 ? 0 : (this._fastT ?? 9) + dt;
+    const prev = this._sStop ?? s;
+    this._sStop = s;
+    const x = this._stopShot;
+    if (x) {
+      if (s > 2.2 || a.aim || this.action || mode !== 'ground' || x.out || !M.shots.includes(x)) { M.stopShot(x, false); this._stopShot = null; }
+      return;
+    }
+    if (mode === 'ground' && !act && !a.aim && !a.carryBox && !a.carrying && !a.emote && M.fullW < 0.05 && this._fastT < 0.5 && prev >= 1.4 && s < 1.4) {
+      // soft: eldeki silahın tutuş pozu ve ayak IK'sı geri çekilmez (fren adımı bacak ve gövdede okunur)
+      this._stopShot = M.play('Sprint_Exit', { mask: 'full', group: 'stopstep', from: 0.02, to: 0.66, dur: 0.8, w: 0.4, fadeIn: 0.06, fadeOut: 0.3, soft: true });
+    }
+  }
+
+  /**
+   * Yerinde dönüş (bot, NPC: dururken yönü birden değişince; oyuncunun yönü yalnız hareketle döner, onlarda yok):
+   * Turn90/Turn180 klipleri kök dönüşü içermez — ayak adımlarını 'lower' maskesiyle (kalça, bacaklar, IK ayakları; baş
+   * öncülük eder) oynatır, kök yönü klibin ilerleyişine bağlı yumuşak profille döner. Hedef değişirse sarılmadan izlenir:
+   * toplam dönüş (tot) hedefin kare başına küçük değişimiyle güncellenir (hedef başlangıç yönünün tam arkasında ±π
+   * dikişini geçse de kök 2π sıçramaz, klibin adım yönüyle aynı yöne döner); hedef bir karede 0,5 rad'dan çok değişirse
+   * dönüş kesilir (yeni hedefe yeniden döner). Eylem, nişan, saldırı/hareket klibi, ifade, taşıma ya da hareket başlayınca
+   * kesilir. Yön ve hız ağda gittiği için türetilir. Döner: kök yönünü bu kare dönüş belirledi mi.
+   */
+  updateTurn(dt, a, mode, s) {
+    const M = this.motion;
+    const ok = !this.opts.player && mode === 'ground' && s < 0.35 && (a.speed || 0) < 0.35 && !a.aim && !a.instantYaw && !a.emote && !a.carryBox && !a.carrying && !this.action && !this._dead
+      && !M.playing('attack') && !M.playing('move') && !M.playing('stopstep') && M.fullW < 0.05;
+    const T = this.turn;
+    if (T) {
+      const x = T.shot;
+      const dy = wrapAngle(a.yaw - T.ty);
+      if (!ok || x.out || !M.shots.includes(x) || Math.abs(dy) > 0.5) { M.stopShot(x); this.turn = null; return false; }
+      T.tot += dy; T.ty = a.yaw;
+      const k = Math.min(1, (x.t - x.from) / Math.max(1e-3, x.to - x.from));
+      this.visYaw = T.y0 + T.tot * smoothstep(T.k0, T.k1, k);
+      if (k >= T.k1) this.turn = null;
+      return true;
+    }
+    if (!ok) return false;
+    const err = wrapAngle(a.yaw - this.visYaw);
+    if (Math.abs(err) < 0.9) return false;
+    const d = Math.abs(err) > 2.2 ? TURNS[180] : TURNS[90];
+    // +yaw = sola dönüş (model +Z ileri, sol +X)
+    const shot = M.play(err > 0 ? d.L : d.R, { mask: 'lower', group: 'turn', from: d.from, to: d.to, dur: d.dur, fadeIn: 0.08, fadeOut: 0.2 });
+    if (!shot) return false;
+    this.turn = { shot, y0: this.visYaw, tot: err, ty: a.yaw, k0: d.k0, k1: d.k1 };
+    return true;
+  }
+
   /** Kök: yön, dönüşte yatma, yatma/koltuk ofsetleri, el feneri, ikincil hareket */
   finishRoot(dt, a, mode, s, lay, layLift, layZ) {
-    if (a.yaw !== undefined) this.visYaw = dampAngle(this.visYaw, a.yaw, a.instantYaw ? 40 : 14, dt);
+    const turning = !!this.turn;
+    if (a.yaw !== undefined && !(this.motion && this.updateTurn(dt, a, mode, s))) this.visYaw = dampAngle(this.visYaw, a.yaw, a.instantYaw ? 40 : 14, dt);
     const yawRate = dt > 0 ? wrapAngle(this.visYaw - this.lastYaw) / dt : 0;
-    this.yawRate = damp(this.yawRate || 0, yawRate, 10, dt);
+    // yerinde dönüş bu karede bitti ya da kesildi: dönüşün kendi ürettiği açısal hız Motion'ın yan adım dönüşüne geçmez
+    // (dönüş klibinin kuyruğu oynarken bacaklar birkaç kare tam ağırlıklı yan adım yürüyüşüne atlamasın)
+    this.yawRate = turning && !this.turn ? 0 : damp(this.yawRate || 0, yawRate, 10, dt);
     this.lastYaw = this.visYaw;
     this.root.rotation.y = this.visYaw;
     const leanT = mode === 'ground' && s > 2 ? clamp(-yawRate * s * 0.012, -0.22, 0.22) : 0;
@@ -843,7 +1136,8 @@ export class Avatar {
     for (const [anchor, gain] of [[A.back, 1], [A.hips, 0.45], [A.chest, 0.6]]) {
       if (!anchor) continue;
       for (const g of anchor.children) {
-        if (!g.userData.acc) continue;
+        // gövde yüzeyini izleyen kayış şeritleri (userData.fixed) sallanmaz: sallansa göğse gömülür ya da havada kalır
+        if (!g.userData.acc || g.userData.fixed) continue;
         if (!g.userData.base) g.userData.base = { y: g.position.y, rx: g.rotation.x, rz: g.rotation.z };
         const b = g.userData.base;
         g.rotation.x = b.rx + sp.x * gain;
@@ -854,15 +1148,51 @@ export class Avatar {
   }
 
   /** Baş/boyun yukarı-aşağı (klip pozuna eklemeli) */
-  lookPitch(x) {
-    const E = this.rig.restData.entries;
-    for (const [i, f] of [[5, 0.4], [6, 0.6]]) {
-      const e = E[i], b = this.rig.list[i];
-      if (!e || !b) continue;
-      _q.setFromEuler(_e.set(x * f, 0, 0, 'YXZ'));
-      // yerel_yeni = P⁻¹ · R · P · yerel
-      b.quaternion.premultiply(_q.premultiply(e.Pinv).multiply(e.P));
-    }
+  lookPitch(x) { this.bendBone(5, x * 0.4, 0, 0); this.bendBone(6, x * 0.6, 0, 0); }
+
+  /**
+   * Eklemeli döndürme: RIG kemiğini (dizin) T-poz model uzayındaki eksenler etrafında döndürür (x: öne eğilme,
+   * y: sola dönme, z: sola yatma; yerel_yeni = P⁻¹ · R · P · yerel).
+   */
+  bendBone(i, x, y, z) {
+    const e = this.rig.restData.entries[i], b = this.rig.list[i];
+    if (!e || !b) return;
+    _q.setFromEuler(_e.set(x, y, z, 'YXZ'));
+    b.quaternion.premultiply(_q.premultiply(e.Pinv).multiply(e.P));
+  }
+  /** Bel-gövde-göğüs eğilmesi (x: öne +, z: yana), karın/gövde/göğüse 0,45/0,35/0,2 paylaştırılır */
+  bendSpine(x, z = 0) { for (const [i, f] of SPINE_BEND) this.bendBone(i, x * f, 0, z * f); }
+
+  /**
+   * Duruş (updateMotion'da klip ve prosedürel katmandan sonra, ayak IK'sından önce):
+   *  - hızlanırken öne, yavaşlarken geriye eğilme (yumuşatılmış ivme; ağda giden hızdan türetilir, uzakta da aynı),
+   *  - yokuş yukarı öne, yokuş aşağı geriye eğilme (ayak IK'sının ölçtüğü eğim), ağır yükte (fıçı, büyük kasa) geriye
+   *    yaslanma; tam gövde klibinde ve nişanda geri çekilir,
+   *  - kişilik eki (Motion PERSONA.pose): bel/göğüs/baş açısı ayakta her hızda, kol açıklığı yalnız yürürken ve eller
+   *    boşken (koşu kümesi tek: koşarken karakterler duruşundan ayırt edilir).
+   */
+  posture(dt, a, mode, s, dead, M) {
+    const acc = dt > 0 ? (s - (this._sPrev ?? s)) / dt : 0;
+    this._sPrev = s;
+    this.accSm = damp(this.accSm || 0, clamp(acc, -25, 25), 5, dt);
+    const onFoot = (mode === 'ground' || mode === 'crouch') && !dead ? (1 - M.fullW) * (1 - this.blend.aim * 0.7) : 0;
+    const ik = this.footIK;
+    const slope = ik ? (ik.slope || 0) * ik.w : 0;
+    let bend = onFoot * (clamp(this.accSm * 0.010, -0.14, 0.10) + clamp(Math.atan(slope) * 0.4, -0.12, 0.12));
+    if (this._carryBox === 2 && !dead) bend -= 0.12 * (1 - M.fullW);
+    this.spineLean = damp(this.spineLean || 0, bend, 10, dt);
+    const P = M.persona && M.persona.pose;
+    const pw = P && mode === 'ground' && !dead ? (1 - M.fullW) * (1 - M.upperW) * (1 - this.blend.aim) : 0;
+    this.personaW = damp(this.personaW ?? pw, pw, 6, dt);
+    const w = this.personaW;
+    const sp = this.spineLean + (P ? (P.sp || 0) * D * w : 0);
+    if (Math.abs(sp) > 1e-4) this.bendSpine(sp);
+    if (!P || w < 1e-3) return;
+    if (P.ch) this.bendBone(4, P.ch * D * w, 0, 0);
+    if (P.hd) this.lookPitch(P.hd * D * w);
+    this.armFree = damp(this.armFree ?? 1, this.heldId || a.carryBox || a.carrying ? 0 : 1, 6, dt);
+    const ab = (P.ab || 0) * D * w * smoothstep(0.3, 1.2, s) * this.armFree;
+    if (Math.abs(ab) > 1e-4) { this.bendBone(UPPER_ARM_L, 0, 0, ab); this.bendBone(UPPER_ARM_R, 0, 0, -ab); }
   }
 
   dispose() {

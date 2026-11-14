@@ -11,6 +11,8 @@ const GRAV = 21;
 const JUMP_V = 6.1;
 const COYOTE = 0.12;
 const JUMP_BUFFER = 0.14;
+const KNOCK_T = 1.95; // yere serilme: sırtüstü düşüş + sıçrayarak kalkış (sn)
+const KNOCK_IMMUNE = 3.5; // kalktıktan sonra bu süre yeniden serilmez: hücum eden geyik (2,2 sn) ve ağır zombi (2 sn) zincirleyemesin
 const _v = new THREE.Vector3();
 
 export class Player {
@@ -18,7 +20,7 @@ export class Player {
     this.session = session;
     this.game = session.game;
     this.profile = profile; // {id, name, charId, look, stats}
-    this.avatar = new Avatar(this.game, profile.look, {});
+    this.avatar = new Avatar(this.game, profile.look, { player: true }); // player: yerinde dönüş klibi yok (yön hareketle döner)
     this.root = this.avatar.root;
     this.pos = new THREE.Vector3();
     this.vel = new THREE.Vector3();
@@ -37,6 +39,8 @@ export class Player {
     this.vehicle = null;
     this.seat = -1;
     this.lockMove = 0;
+    this.knockT = 0; // yere serilmiş (sn): hareket/zıplama/saldırı/etkileşim yok
+    this.knockCd = 0; // yeniden serilebilmeye kalan süre (sn; serilmeden itibaren: süre + kalkış sonrası bağışıklık)
     this.recoil = 0;
     this.camShake = 0;
     this.camDip = 0;
@@ -75,6 +79,17 @@ export class Player {
   /** Gövdeyi görsel konuma taşı (merdiven, atlama, taşınma, uyku) */
   syncBody() { if (this.body) this.body.teleport(this.pos.x, this.pos.y, this.pos.z); }
 
+  /**
+   * Süreli kilitler (yere serilme, ardından bağışıklık, kısa hareket kilidi) her karede bir kez ve moddan bağımsız
+   * azalır: Session.update mod dalından önce çağırır. Araçta, sırtta taşınırken, uykuda ya da engel atlarken donup
+   * sonradan oyuncuyu kalkış animasyonu olmadan kilitli bırakmasınlar.
+   */
+  tickTimers(dt) {
+    this.knockT = Math.max(0, this.knockT - dt);
+    this.knockCd = Math.max(0, this.knockCd - dt);
+    this.lockMove = Math.max(0, this.lockMove - dt);
+  }
+
   /** Yerel girdiyle hareket niyeti. Konum entegrasyonu physicsStep'te yapılır. */
   update(dt, input, uiBlocking) {
     const S = this.session;
@@ -96,7 +111,7 @@ export class Player {
     if (this.roll) { this.updateRoll(dt); return; }
     // ---- hareket girdisi
     let mx = 0, mz = 0;
-    if (!uiBlocking && this.lockMove <= 0) {
+    if (!uiBlocking && this.lockMove <= 0 && !(this.knockT > 0)) {
       if (input.isDown('forward')) mz += 1;
       if (input.isDown('back')) mz -= 1;
       if (input.isDown('left')) mx += 1;
@@ -109,8 +124,8 @@ export class Player {
     let dx = fx * mz + rx * mx, dz = fz * mz + rz * mx;
     const dl = Math.hypot(dx, dz);
     if (dl > 0) { dx /= dl; dz /= dl; }
-    // ---- duruş geçişleri (tavan kontrolüyle)
-    if (!uiBlocking && st && !st.downed) {
+    // ---- duruş geçişleri (tavan kontrolüyle); yere serilmişken (kalkış süresince) duruş/takla yok
+    if (!uiBlocking && st && !st.downed && !(this.knockT > 0)) {
       if (input.wasPressed('crouch') && this.sprinting && this.onGround && !this.swimming && moving && st.stamina > 14 && !this.carrying && !this.carryProp) { this.startRoll(dx, dz); return; }
       if (input.wasPressed('crouch')) this.wantStance = this.mode === 'crouch' ? 'stand' : 'crouch';
       if (input.wasPressed('prone')) this.wantStance = this.mode === 'prone' ? 'crouch' : 'prone';
@@ -134,7 +149,8 @@ export class Player {
       else target = this.aiming ? 2.4 : base;
       target *= sm;
       if (this.carrying) target *= 0.6;
-      if (this.carryProp) target = Math.min(target, 3.2) * (this.carryProp.def.mass > 14 ? 0.8 : 0.9);
+      // elde nesne: hafif kutu/kasa hafif koşu temposunda; ağır yük (büyük kasa, fıçı: > 14 kg) ağır adımla yürünür
+      if (this.carryProp) target = this.carryProp.def.mass > 14 ? Math.min(target, 1.7) : Math.min(target, 3.2) * 0.9;
       if (this.grabT > 0) target *= 0.35;
       // geri geri yürürken yavaş
       if (mz < 0 && this.aiming) target *= 0.8;
@@ -161,7 +177,7 @@ export class Player {
     // ---- zıplama: tampon + kenar affı (coyote time) + engel atlama
     this.jumpBuffer = Math.max(0, this.jumpBuffer - dt);
     this.coyote = this.onGround ? COYOTE : Math.max(0, this.coyote - dt);
-    if (!uiBlocking && input.wasPressed('jump') && st && !st.downed) {
+    if (!uiBlocking && input.wasPressed('jump') && st && !st.downed && !(this.knockT > 0)) {
       if (this.mode === 'crouch' || this.mode === 'prone') this.wantStance = 'stand';
       else if (this.onGround && !this.swimming && this.tryVault()) { /* engel atlama */ }
       else this.jumpBuffer = JUMP_BUFFER;
@@ -175,7 +191,6 @@ export class Player {
       this.avatar.play('jump', 0.35);
       S.audio && S.audio.play('jump', { at: this.pos, vol: 0.4 });
     }
-    this.lockMove = Math.max(0, this.lockMove - dt);
     this.grabT = Math.max(0, (this.grabT || 0) - dt);
     this.recoil = damp(this.recoil, 0, 9, dt);
   }
@@ -196,7 +211,9 @@ export class Player {
     prop.d.onSleep = null;
     this.carryProp = prop;
     this.session.act('prop_carry', { id: prop.id, on: 1 }); // iyimser: host çakışmada geri alır
-    this.avatar.play('pickup', 0.5);
+    // nesnenin ortası ayaktan 0,45 m yukarıdaysa (masa/raf/kasa üstü) eğilmeden masadan alma klibi
+    const c = prop.d.body.translation();
+    this.avatar.play('pickup', 0.5, c.y - this.pos.y > 0.45 ? 'table' : null);
     this.session.audio && this.session.audio.play('pickup', { vol: 0.4, rate: 0.8 });
   }
 
@@ -294,12 +311,17 @@ export class Player {
     }
   }
 
-  /** Yere iniş: düşme hasarı, ses, kamera tepkisi */
+  /**
+   * Yere iniş: düşme hasarı, ses, kamera tepkisi. 6 m üstü düşüşte yere serilir; 3,4–6 m'de dururken sert iniş (derin
+   * çömelip doğrulma, kısa kilit), koşarken adım sürer.
+   */
   land() {
     const S = this.session;
     const st = this.stats;
     const fall = this.fallStartY - this.body.feet.y;
-    if (fall > 3.4 && st && !this.swimming) {
+    if (this.mode === 'air') this.mode = this.body.stance === 'crouch' ? 'crouch' : 'ground';
+    const hurt = fall > 3.4 && st && !this.swimming;
+    if (hurt) {
       const dmg = (fall - 3.4) * 9;
       st.damage(dmg, 'fall');
       S.onLocalDamaged(dmg, 'fall');
@@ -308,9 +330,35 @@ export class Player {
     if (fall > 0.9) {
       S.audio && S.audio.play('land', { at: this.pos, vol: clamp(fall / 4, 0.25, 0.9) });
       this.camDip = Math.min(0.35, fall * 0.06);
-      if (fall > 1.6) this.avatar.play('land', 0.25);
+      if (hurt && fall > 6 && this.knockdown()) return;
+      if (hurt && !st.downed && Math.hypot(this.vel.x, this.vel.z) < 1.5) { this.avatar.play('land', 0.8, 'hard'); this.lockMove = Math.max(this.lockMove, 0.3); }
+      else if (fall > 1.6) this.avatar.play('land', 0.25);
     }
-    if (this.mode === 'air') this.mode = this.body.stance === 'crouch' ? 'crouch' : 'ground';
+  }
+
+  /**
+   * Yere serilme: sırtüstü düşüp 1 sn sonra sıçrayarak kalkar (toplam 1,95 sn; bu sürede hareket, zıplama, duruş,
+   * saldırı, etkileşim, eşya kullanma/bırakma, üretim ve ifade yok). Kalktıktan sonra 3,5 sn yeniden serilmez
+   * (hücum eden geyik, ağır zombi ya da ayı oyuncuyu yerde zincirleyemesin; itme ve hasar sürer). Basılı tutma,
+   * henüz gerçekleşmemiş uzanma (yerden alma, kapı kolu), süren işlem (yeme, üretim), havadaki vuruş ve balık tutma
+   * iptal edilir; eldeki nesne ve sırttaki arkadaş bırakılır. Kurbanın kendi istemcisinde karar verilir, 'knock'
+   * eylemiyle yansıtılır. Döner: serildi mi.
+   */
+  knockdown() {
+    // knockCd serilme süresini de kapsar (süre + bağışıklık)
+    if (!(this.mode === 'ground' || this.mode === 'crouch') || this.knockCd > 0 || this.vault || this.roll || (this.stats && this.stats.downed)) return false;
+    const S = this.session;
+    if (S.interact) S.interact.cancelHold(true);
+    if (S.ui && S.ui.cancelProgress) S.ui.cancelProgress();
+    if (S.combat) S.combat.swing = null;
+    if (S.npcs) S.npcs.stopFishing();
+    if (this.carryProp) this.dropProp(false);
+    if (this.carrying) S.act('carry', { target: this.carrying, drop: true });
+    this.knockT = KNOCK_T;
+    this.knockCd = KNOCK_T + KNOCK_IMMUNE;
+    this.vel.x *= 0.25; this.vel.z *= 0.25;
+    this.avatar.play('knock', KNOCK_T);
+    return true;
   }
 
   /** Fizik sonrası: enterpolasyonlu konum, hız, gürültü, kamera */
@@ -353,9 +401,12 @@ export class Player {
     if (h < 0.45) return false;
     const tx = this.pos.x + fx * 1.9, tz = this.pos.z + fz * 1.9;
     if (phys.overlapsBox(tx - 0.3, tz - 0.3, tx + 0.3, tz + 0.3, this.pos.y + 0.2, this.pos.y + 1.7)) return h >= 0.8 && this.tryClimbOnto(c, fx, fz, h);
-    this.vault = { t: 0, dur: 0.58, from: this.pos.clone(), to: new THREE.Vector3(tx, phys.groundHeight(tx, tz, this.pos.y + 0.6), tz), h: c.maxY + 0.35 };
-    this.lockMove = 0.58;
-    this.avatar.play('vault', 0.58);
+    // hız korunur: koşarak/deparla atlayış kısa sürer, iniş hızın %85'iyle devam eder (dururken atlayış eskisi gibi
+    // 0,58 sn ve inişte durur); klip süreye ölçeklenir, uzak avatar süreyi eylemle alır
+    const v0 = Math.hypot(this.vel.x, this.vel.z), dur = clamp(1.9 / Math.max(3.3, v0 * 0.95), 0.36, 0.58);
+    this.vault = { t: 0, dur, from: this.pos.clone(), to: new THREE.Vector3(tx, phys.groundHeight(tx, tz, this.pos.y + 0.6), tz), h: c.maxY + 0.35, exitV: v0 > 1 ? Math.min(v0 * 0.85, 6.5) : 0 };
+    this.lockMove = dur;
+    this.avatar.play('vault', dur);
     this.session.audio && this.session.audio.play('swing', { at: this.pos, vol: 0.4 });
     return true;
   }
@@ -398,7 +449,20 @@ export class Player {
     }
     this.root.position.copy(this.pos);
     this.syncBody();
-    if (k >= 1) { this.vault = null; this.vel.set(0, 0, 0); this.fallStartY = this.pos.y; }
+    if (k >= 1) {
+      this.vault = null;
+      // girdi kilidi her atlayışın ve tırmanmanın sonunda kalkar (atlayış sürerken Player.update çalışmaz; kilit inişten
+      // sonra da sürüp oyuncuyu engelin ardında ya da üstünde donduruyordu). Koşarak atlayıştan hızla, atlayış yolu
+      // boyunca çıkılır (yönelim değil: atlayışta vurunca ya da ateş edince yönelim kameraya döner); tırmanma ve duran
+      // atlayış inişte durur
+      this.lockMove = 0;
+      if (v.climb || !v.exitV) this.vel.set(0, 0, 0);
+      else {
+        const dx = v.to.x - v.from.x, dz = v.to.z - v.from.z, dl = Math.hypot(dx, dz) || 1;
+        this.vel.set((dx / dl) * v.exitV, 0, (dz / dl) * v.exitV); this.moveSpeedSm = v.exitV; this.speed = v.exitV;
+      }
+      this.fallStartY = this.pos.y;
+    }
   }
 
   startLadder(l) {
@@ -519,8 +583,9 @@ export class Player {
     const moveAngle = sp > 0.3 ? wrapAngle(Math.atan2(this.vel.x, this.vel.z) - this.yaw) : 0;
     return {
       mode, speed: this.mode === 'swim' ? this.speed * 0.6 : this.speed, vy: this.mode === 'climb' ? this.climbV || 0 : this.vel.y, yaw: this.yaw, pitch: -this.camPitch * 0.9,
-      aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying, carryBox: !!this.carryProp,
+      aim: this.aiming, recoil: this.recoil, steer: this.vehicle ? this.vehicle.steer : 0, emote: this.emote, carrying: !!this.carrying, carryBox: this.carryProp ? (this.carryProp.def.mass > 14 ? 2 : 1) : 0, // 2: ağır yük
       mood: st && st.morale < 30 ? 1 : 0, tired: !!(st && st.stamina < 15), act: this.avatar.lastAct || null, actT: this.avatar.lastActAt ? (performance.now() - this.avatar.lastActAt) / 1000 : 0, moveAngle: this.roll ? 0 : moveAngle, grounded: this.onGround, sprint: this.sprinting, roll: !!this.roll,
+      hit: this.avatar.lastHit || null, // isabet tepkisi [sayaç, klip dizini] (eylem yuvasından ayrı)
     };
   }
 

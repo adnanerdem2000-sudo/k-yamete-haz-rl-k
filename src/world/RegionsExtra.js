@@ -50,7 +50,7 @@ function wall(W, ax, az, bx, bz, y, h = 4, t = 0.6, color = '#b5aea3') {
 function tower(W, x, y, z, h = 6, name = 'Gözetleme Kulesi') {
   P.watchTower(W.geo, x, y, z, h);
   for (const [dx, dz] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) W.physics.add({ shape: 'circle', x: x + dx, z: z + dz, r: 0.15, minY: y, maxY: y + h, kind: 'prop' });
-  W.physics.addFloor(x - 1.7, z - 1.7, x + 1.7, z + 1.7, y + h + 0.15);
+  W.physics.addFloor(x - 1.7, z - 1.7, x + 1.7, z + 1.7, y + h + 0.15, { surface: 'wood' });
   W.interactable('ladder', x + 1.5, y + h / 2, z, { top: y + h + 0.15, bottom: y, name });
   W.lamp(x, y + h + 1.5, z, 'flood', 0xeaf2ff);
 }
@@ -81,7 +81,7 @@ function farm(W, rng) {
   woodFence(W, -724, 52, -724, 120); woodFence(W, -724, 140, -724, 196);
   // korkuluk, su yalağı, el arabası
   P.rbox(g, 'metal', -628, y, 186, 0, -1.4, 0, -0.4, 1.4, 0.6, 0.4, '#7f8c8d');
-  W.physics.addBoxC(-628, 186, 1.4, 0.4, y, y + 0.6, { kind: 'prop', walkable: true });
+  W.physics.addBoxC(-628, 186, 1.4, 0.4, y, y + 0.6, { kind: 'prop', walkable: true, surface: 'metal' });
   for (const [x, z] of [[-592, 152], [-610, 151], [-688, 150]]) W.container('barrel', x, z, { h: 1.0 });
   W.container('crate', -585, 182, { h: 0.8, label: 'Tohum Sandığı' });
   W.container('cooler', -598, 118, { h: 0.5, label: 'Süt Soğutucusu' });
@@ -106,7 +106,7 @@ function lighthouse(W) {
   W.physics.add({ shape: 'circle', x, z, r: 3.1, minY: y, maxY: y + H + 4, kind: 'wall' });
   // kapı ve iç merdiven yerine: fener odasına tırmanma (ip merdiven)
   P.rbox(g, 'wood', x, y, z + 3.0, 0, -0.6, 0, -0.05, 0.6, 2.1, 0.08, '#5d4037');
-  W.physics.addFloor(x - 3.3, z - 3.3, x + 3.3, z + 3.3, y + H + 0.25);
+  W.physics.addFloor(x - 3.3, z - 3.3, x + 3.3, z + 3.3, y + H + 0.25, { surface: 'metal' });
   W.interactable('ladder', x + 0.5, y + H / 2, z + 3.3, { top: y + H + 0.25, bottom: y, name: 'Fener Kulesi', exitX: x + 2.4, exitZ: z });
   W.interactable('lighthouse', x, y + H + 1, z + 1.2, { name: 'Fener Işığı' });
   W.lighthouse = { x, y: y + H + 1.4, z };
@@ -123,7 +123,7 @@ function resort(W, rng) {
   const px = -180, pz = 716;
   P.rbox(g, 'tiles', px, y, pz, 0, -8, -0.02, -4, 8, 0.12, 4, '#e8f0f2');
   P.rbox(g, 'glass', px, y, pz, 0, -7, 0.13, -3, 7, 0.16, 3, '#3fb1d6');
-  W.physics.addFloor(px - 8, pz - 4, px + 8, pz + 4, y + 0.12);
+  W.physics.addFloor(px - 8, pz - 4, px + 8, pz + 4, y + 0.12, { surface: 'tile' });
   // plaj şemsiyeleri ve şezlonglar
   for (let i = 0; i < 9; i++) {
     const x = -276 + i * 24 + rng.next() * 6, z = 752 + rng.next() * 18;
@@ -136,11 +136,11 @@ function resort(W, rng) {
   }
   // cankurtaran kulesi ve iskele
   P.watchTower(g, -150, T.heightAt(-150, 770), 770, 3.2);
-  W.physics.addFloor(-151.7, 768.3, -148.3, 771.7, T.heightAt(-150, 770) + 3.35);
+  W.physics.addFloor(-151.7, 768.3, -148.3, 771.7, T.heightAt(-150, 770) + 3.35, { surface: 'wood' });
   W.interactable('ladder', -148.5, T.heightAt(-150, 770) + 1.6, 770, { top: T.heightAt(-150, 770) + 3.35, bottom: T.heightAt(-150, 770), name: 'Cankurtaran Kulesi' });
   P.dock(g, -205, 776, 1.4, 60, 3, 0);
   for (let i = 0; i < 10; i++) { const x = -284 + i * 22 + rng.next() * 8, z = 744 + rng.next() * 8; W.placeModel('props', rng.chance(0.5) ? 'palm-long' : 'palm-short', x, z, rng.next() * 6, 6 + rng.next() * 2, { collide: false }); }
-  W.physics.addFloor(-206.5, 776, -203.5, 836, 1.4);
+  W.physics.addFloor(-206.5, 776, -203.5, 836, 1.4, { surface: 'wood' });
   W.interactable('fishing_spot', -205, 1.7, 832, { name: 'Balık Tutma Noktası (İskele)', water: 'sea' });
   W.vehicleSpawns.push({ id: 'resort_van', type: 'van', x: -228, z: 660, rot: PI / 2, fuel: 0.45, health: 0.75 });
   W.vehicleSpawns.push({ id: 'resort_car', type: 'sedan', x: -130, z: 660, rot: -PI / 2, fuel: 0.2, health: 0.5 });
@@ -230,7 +230,7 @@ function plane(W, x, z, a, wrecked) {
   const c = Math.cos(a), s = Math.sin(a);
   const cols = [];
   for (let t = -4; t <= 4.5; t += 1.5) cols.push(W.physics.add({ shape: 'circle', x: x + s * t, z: z + c * t, r: 0.85, minY: by - 1, maxY: by + 1.6, kind: 'vehicle', walkable: true }));
-  for (const sd of [-1, 1]) for (let t = 1.5; t <= 5.5; t += 1.5) cols.push(W.physics.add({ shape: 'circle', x: x + s * 1.4 + c * sd * t, z: z + c * 1.4 - s * sd * t, r: 0.6, minY: by + 1.3, maxY: by + 1.7, kind: 'prop', walkable: true }));
+  for (const sd of [-1, 1]) for (let t = 1.5; t <= 5.5; t += 1.5) cols.push(W.physics.add({ shape: 'circle', x: x + s * 1.4 + c * sd * t, z: z + c * 1.4 - s * sd * t, r: 0.6, minY: by + 1.3, maxY: by + 1.7, kind: 'prop', walkable: true, surface: 'metal' }));
   if (wrecked) {
     planeGeo(W.geo, true, x, by, z, a);
     W.container('body', x + 3, z + 2, { h: 0.3, label: 'Pilotun Cesedi', special: 'pilot_log' });
@@ -273,7 +273,7 @@ function village(W, rng) {
   // köy meydanı çeşmesi ve çınar
   P.rbox(g, 'concrete', -640, y, -462, 0, -1.6, 0, -0.5, 1.6, 2.2, 0.5, '#c9c2b0');
   P.rbox(g, 'glass', -640, y, -462, 0, -1.2, 0.2, 0.5, 1.2, 0.5, 1.2, '#4aa3c7');
-  W.physics.addBoxC(-640, -462, 1.6, 0.5, y, y + 2.2, { kind: 'prop' });
+  W.physics.addBoxC(-640, -462, 1.6, 0.5, y, y + 2.2, { kind: 'prop', surface: 'concrete' });
   W.interactable('water_spring', -640, y + 0.8, -461, { name: 'Köy Çeşmesi' });
   W.vegetation && W.vegetation.add && W.vegetation.add('oak', -628, -466, 0.7, 1.6);
   for (const [x, z] of [[-660, -470], [-618, -470]]) P.logBench(g, x, y, z, 0);
@@ -303,11 +303,11 @@ function dam(W) {
   // savak ağzı ve cebri borular (santrale)
   for (const pz of [-200, -192]) {
     P.rbox(g, 'metal', -478, y, pz, PI / 2, -0.8, 0.2, -14, 0.8, 1.8, 0, '#56656c');
-    W.physics.addBox(-492, pz - 0.8, -478, pz + 0.8, y, y + 1.8, { kind: 'prop', walkable: true });
+    W.physics.addBox(-492, pz - 0.8, -478, pz + 0.8, y, y + 1.8, { kind: 'prop', walkable: true, surface: 'metal' });
   }
   // trafo sahası
   P.chainFence(g, -446, -236, -436, -236, y, 2.2); P.chainFence(g, -436, -236, -436, -222, y, 2.2);
-  for (const [tx, tz] of [[-443, -232], [-439, -228]]) { P.rbox(g, 'metal', tx, y, tz, 0, -1, 0, -0.8, 1, 2.2, 0.8, '#6b7b84'); W.physics.addBoxC(tx, tz, 1, 0.8, y, y + 2.2, { kind: 'prop' }); }
+  for (const [tx, tz] of [[-443, -232], [-439, -228]]) { P.rbox(g, 'metal', tx, y, tz, 0, -1, 0, -0.8, 1, 2.2, 0.8, '#6b7b84'); W.physics.addBoxC(tx, tz, 1, 0.8, y, y + 2.2, { kind: 'prop', surface: 'metal' }); }
   for (let i = 0; i < 6; i++) P.powerPole(g, -430 + i * 30, T.heightAt(-430 + i * 30, -150 + i * 8), -150 + i * 8, 0.26);
   W.interactable('dam_control', -470, y + 1, -216, { name: 'Santral Kontrol Paneli' });
   W.lamp(-494, top + 4, -170, 'street');

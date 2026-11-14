@@ -11,13 +11,12 @@ import { NavGrid, NAV } from '../../src/world/NavGrid.js';
 
 await PhysicsWorld.load();
 
-/** Düz sahte arazi: Rapier yükseklik alanı (N/cell/h), yol ızgarası (su işlevleri), sürüş yüzeyi (surfaceAt) */
+/** Düz sahte arazi: Rapier yükseklik alanı (N/cell/h), yol ızgarası (su işlevleri); surf: sahte dünyanın surfaceAt'i okur */
 function fakeTerrain(N = 32, cell = 8) {
   const V = N + 1;
   return {
     N, cell, half: (N * cell) / 2, h: new Float32Array(V * V), surf: 'asphalt',
     heightAt: () => 0, isWater: () => false, waterLevelAt: () => -100,
-    surfaceAt() { return this.surf; },
   };
 }
 /** Assets.model yerine: 'paint' malzemeli, 1,5 m yüksek kutu gövde (ölçek def.scale ile büyütülür) */
@@ -36,7 +35,8 @@ function fakeSession({ phys = false, nav = false, isHost = true } = {}) {
   const S = {
     isHost, localId: 'p1', t: 0,
     game: { scene: new THREE.Scene(), phys: null, gfx: null, assets: { model: (kit, name) => fakeModel(name) } },
-    world: { terrain, physics, nav: null, vehicleSpawns: [], doors: [], windows: [], interactables: [] },
+    // tek yüzey sınıflayıcı (World.surfaceAt) yerine: arazinin sürüş yüzeyi canlı okunur (drivingRig ve testler değiştirir)
+    world: { terrain, physics, nav: null, vehicleSpawns: [], doors: [], windows: [], interactables: [], surfaceAt: () => terrain.surf },
     env: { weather: { rain: 0, snow: 0 } },
     local: { mode: 'ground', pos: new THREE.Vector3(), avatar: { hold() {}, setFlashlight() {} } },
     players: new Map(), results: { vehicles: new Set() }, zombies: { views: new Map() },

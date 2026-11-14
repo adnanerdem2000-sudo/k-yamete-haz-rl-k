@@ -178,6 +178,14 @@ export class Build {
     g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.group.add(g);
     st.mesh = g;
+    if (st.built >= 1 && def.walkThrough) {
+      // içinden geçilen süs (halı): yalnız üstü basılabilir ince zemin, ayak sesi halı okusun. 5 cm'lik üst yüz bütün
+      // basamak/yoklama paylarının altında, yol bulma/görüş/mermi işaretleri kapalı: hareketi, yol bulmayı, görüşü ve mermiyi
+      // kesmez; Rapier'e aynalanmaz (oyuncu, nesne ve araç kenarına takılmaz). st.colliders'ta: yıkım, kayıt yükleme ve
+      // oturum sonu temizler
+      const [w, h, d] = def.size, q = st.rot & 1, hw = (q ? d : w) / 2, hd = (q ? w : d) / 2;
+      st.colliders.push(S.world.physics.addFloor(st.x - hw, st.z - hd, st.x + hw, st.z + hd, st.y + h, { owner: st, surface: 'carpet', noPhysics: true }));
+    }
     if (st.built >= 1 && !def.walkThrough) {
       const [w, h, d] = def.size;
       const q = st.rot & 1;
@@ -201,7 +209,7 @@ export class Build {
         st.colliders.push(c);
       }
       if (def.tower) {
-        S.world.physics.addFloor(st.x - 1.7, st.z - 1.7, st.x + 1.7, st.z + 1.7, st.y + 4.15);
+        S.world.physics.addFloor(st.x - 1.7, st.z - 1.7, st.x + 1.7, st.z + 1.7, st.y + 4.15, { surface: 'wood' });
         st.ladder = { x: st.x + 1.5, z: st.z, top: st.y + 4.15, bottom: st.y };
       }
       if (def.light) {
@@ -455,7 +463,7 @@ export class Build {
     if (def.door) { S.act('door_struct', { id: st.id }); S.audio.play('door', { at: st, vol: 0.8 }); return; }
     if (def.garden) { this.useGarden({ id: st.id, x: st.x, y: st.y, z: st.z }); return; }
     if (def.tower) { S.local.startLadder({ x: st.ladder.x, z: st.ladder.z, top: st.ladder.top, bottom: st.ladder.bottom, exitX: st.x, exitZ: st.z }); return; }
-    if (def.music) { S.local.avatar.play('fish', 4); S.act('team_morale', { amount: 6 }); for (let i = 0; i < 8; i++) setTimeout(() => S.audio.play('success', { vol: 0.3 }), i * 450); return; }
+    if (def.music) { S.local.avatar.play('guitar', 4); S.act('team_morale', { amount: 6 }); for (let i = 0; i < 8; i++) setTimeout(() => S.audio.play('success', { vol: 0.3 }), i * 450); return; }
     if (def.antenna) { S.events.useRadio(true); return; }
     if (st.hp < def.hp * 0.95) {
       if (!S.inventory.has('plank')) { S.ui.toast('Onarım için tahta gerekli.', 'warn'); return; }
@@ -497,7 +505,7 @@ export class Build {
         S.quests.onRepair('generator');
         if (tm.extra) S.time.advance(tm.extra);
         S.ui.toast('Jeneratör çalışıyor! Elektrik geldi.', 'good', 4);
-      }, 'hammer');
+      }, 'search:low'); // motorun başında diz çöküp onarma
       return;
     }
     if (g.fuel <= 0.05 || (!g.on && inv.slots.some((s) => s && s.id === 'jerrycan' && s.fuel > 0) && g.fuel < 10)) {
@@ -632,7 +640,7 @@ export class Build {
         const fert = inv.remove('fertilizer', 1) > 0;
         S.act('garden', { id: it.id, g: { crop, planted: S.time.total, watered: this.s.env.weather.rain > 0.2, fert } });
         S.ui.toast(`${ITEMS[crop].name} ekildi.`, 'good');
-      }, 'search');
+      }, 'search:plant'); // diz çöküp tohum ekme
       return;
     }
     const grow = this.growth(g);
@@ -642,13 +650,14 @@ export class Build {
         S.giveLocal(g.crop, n);
         if (Math.random() < 0.5) S.giveLocal('seeds', 1);
         S.act('garden', { id: it.id, g: { crop: null } });
-      }, 'search');
+      }, 'search:harvest'); // belden eğilip toplama
       return;
     }
     if (!g.watered) {
       const i = inv.firstSlotOf('water_bottle') >= 0 ? 'water_bottle' : inv.firstSlotOf('dirty_water') >= 0 ? 'dirty_water' : null;
       if (!i) { S.ui.toast('Sulamak için su gerekli.', 'warn'); return; }
       inv.remove(i, 1); S.giveLocal('empty_bottle', 1);
+      S.local.avatar.play('search', 1.6, 'pour'); // sulama anlık: şişeden dökme klibi kısa oynar
       S.act('garden', { id: it.id, g: { ...g, watered: true } });
       S.ui.toast('Sulandı.', 'good', 1.5);
     }
@@ -747,6 +756,9 @@ export class Build {
       this.bunkerLight = { x: bp.x, y: y + 2.6, z: bp.z, color: 0xfff0c8, intensity: 14, range: 10, on: true, always: true, zone: 'ev' };
       S.env.extraLights.push(this.bunkerLight);
     }
+    // ayak sesi zemini (World.surfaceAt): 1. aşama toprak (kazı), 2. aşamadan sonra beton döküm
+    const BZ = S.world.under && S.world.under.zones.find((q) => q.id === 'ev');
+    if (BZ) BZ.surface = b.stage >= 2 ? 'concrete' : 'dirt';
     this.bunkerLight.on = b.stage >= 4 || this.powered;
   }
 

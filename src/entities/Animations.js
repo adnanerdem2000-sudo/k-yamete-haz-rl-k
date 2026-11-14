@@ -355,6 +355,23 @@ export function hammer(p, t) {
   return p;
 }
 
+/**
+ * Gitar çalma: sol kol yana-öne uzanıp sapı tutar, sağ önkol gövdenin önünden çaprazlama telleri vurur (ritimli),
+ * baş sapa eğik (açılar yakın plan denemeleriyle ayarlandı)
+ */
+export function guitar(p, t) {
+  const strum = sin(t * 11), beat = max(0, sin(t * 5.5));
+  p.set('Spine', 4 * D, 6 * D, 0);
+  p.set('Neck', 4 * D, 0, 0);
+  p.set('Head', (14 + beat * 3) * D, 12 * D, 4 * D);
+  p.set('LeftArm', -20 * D, -20 * D, -35 * D);
+  p.set('LeftForeArm', 0, (-40 + sin(t * 1.7) * 5) * D, 0);
+  p.set('RightArm', (-12 - beat * 3) * D, 40 * D, 68 * D);
+  p.set('RightForeArm', 0, (102 + strum * 12) * D, 0);
+  grip(p, 'Left', 0.6); grip(p, 'Right', 0.5);
+  return p;
+}
+
 /** Taşıma (arkadaşını omuzda taşıma) */
 export function carryPose(p) {
   p.set('RightArm', -60 * D, 0, 40 * D);

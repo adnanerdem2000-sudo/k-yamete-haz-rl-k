@@ -100,8 +100,8 @@ etkilediği için Aşama 1'in sonunda (1b) düzeltiliyor.
 | 7 | Eşya verilen oyuncu o arada oyundan çıkarsa eşya kayboluyor | kod (`Session` `give`) | 1b — **düzeltildi** |
 | 8 | Host istemciden gelen alma miktarını doğrulamıyor (negatif miktarla konteynerde eşya çoğalıyor) | kod (`loot_take`, `store_take`) | 1b — **düzeltildi** |
 | 9 | Özel içerikten, ödülden ve takastan gelen silah/aletler hiç aşınmıyor (dayanıklılık yazılmıyor) | kod (`SPECIAL_LOOT`, `grant`) | 1b — **düzeltildi** |
-| 10 | Arama/sargı/tamir gibi döngülü eylem bir duygu hareketiyle (sevinç, dans) kesilirse klip sonsuza dek sürüyor; o karakterde ayak IK'sı ve kişisel hareketler kapanıyor | e2e (`motion`: 1. ve 2. karakter) | 2 |
-| 11 | Evin zemin katında ayak sesi çim olarak çalıyor (iç zemin eşiği 0,35 m, zemin kaldırma 0,30 m) | e2e (`audio`) + kod | 2 |
+| 10 | Arama/sargı/tamir gibi döngülü eylem bir duygu hareketiyle (sevinç, dans) kesilirse klip sonsuza dek sürüyor; o karakterde ayak IK'sı ve kişisel hareketler kapanıyor | e2e (`motion`: 1. ve 2. karakter) | 2 — **düzeltildi** (`Avatar.endMotionAct`: yeni eylem başka grupta da olsa öncekinin çekimleri söner; e2e `motion`) |
+| 11 | Evin zemin katında ayak sesi çim olarak çalıyor (iç zemin eşiği 0,35 m, zemin kaldırma 0,30 m) | e2e (`audio`) + kod | 2 — **düzeltildi** (tek sınıflayıcı `World.surfaceAt`; birim `surface`, e2e `audio`) |
 | 12 | Çarpışma dünyası `isFloor`/`navType`/`navPad` seçeneklerini düşürüyor: döşeme denetimleri ölü kod; inşa hayaleti üst katlarda ve iskelede araziye düşüyor | birim (`collision`) | 3 |
 | 13 | Oyuncu yapıları (duvar, çit, barikat, kapılı duvar) yol ızgarasında kırılabilir yapı değil aşılmaz engel; zombiler savunmayı kırmak yerine etrafından yol arıyor | birim (`navgrid`) | 3 |
 | 14 | Patlama itkisi kütleden bağımsız aynı hızı veriyor (6 kg kasa ile 128 kg kasa, motosiklet ile 6 t kamyon aynı savruluyor) | birim (`physics`) | 3 |
@@ -152,6 +152,103 @@ etkilenen 8 senaryo yeniden: 7/8 geçti; `host-migration` istemcinin yeni host'u
 ve o koşuda kareler çok yavaştı (eski host gecikmesi 1.960 ms) — bekleme koşula bağlandı (en çok 60 sn), senaryo tek
 başına yeniden koşuldu ve geçti (istemci zombiyi gördü). `gameplay`'in yeni kayıt yükleme denetimi: gün 2, saat farkı
 1 dk, 11 yığınlık envanter, konum ve olay kararı kayıttakiyle aynı.
+
+## Tur 2 — Aşama 2: karakter kalitesi ve hareket (14 Kasım 2026)
+Dört paralel geliştirme dalı (görünüm; animasyon ve etkileşim; zemin sınıflayıcı; hareket hissi ve kişilik) tek dalda
+birleştirildi, tam regresyon koşuldu, beş bakış açılı bağımsız inceleme ve her bulguyu çürütmeye çalışan doğrulayıcı
+çalıştırıldı, doğrulanan bulgular düzeltilip teste bağlandı.
+
+**Eklenen testler.** Birim: `charlook` (yeni, 13 test: göz/kaş ayrımı, iris konumu, taban yuvası, ikinci kumaş, bilek ve
+kol saati, gözlük camları, askı/kayış gömülmesi ve omuz boşluğu, omuz çantası, yağmacı yüzü, eski görünüm ayıklama,
+veri), `actions` (yeni, 5: eylem çeşitleri, basılı tutma, iptal), `motion` (5 → 14: döngü aralığı/gidip gelme/çıkış,
+kişilik, kıpırdanma, yere serilme, ağ yansıtması), `surface` (yeni, 11: tek sınıflayıcı, eski sınıflayıcılarla altın
+karşılaştırma, oda zeminleri, yol dizini), `physics` (taşınan kutu taşıyanı durdurmuyor), `netevents` (ağır yük
+`carryBox` 2). Uçtan uca: `motion` (eylem çeşitleri ve uzak yansıma, yumruk sırası, isabet dizini, gitar, el sallama,
+dans, durdurma sırası, diz çökme döngüsü ve çıkışı, kıpırdanma ve yansıması, kişilik beklemeleri, yamaçta ayak tabanı
+ve gövde eğimi, depardan duruş adımı, yerinde dönüş, ivme eğilmesi, yere serilme, ağır yük, sert iniş, atlayış hızı),
+`audio` (oda oda zemin sesi, kapı eşikleri, sığınak/köprü/iskele, sokak/kaldırım/çim, uzak oyuncu ve zombi, 86 binanın
+tüm odalarında taraması), `carry` (taşırken yürüme hızı ve elde duruş, ağır fıçı), `physics` (atlayışta hız),
+`smoke-menu` (taban ve ikinci renk satırları), `outfits` (yüz ve göz).
+
+**Birleştirmede bulunan hata.** Taşınan kutu taşıyanın kendi kapsülünü durduruyordu: karakter denetleyicisinin sorgu
+üyeliği "hepsi" olduğu için taşınan nesnenin süzgeci (oyuncu hariç) kapsülle eşleşiyordu; yavaş karede taşıyan
+2,9 m/sn yerine ~0,3–0,4 m/sn sürünüyordu (`carry` senaryosu ara sıra düşüyordu). Sorgu üyeliği `G.PLAYER` yapıldı
+(tek mekanizma; ikinci daldaki yüklem tabanlı çözüm kaldırıldı). Birim testi 60/20/10 fps'de taşırken ≥ 2,7 m yürümeyi,
+duvarın yine durdurmasını ve yerdeki kutunun önde kalmasını denetliyor.
+
+**Bağımsız inceleme (5 bakış açısı: ağda animasyon yansıtması, animasyon durum makinesi, oynanış ve hareket, zemin
+sınıflayıcı, karakter görünümü; her bakış açısının bulgularını çürütmeye çalışan ayrı doğrulayıcı).** 37 bulgu; farklı
+bakış açılarının aynı kusuru bulduğu kayıtlar birleşince 28 ayrı konu: 3'ü çürütüldü, 1'i Aşama 3'e bırakıldı, kalan
+24 konu düzeltildi ve teste bağlandı (yeni denetimler düzeltmesiz kodda düşüyor):
+
+| Bulgu (önem) | Düzeltme | Test |
+|---|---|---|
+| Yere serilmede kalkış sonunda karakter yeniden sırtüstü düşüyordu: tutulan Hit_Knockback, KipUp sönerken görünüyordu; kalça 1,93 sn'de 0,03 m (yüksek) | KipUp tam girince tutulan ilk klip bırakılıyor; 1,75–1,95 sn'de kalça 0,79–0,90 m | birim `motion` (erkek/kadın, uzak geç başlama); e2e `motion` (6 karakter) |
+| İsabet tepkisi tek eylem yuvasını kullanıyordu: hemen önce yazılan serilme, durdurma, basılı tutma, vuruş diğer oyunculara hiç gitmiyordu; geç katılan süren aramayı göremiyordu (yüksek; üç bakış açısı ayrı ayrı buldu) | isabet anim durumunun ayrı `hit` alanında [sayaç, klip]; eylem yuvasına yazılmıyor | birim `motion`, `netevents`; e2e `motion` (serilme + 0,03 sn sonra isabet → uzakta serilme) — yarış ölçümünde serilmenin görünmesi %15 → %100 |
+| Hayvanlar host'un ve tek oyunculunun oyuncusunu hiç yere sermiyordu, istemciyi her hücumda seriyordu | tek isabet yolu `Session.hitLocal` (olay işleyicisi ve host'un kendi oyuncusu) | birim `player` |
+| Yere serilme zincirlenebiliyordu (geyik 2,2 sn hücum, 1,95 sn serilme: oyuncu 0,25 sn'lik aralıklarla yaralı düşene dek) | kalktıktan sonra 3,5 sn bağışıklık | birim `player`; e2e `physics` |
+| Serilmişken bırakma, ifade, üretim, uyku tulumu, not/telsiz, olta ve otomatik inşa başlangıcı serilme klibini kesiyordu | çağıranlarda serilme denetimi (`Session.canEmote`, `dropSlot`, `useItem`, `Crafting.craft`, `Interact.startHold`); serilmede olta, havadaki vuruş, bekleyen uzanma iptal | birim `player`; e2e `gameplay` |
+| Serilme ve kilit sayaçları farklı yerlerde azalıyordu: araçtan, sırttan, uykudan sonra kilit sürüyordu | `Player.tickTimers` her kipte (Session.update) | birim `player`; e2e `physics` (araçtan inince hemen yürüme) |
+| Yaralı düşen/taşınan/yüzen/uyuyan kurban KipUp ile ayağa kalkıp yeniden düşüyordu | tam gövde kipinde serilme ve devam klibi çıkışsız biter | birim `motion` |
+| Yumruk direkt/kroşe ve kılıç A/B sırası ortak eylem sayacına bağlıydı (araya isabet girince aynı vuruş); botta host ile istemci ters vuruş gösteriyordu | yalnız vuruşla artan sayaç (oyuncuda `act[4]`, botta `bot_fx.n`) | birim `motion` (host, istemci, geç katılan bot); e2e `motion` |
+| Erken bırakılan diz çökme (arama/kaldırma/levye) ayaktaki karakteri diz çöktürüp yeniden kaldırıyordu | çıkış klibi yalnız döngü aralığına varılmışsa | birim `motion` |
+| Yerinde dönüş bitince bacaklar 6 kare tam ağırlıklı yan adıma atlıyordu; hedef ±π dikişini geçince kök 2,1 rad sıçrıyordu | dönüş bitince açısal hız sıfır; dönüş sarılmadan izleniyor | birim `motion` |
+| Yürüyüşle biten kıpırdanma çeşidi (kollarını kavuşturma, telefon) bir sonraki duruşta yeniden beliriyordu | bekleme ağırlık haritası her karede ilerliyor | birim `motion` |
+| Kıpırdanma sürerken eşya kuşanınca kollar kavuşuk/telsiz elde kalıyordu | kolu meşgul eden/aletli kıpırdanma eşya kuşanılınca biter | birim `motion` |
+| Sert inişte 0,8 sn'lik tam gövde iniş klibi, oyuncu koşarken de sürüyordu (kayma) | iniş klibi hız > 0,9'da kesilir | birim `motion` |
+| Koşarak atlayışın çıkış hızı atlayış yolunu değil anlık yönü izliyordu (atlayışta vuruş yana fırlatıyordu); durarak atlayış/tırmanmada iniş sonrası girdi kilidi | hız atlayış yönünde; her atlayış/tırmanma sonunda kilit kalkar | birim `player`; e2e `physics` |
+| Halı hiç 'halı' sesi vermiyordu (içinden geçilen yapının çarpıştırıcısı yoktu; birim testi elle kurulmuş sahte çarpıştırıcıya bakıyordu) | 5 cm ince zemin (`noPhysics`, engellemez), test gerçek yerleştirme yolundan | birim `surface`, `physics` |
+| Koleksiyonlar kafa parçasını (yüz ve saç) değiştiriyordu, ekranda "korunur" yazıyordu | kafa korunuyor; baret/kask şapka yuvasından | birim `charlook`; e2e `outfits` (24 tıklama) |
+| Eski kayıtlardaki Mert görünümü kaldırılmış sarı ikinci rengi taşıyor, önlüğü sarıya boyuyordu | `migrateLook` (oturum, uzak oyuncu, menü) | birim `charlook` |
+| Omuz çantası sallanırken uyluğa 2,8–3,8 cm giriyor, kayışın ucundan ayrılıyordu | çanta sabit grup, kalça genişliği çantanın tüm boyunca | birim `charlook` |
+| Kadın tabanlı yağmacılar (%35) kit ve yüz ağı almıyordu: boş beyaz göz kutuları | yağmacı kiti karakterin tabanıyla | birim `charlook` (40 tohum) |
+| Askı ve kayışın omuz üstündeki dış kenarı eğimli omzun 2,3–3,8 cm üstünde havada duruyordu | her kenar kendi sütun profiliyle; en büyük boşluk ≤ 1,3 cm | birim `charlook` (tüm gövdeler, ≤ 2 cm) |
+| Belgeler giderilmiş iki kıpırdanma zamanlayıcısını ve yetim döngü hatasını açık gösteriyordu; birkaç ifade yanlıştı | KNOWN_ISSUES, DENETIM_NL2, TEST_REPORT, ARCHITECTURE güncellendi | — |
+
+Çürütülenler: bot vekilinde kıpırdanma süresi (poz ilerlemesi üst gövde maskesine hiç ulaşmıyor, görüntü aynı);
+Zeynep'in yelek rengi ve Ceren'in saatsiz bileğe bakması (sanat yönetimi tercihi, kusur değil — yine de yelek kendi
+koyu tonuna döndü ve saate bakma yalnız kol saati takan karakterde seçiliyor). Aşama 3'e kalan: oyuncunun izleme
+kulesi zemini yıkılınca kaldırılmıyor (doğrulandı; Aşama 3'ün kırılabilir yapılar işinde).
+
+**Birim testleri:** 178 test, 173 geçti, 0 başarısız, 5 atlandı. Atlananlar Aşama 3 ve 5'in kayıtlı hataları (12–16).
+
+**Uçtan uca tam regresyon** (birleştirilmiş Aşama 2 kodu, 33 senaryo sırayla, 73 dk): 30/33 geçti. Başarısız üç
+senaryo ayrı ayrı incelendi:
+- `interact`: oyunda hata yok, testin kendisi eksikti. Bırakılan eşya rastgele dönüyle düşüp yuvarlanıyor. Test
+  önce sabit 0,95 rad yönü bekliyordu ve birleştirilmiş dalda ara sıra düştü; ilk düzeltme yönü duran eşyadan
+  ölçtü. Tam koşuda eşya 1,9 m'ye yuvarlandı, alma menzili ise 1,7 m; hedef hiç bulunamadı. Şimdi oyuncu duran
+  eşyaya giden doğru üzerinde 1,1 m'ye taşınıyor; dönüş ve eğilme anı denetimleri aynen duruyor.
+- `daynight`: oyunda hata yok, testin ölçüm penceresi yanlıştı. "Şafakta yaşayan bütün zombiler işaretlenmeli"
+  denetimi yaşayanları 05:59 adımlarından önce sayıyordu. O adımlarda hâlâ gece olduğundan bir zombi daha
+  topraktan çıktı: 17 sayıldı, şafakta 18 zombi yaşıyordu ve 18'i de işaretlendi (oyunun `lastDawn.n` kaydı da 18).
+  Karşılaştırma artık şafak anında yaşayanlarla yapılıyor. İşaretsiz kalan bir zombi testi yine düşürür.
+  Aşama 2 zombi doğurma ve şafak koduna (`Zombies.js`) dokunmadı.
+- `visual`: `03b` yüz yakın planında fark %2,74, eşik %2,5. Mert'in gözlerinde artık iris ve kaş ayrımı var.
+  Kişilik duruşunda (`relaxed`: omurga 6°, baş 7° öne) başı öne eğik; alet çantasının askıları omzuna oturuyor.
+  `03a` (%0,83: askılar ve duruş) ve `09` (%0,27: zombinin askısı) eşiğin altında kaldı ama aynı değişikliklerden
+  etkileniyor. Üç görüntü eskileriyle
+  yan yana incelendi ve yeni taban alındı. Diğer 11 görüntünün farkı %0–0,1; onlara dokunulmadı.
+
+**Yeniden koşu** (düzeltilmiş testler ve yeni taban görüntüleriyle): `visual`, `interact` ve `daynight` 3/3 geçti.
+- Görsel farklar yeni tabana göre %0–0,11. `03b` yüz yakın planı iki koşu arasında %1,28 oynuyor (eşik %2,5). Oyun
+  döngüsü duvar saatine bağlı bir anda durduruluyor; bekleme animasyonunun evresi koşudan koşuya değişebiliyor.
+- `interact`'te eşya 1,3 m'ye yuvarlandı ve oyuncu 1,1 m'ye taşındı. Oyuncu eşyaya döndü (yön hatası < 0,01 rad);
+  eşya etkinleşmeden 0,5 sn sonra envantere girdi.
+- `daynight` aynı durumu yeniden üretti (17 / 18 / 18). Gece boyunca süren nüfus tamamlama 05:59'da bir zombi daha
+  çıkarıyor; bu tasarım gereği.
+
+**Aşama 2'de test edilemeyenler:**
+- Yeni yüz, göz, kumaş ve askı ayrıntıları yalnız yazılım GPU'sunda (SwiftShader) görüldü. Gerçek ekran kartında
+  görüntü, ışık ve kenar yumuşatma farkı denetlenmedi.
+- Animasyonun ağda yansıtılması (eylem çeşitleri, isabet alanı, vuruş sırası, serilme, kıpırdanma) aynı makinedeki
+  sekmeler arasında, yerel taşıyıcıyla denendi. Gerçek internet gecikmesi ve paket kaybı denenmedi.
+- Hareket hissi (ivme eğilmesi, yerinde dönüş, duruş adımı, iniş) sayısal ölçülerle doğrulandı. İnsan oyuncuyla
+  oynanış denemesi yapılmadı.
+- Zemin seslerinde hangi yüzey sesinin seçildiği doğrulandı. Hoparlörden duyulan ses dinlenmedi.
+
+Önceki paralel ajan koşularında (yük altında) `gameplay`'in "W basılıyken araç ilerlemeli" denetimi bir kez düştü.
+Düzeltme öncesi kodda da düşüyordu, tek başına ve tam koşuda geçti. Yüke duyarlı bir denetim; tekrarlanırsa Aşama 5'te
+(araçlar) incelenecek.
 
 ---
 

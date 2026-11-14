@@ -283,7 +283,9 @@ export class CharacterBody {
     k.setCharacterMass(80);
     k.setNormalNudgeFactor(0.0005);
     this.kcc = k;
-    this.filter = groups(ALL, G.STATIC | G.VEHICLE | G.PROP);
+    // sorgu üyeliği PLAYER: süzgecinde PLAYER olmayan gövde (taşınan nesne, setCarried) kapsülü durdurmaz. Üyelik ALL
+    // iken oyuncu elindeki kutuya dayanıyordu: taşırken 2,9 m/sn yerine yavaş karede ~0,3 m/sn yürüyordu.
+    this.filter = groups(G.PLAYER, G.STATIC | G.VEHICLE | G.PROP);
     this.grounded = false;
     this.feet = new THREE.Vector3(x, y, z);
     this.prevFeet = this.feet.clone();

@@ -120,8 +120,11 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
       S.localStats.health = 100;
       pl.spawnAt(f.x, f.y + hgt, f.z, 0);
       pl.fallStartY = f.y + hgt;
-      window.__step(150);
-      out.push({ h: hgt, hp: +S.localStats.health.toFixed(1), gap: +(pl.pos.y - f.y).toFixed(3) });
+      let knock = 0, lock = 0;
+      window.__step(150, [], () => { knock = Math.max(knock, pl.knockT || 0); lock = Math.max(lock, pl.lockMove || 0); });
+      // inişte yansıtılan eylem: 2,5 m hafif iniş, 5 m sert iniş (dururken), 9 m yere serilme
+      const act = pl.avatar.lastAct ? [pl.avatar.lastAct[1], pl.avatar.lastAct[3]] : null;
+      out.push({ h: hgt, hp: +S.localStats.health.toFixed(1), gap: +(pl.pos.y - f.y).toFixed(3), act, knock: +knock.toFixed(2), lock: +lock.toFixed(2), knockEnd: +(pl.knockT || 0).toFixed(2) });
     }
     S.localStats.health = 100;
     S.localStats.cond.injury = 0;
@@ -133,6 +136,47 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   const canAt = (h) => { const x = Fl.find((f) => f.h === h); return x ? x.hp : NaN; };
   check(Fl.length === 3 && canAt(2.5) >= 99 && canAt(5) < canAt(2.5) - 3 && canAt(9) < canAt(5) - 15 && canAt(9) > 5 && Fl.every((f) => Math.abs(f.gap) < 0.2),
     'düşme hasarı yükseklikle artmalı (2,5 m zararsız, 9 m > 5 m), oyuncu her düşüşte zemine inmeli', res.fall);
+  const fAt = (h) => Fl.find((f) => f.h === h) || {};
+  check(Fl.length === 3 && fAt(2.5).act && fAt(2.5).act[0] === 'land' && fAt(2.5).act[1] !== 'hard' && fAt(2.5).knock === 0 &&
+    fAt(5).act && fAt(5).act[0] === 'land' && fAt(5).act[1] === 'hard' && fAt(5).lock >= 0.29 && fAt(5).knock === 0 &&
+    fAt(9).act && fAt(9).act[0] === 'knock' && fAt(9).knock > 1.9 && fAt(9).knockEnd < fAt(9).knock - 1,
+  'iniş tepkisi: 2,5 m hafif iniş, 5 m sert iniş (kısa kilit), 9 m yere serilme (1,95 sn süre işler); eylem yansıtılmalı', res.fall);
+  // ---- yere serilme: kalktıktan sonra 3,5 sn bağışıklık (geyik hücumu 2,2 sn arayla zincirleyemesin); süre moddan bağımsız
+  // işler: serilip 0,1 sn sonra araca binen (geç gelen koltuk) oyuncunun süresi araçta da azalır, inince hemen yürür
+  // (eskiden süre araçta donuyor, inince 1,9 sn kilitli kalıyordu)
+  res.knock = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local, V = S.vehicles;
+    const f = window.__flat(20, 2.2);
+    const v = V.list.find((x) => x.type === 'sedan' && !x.wrecked);
+    if (!f || !v) return 'alan/araç yok';
+    pl.spawnAt(f.x, f.y + 0.05, f.z, Math.PI / 2);
+    window.__step(270); // önceki ölçümdeki 9 m düşüşün serilmesi ve bağışıklığı bitsin (4,5 sn)
+    const first = pl.knockdown();
+    window.__step(132); // 2,2 sn
+    const up = !(pl.knockT > 0), again = pl.knockdown();
+    window.__step(210); // toplam 5,7 sn > 1,95 + 3,5
+    const later = pl.knockdown();
+    window.__step(280); // + aşağıdaki 60 kare: 5,67 sn > 1,95 + 3,5 (yeniden serilebilir)
+    v.fuel = v.maxFuel; v.broken = false; v.health = v.maxHealth;
+    v.teleport(f.x + 8, f.y + 1, f.z, Math.PI / 2);
+    window.__step(60);
+    const car = pl.knockdown();
+    window.__step(6);
+    S.applyAction('vehicle_enter', { id: v.id, seat: 0 }, S.localId);
+    window.__step(5);
+    const mode = pl.mode;
+    window.__step(180);
+    const inCar = +pl.knockT.toFixed(2);
+    V.exitLocal();
+    window.__step(2);
+    const x0 = pl.pos.x, z0 = pl.pos.z, k0 = +pl.knockT.toFixed(2);
+    window.__step(30, ['KeyW']);
+    return { first, up, again, later, car, mode, inCar, afterExit: k0, moved: +Math.hypot(pl.pos.x - x0, pl.pos.z - z0).toFixed(2), exitMode: pl.mode };
+  });
+  log('yere serilme', res.knock);
+  const Kn = res.knock && typeof res.knock === 'object' ? res.knock : null;
+  check(Kn && Kn.first && Kn.up && Kn.again === false && Kn.later && Kn.car && Kn.mode === 'drive' && Kn.inCar === 0 && Kn.afterExit === 0 && Kn.moved > 0.5 && Kn.exitMode === 'ground',
+    'yere serilme: 1,95 sn sonra kalkılmalı, 3,5 sn bağışıklıkta yeniden serilmemeli; serilip araca binilince süre araçta işlemeli, inince hemen yürünmeli', res.knock);
   // ---- basamak / veranda: ev girişine yürü (verandaya basamak çıkma)
   res.step = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;
@@ -162,6 +206,34 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   const Bs = res.step;
   check(Bs && Bs.reachedTopOfStep2 > 0.55 && Bs.finalX > 9 && Bs.stoppedByWall && !Bs.highBlockClimbed && Bs.highBlockX < 3.2,
     "iki basamak (0,35 m + 0,35 m) yürüyerek çıkılmalı, 1,4 m'lik duvar durdurmalı; tek seferde 0,75 m'lik blok çıkılamamalı", Bs);
+  // ---- engel atlama hızı korur: deparla 0,8 m'lik engele koşulur, 0,75 m kala zıplanır (engel atlayışı); inişte hız
+  // sıfırlanmamalı (eskiden durup kilitli kalıyordu), W basılı kalınca koşu sürer
+  res.vault = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local, P = S.world.physics;
+    const f = window.__flat(16);
+    if (!f) return 'düz alan yok';
+    const bx = f.x + 7;
+    const box = P.addBox(bx, f.z - 1.5, bx + 0.4, f.z + 1.5, f.y - 0.5, f.y + 0.8, { kind: 'prop', walkable: true });
+    pl.spawnAt(f.x, f.y + 0.05, f.z, Math.PI / 2);
+    S.localStats.stamina = 100;
+    window.__step(20);
+    let start = -1, end = -1, pressed = -1, vIn = 0, dur = 0, vAfter = [], xEnd = 0, x01 = 0, lockAfter = 0;
+    window.__step(130, (i) => {
+      if (start < 0 && pressed < 0 && bx - pl.pos.x < 0.95 && bx - pl.pos.x > 0.5) { window.__press('Space'); pressed = i; vIn = Math.hypot(pl.vel.x, pl.vel.z); }
+      return ['KeyW', 'ShiftLeft'];
+    }, (i) => {
+      if (pl.vault && start < 0) { start = i; dur = pl.vault.dur; }
+      if (start >= 0 && end < 0 && !pl.vault) { end = i; xEnd = pl.pos.x; lockAfter = pl.lockMove; }
+      if (end >= 0 && i - end < 6) vAfter.push(+Math.hypot(pl.vel.x, pl.vel.z).toFixed(2));
+      if (end >= 0 && i - end === 6) x01 = pl.pos.x;
+    });
+    P.remove(box);
+    return { pressed, start, end, vIn: +vIn.toFixed(2), dur: +dur.toFixed(2), vAfter, lockAfter: +lockAfter.toFixed(2), ilerleme01: +(x01 - xEnd).toFixed(2), gecti: +(pl.pos.x - bx).toFixed(2) };
+  });
+  log('engel atlama', res.vault);
+  const Va = res.vault && typeof res.vault === 'object' ? res.vault : null;
+  check(Va && Va.start >= 0 && Va.end > Va.start && Va.vIn > 5 && Va.dur < 0.45 && Va.vAfter.length && Math.min(...Va.vAfter) > 3 && Va.lockAfter === 0 && Va.ilerleme01 > 0.3 && Va.gecti > 1,
+    'deparla engel atlayışı kısa sürmeli ve hız korunmalı: inişten sonraki 0,1 sn hız > 3 m/sn, girdi kilidi kalkmış, koşu sürmeli', res.vault);
   // ---- eğilme ve tavan
   res.crouch = await evalJS(page, () => {
     const S = window.__game.session, pl = S.local;

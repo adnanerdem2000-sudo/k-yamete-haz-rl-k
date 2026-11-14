@@ -7,8 +7,12 @@
 //  Döngüler ortak fazla ilerler: her klip sol topuğun yere bastığı ana hizalıdır (ph), faz hızı karakterin gerçek
 //  hızından ve kliplerin ölçülmüş yürüyüş hızından (ayak kayması ölçümü) hesaplanır → ayak kayması en aza iner.
 //  Karıştırma: ağırlıklı dörtlü toplamı + normalleme (yarıküre hizalı), konumlar ağırlıklı ortalama.
-//  Tek seferlik klipler (eylem katmanı): maskeli (tam / üst gövde / kollar) üzerine yazma, giriş/çıkış sönümü,
-//  aralık (from/to), döngü ve sonda bekleme (ölüm, uyku) desteği.
+//  Ayakta bekleme kişiliğe göredir (PERSONA); ara sıra beliren bekleme çeşitlerini (kıpırdanma) Motion zamanlamaz:
+//  tek karar noktası Avatar.updateFidget'tir, Motion yalnız setIdleVariant ile isteneni oynatır.
+//  Tek seferlik klipler (eylem katmanı): maskeli (tam / alt / üst gövde / kollar) üzerine yazma, giriş/çıkış sönümü,
+//  aralık (from/to), döngü ve sonda bekleme (ölüm, uyku) desteği. Döngü kendi aralığında (loopFrom…to) döner ya da
+//  uçlarda yön değiştirir (pingpong: diz çöküp onarma gibi girişi/çıkışı olan klipler başa sarıp yeniden çökmez);
+//  exitTo: döngü durdurulunca klibin to…exitTo kısmı çıkış olarak oynar (diz çökmüşken ayağa kalkma).
 import * as THREE from 'three';
 
 const TAU = Math.PI * 2;
@@ -25,16 +29,21 @@ const SETS = {
   zwalk: ['Zombie_Walk_Fwd_Loop', null, 'Zombie_Walk_L_Loop', null, 'Zombie_Walk_Bwd_Loop', null, 'Zombie_Walk_R_Loop', null],
 };
 
-// Kişiliğe göre bekleme çeşitleri (ana + ara sıra kıpırdanma) ve ileri yürüyüş klibi
+// Kişilik (ana karakterler: Mert relaxed, Zülal agile, Deniz confident, Elif observer, Bora heavy, Ceren calm; yağmacı
+// observer). idle: temel bekleme (ad ya da [[ad, ağırlık]] karışımı); idleFree: elde eşya/yük varken kolları meşgul eden
+// temel beklemenin yerine; walk: ileri yürüyüş (ad ya da karışım — Walk_Loop ile Walk_Fwd_Loop birebir aynı klip, ayrım
+// Walk_Fwd/Walk_Formal karışımı ve tempoyla); rate: adım temposu (±%8'i geçmez: ayak kayar); fidgets: [tür, ağırlık]
+// kıpırdanma havuzu (türler Avatar FIDGETS'te; Motion zamanlamaz, yalnız setIdleVariant ile bekleme çeşidini oynatır);
+// pose: duruş eki (derece; Avatar uygular): sp bel/gövde öne, ch göğüs öne (− dik), hd baş öne, ab kol açıklığı (yürürken)
 export const PERSONA = {
-  relaxed: { idle: 'Idle_Loop', fidget: ['Idle_LookAround_Loop'], walk: 'Walk_Loop' },
-  agile: { idle: 'Idle_Loop', fidget: ['Idle_LookAround_Loop'], walk: 'Walk_Fwd_Loop', rate: 1.05 },
-  confident: { idle: 'Idle_Loop', fidget: ['Idle_FoldArms_Loop'], walk: 'Walk_Fwd_Loop' },
-  observer: { idle: 'Idle_LookAround_Loop', fidget: ['Idle_Loop'], walk: 'Walk_Fwd_Loop' },
-  heavy: { idle: 'Idle_Loop', fidget: ['Idle_FoldArms_Loop'], walk: 'Walk_Loop', rate: 0.95 },
-  calm: { idle: 'Idle_Loop', fidget: ['Idle_TalkingPhone_Loop'], walk: 'Walk_Formal_Loop' },
-  formal: { idle: 'Idle_Loop', fidget: ['Idle_FoldArms_Loop'], walk: 'Walk_Formal_Loop' },
-  default: { idle: 'Idle_Loop', fidget: ['Idle_LookAround_Loop'], walk: 'Walk_Fwd_Loop' },
+  relaxed: { idle: 'Idle_Loop', walk: 'Walk_Fwd_Loop', rate: 0.97, pose: { sp: 6, hd: 7 }, fidgets: [['tinker', 3], ['stretch', 1], ['lookAround', 1]] },
+  agile: { idle: [['Idle_Loop', 0.65], ['Sword_Idle', 0.35]], walk: 'Walk_Fwd_Loop', rate: 1.06, pose: { sp: 3, hd: -3, ab: -3 }, fidgets: [['peek', 2], ['lantern', 2], ['stretch', 1]] },
+  confident: { idle: 'Idle_FoldArms_Loop', idleFree: 'Idle_Loop', walk: 'Walk_Fwd_Loop', pose: { sp: -3, ch: -4, hd: -4, ab: 4 }, fidgets: [['boxing', 2], ['stretch', 1], ['lookAround', 1]] },
+  observer: { idle: 'Idle_LookAround_Loop', walk: [['Walk_Fwd_Loop', 0.4], ['Walk_Formal_Loop', 0.6]], pose: { sp: 2, ab: -2 }, fidgets: [['binoculars', 3], ['peek', 1]] },
+  heavy: { idle: [['Idle_Loop', 0.72], ['Idle_Tired_Loop', 0.28]], idleFree: 'Idle_Loop', walk: 'Walk_Fwd_Loop', rate: 0.93, pose: { sp: 4, ch: -2, hd: 2, ab: 9 }, fidgets: [['stretch', 2], ['foldArms', 2], ['lookAround', 1]] },
+  calm: { idle: [['Idle_Loop', 0.55], ['Idle_FoldArms_Loop', 0.45]], idleFree: 'Idle_Loop', walk: 'Walk_Formal_Loop', pose: { sp: -2, hd: 2, ab: -3 }, fidgets: [['watch', 2], ['radio', 2], ['lookAround', 1]] },
+  formal: { idle: 'Idle_Loop', walk: 'Walk_Formal_Loop', fidgets: [['watch', 2], ['foldArms', 1]] },
+  default: { idle: 'Idle_Loop', walk: 'Walk_Fwd_Loop', fidgets: [['stretch', 1], ['lookAround', 1]] },
 };
 
 // Durum değişiminde oynayan geçiş klipleri [klip, süre(sn), from, to]
@@ -44,11 +53,15 @@ const TRANSITIONS = {
   'stand>crouch': ['Crouch_Enter', 0.38, 0, 1], 'crouch>stand': ['Crouch_Exit', 0.4, 0, 1],
 };
 
-// Maskeler: kemik adı → ağırlık (üst gövde katmanında bel kısmen; bacaklar temel katmanda kalır)
+// Maskeler: kemik adı → ağırlık (üst gövde katmanında bel kısmen; bacaklar temel katmanda kalır). 'lower': kalça, bacaklar
+// ve IK ayakları (yerinde dönüş adımları; konum izleri de yazılır), baş dönüşe öncülük eder; kollar/tutuşlar etkilenmez
 const UPPER = { Abdomen: 0.45, Torso: 0.75, Chest: 1, Neck: 1, Head: 1 };
 const ARM_RE = /^(Shoulder|UpperArm|LowerArm|Wrist|Index|Middle|Ring|Pinky|Thumb)/;
+const LOWER_RE = /^(Body|Hips|UpperLeg|LowerLeg|Foot)/;
+const LOWER = { Abdomen: 0.35, Neck: 0.4, Head: 0.6 };
 function maskWeight(mask, name) {
   if (mask === 'full') return 1;
+  if (mask === 'lower') return LOWER_RE.test(name) ? 1 : LOWER[name] ?? 0;
   if (mask === 'upper') return UPPER[name] ?? (ARM_RE.test(name) ? 1 : 0);
   if (mask === 'arms') return ARM_RE.test(name) ? 1 : name === 'Chest' ? 0.3 : 0;
   if (mask === 'rarm') return ARM_RE.test(name) && name.endsWith('R') ? 1 : 0;
@@ -91,17 +104,22 @@ export class Motion {
     // zombi: kendi bekleme/yürüme/koşu kümesi; bireysel hız çarpanı (sürü aynı adımla yürümesin)
     this.zombie = opts.kind === 'zombie';
     this.rateMul = opts.rate || 1;
-    this.persona = this.zombie ? { idle: 'Zombie_Idle_Loop', fidget: [] } : PERSONA[opts.persona] || PERSONA.default;
+    this.persona = this.zombie ? { idle: 'Zombie_Idle_Loop', fidgets: [] } : PERSONA[opts.persona] || PERSONA.default;
     this.sets = this.zombie ? { ...SETS, walk: SETS.zwalk } : { ...SETS, walk: [this.persona.walk || SETS.walk[0], ...SETS.walk.slice(1)] };
     this.state = 'stand';
     this.sw = { stand: 1 }; // durum ağırlıkları
     this.phase = { stand: Math.random(), crouch: Math.random(), prone: Math.random() }; // durum → döngü fazı (0..1)
     this.t = Math.random() * 20;
-    this.idle = { cur: this.persona.idle, prev: null, x: 1, until: 6 + Math.random() * 8, fidget: false };
+    // ayakta bekleme: cur istenen bekleme (ad ya da karışım), x onun ağırlık payı (1: geçiş bitti); w: çapraz sönümdeki
+    // beklemeler (bekleme → {w ağırlık, t0 klip başlangıcı}). Zamanlayıcı yok: kıpırdanma çeşidini Avatar seçer
+    this.idle = { cur: this.persona.idle, prev: null, x: 1, w: new Map([[this.persona.idle, { w: 1, t0: 0 }]]) };
+    this.variant = null; // kıpırdanma bekleme çeşidi (setIdleVariant)
+    this.variantT = 0;
     this.shots = [];
     this.d8 = new Float32Array(8);
     this.fullW = 0; // tam gövde tek seferlik klip ağırlığı (prosedürel katman geri çekilir)
     this.upperW = 0;
+    this.lowerW = 0; // alt gövde klibi (yerinde dönüş): tutuşlar, ayak IK'sı ve kıpırdanma sürer
     this.tmpBody = new THREE.Vector3();
   }
 
@@ -170,7 +188,13 @@ export class Motion {
         if (g.w <= 1e-3) continue;
         if (g.clip) { const s = this.sampler(g.clip); if (s) parts.push([s, g.w]); continue; }
         const d = this._dirs(angle, g.set);
-        for (let i = 0; i < 8; i++) if (d[i] > 1e-3 && g.set[i]) { const s = this.sampler(g.set[i]); if (s) parts.push([s, g.w * d[i]]); }
+        for (let i = 0; i < 8; i++) {
+          if (d[i] <= 1e-3 || !g.set[i]) continue;
+          const e = g.set[i];
+          // karışık yön (kişilik yürüyüşü [[ad, ağırlık]]): eş süreli/eş fazlı klipler birlikte örneklenir
+          if (Array.isArray(e)) { for (const [n, k] of e) { const s = this.sampler(n); if (s) parts.push([s, g.w * d[i] * k]); } }
+          else { const s = this.sampler(e); if (s) parts.push([s, g.w * d[i]]); }
+        }
       }
       for (const [s, w] of parts) { wsum += w; dist += w * (s.info.speed || 1) * s.dur; dur += w * s.dur; }
     }
@@ -187,34 +211,59 @@ export class Motion {
     return moveW;
   }
 
-  /** Bekleme klibi (ayakta: kişilik çeşitleri arasında yumuşak geçiş) */
-  _idle(name, w) {
-    const s = this.sampler(name);
-    if (s) this._add(s, frac(this.t / s.dur) * s.dur, w);
+  /** Bekleme klibi (döngü; t: klibin saati) ya da karışımı ([[ad, ağırlık]]) */
+  _idle(entry, w, t = this.t) {
+    if (Array.isArray(entry)) { for (const [n, k] of entry) this._idle(n, w * k, t); return; }
+    const s = this.sampler(entry);
+    if (s) this._add(s, frac(t / s.dur) * s.dur, w);
   }
-  _standIdle(w, dt, a) {
-    const I = this.idle;
-    I.until -= dt;
-    // yorgunken nefes nefese bekleme; konuşurken el kol hareketli konuşma
-    const want = a.talk && this.has('Idle_Talking_Loop') ? 'Idle_Talking_Loop' : a.tired && this.has('Idle_Tired_Loop') ? 'Idle_Tired_Loop' : null;
-    if (want && I.cur !== want) { I.prev = I.cur; I.cur = want; I.x = 0; I.until = 4; }
-    else if (!want && (I.cur === 'Idle_Talking_Loop' || I.cur === 'Idle_Tired_Loop') && I.cur !== this.persona.idle) { I.prev = I.cur; I.cur = this.persona.idle; I.x = 0; I.fidget = false; I.until = 6 + Math.random() * 6; }
-    else if (!want && I.until <= 0 && this.persona.fidget.length) {
-      const P = this.persona;
-      const next = I.fidget || I.cur === 'Idle_Tired_Loop' || I.cur === 'Idle_Talking_Loop' ? P.idle : P.fidget[Math.floor(Math.random() * P.fidget.length)];
-      I.fidget = next !== P.idle;
-      if (next !== I.cur && this.has(next)) { I.prev = I.cur; I.cur = next; I.x = 0; }
-      const s = this.sampler(I.cur);
-      I.until = I.fidget ? Math.max(3, (s ? s.dur : 3) * (1 + Math.floor(Math.random() * 2))) : 7 + Math.random() * 10;
+  /**
+   * Ayakta bekleme. Öncelik: konuşma > yorgunluk > kıpırdanma çeşidi (setIdleVariant; Avatar.updateFidget seçer) > elde
+   * eşya/yük varken idleFree (kolları kavuşturan bekleme eşyayla çakışmasın) > kişiliğin temel beklemesi. Kendi
+   * zamanlayıcısı yoktur. Geçiş 0,6 sn doğrusal çapraz sönüm; art arda değişimde de sıçramasın diye ağırlık haritası.
+   * Harita her karede ilerler (_idleWeights; yürürken ve başka durumdayken de): yürüyüşle biten kıpırdanma çeşidi bir
+   * sonraki duruşta yeniden belirmesin. Burada yalnız örneklenir.
+   */
+  _standIdle(w) {
+    const W = this.idle.w;
+    let tot = 0;
+    for (const e of W.values()) tot += e.w;
+    tot = tot || 1;
+    for (const [k, e] of W) this._idle(k, (w * e.w) / tot, this.t - e.t0);
+  }
+  /** Bekleme ağırlık haritası: istenen bekleme 0,6 sn'de girer, diğerleri söner (her karede, örneklemeden bağımsız) */
+  _idleWeights(dt, a) {
+    const I = this.idle, P = this.persona, W = I.w;
+    const want = a.talk && this.has('Idle_Talking_Loop') ? 'Idle_Talking_Loop'
+      : a.tired && this.has('Idle_Tired_Loop') ? 'Idle_Tired_Loop'
+        : this.variant && this.has(this.variant) ? this.variant
+          : a.busy && P.idleFree ? P.idleFree : P.idle;
+    if (want !== I.cur) { I.prev = I.cur; I.cur = want; }
+    // kıpırdanma çeşidi kendi başından oynar (uzak avatarda da aynı noktadan: başlangıç ağdan gelir)
+    if (!W.has(want)) W.set(want, { w: 0, t0: want === this.variant ? this.variantT : 0 });
+    let tot = 0;
+    for (const [k, e] of W) {
+      e.w = k === want ? Math.min(1, e.w + dt / 0.6) : Math.max(0, e.w - dt / 0.6);
+      if (e.w <= 0 && k !== want) W.delete(k); else tot += e.w;
     }
-    I.x = Math.min(1, I.x + dt / 0.6);
-    if (I.prev && I.x < 1) this._idle(I.prev, w * (1 - I.x));
-    this._idle(I.cur, w * (I.x < 1 && I.prev ? I.x : 1));
+    I.x = W.get(want).w / (tot || 1);
+  }
+  /** Ayakta bekleme çeşidi (kıpırdanma: kollarını kavuşturma, etrafa bakınma, telsiz…); null: kişiliğin beklemesi. off: geçen süre */
+  setIdleVariant(name, off = 0) {
+    this.variant = name || null;
+    this.variantT = this.t - off;
+    // aynı çeşit sönerken yeniden istenirse kendi başından başlasın
+    const e = name && this.idle.w.get(name);
+    if (e && e.w <= 0.02) e.t0 = this.variantT;
   }
 
   // ---------------------------------------------------------------- tek seferlik klipler
   /**
-   * o: { dur | rate, from, to (0..1), mask: full|upper|arms|rarm|larm|head, w, fadeIn, fadeOut, hold, loop, group }
+   * o: { dur | rate, from, to (0..1), mask: full|lower|upper|arms|rarm|larm|head, w, fadeIn, fadeOut, hold, loop, group,
+   *      loopFrom (0..1, döngünün başı; yoksa from), pingpong (uçlarda yön değiştir), exitTo (0..1, durdurulunca
+   *      to…exitTo çıkış klibi), soft (tam gövde ama tam gövde ağırlığına sayılmaz: tutuş/prosedürel katman geri
+   *      çekilmez — düşük ağırlıklı eklemeli his klipleri için) }. 'full' ve 'lower' konum izlerini de (kalça, IK
+   *      ayakları) maske ağırlığıyla yazar.
    * @returns tanıtıcı (null: klip yok)
    */
   play(name, o = {}) {
@@ -224,27 +273,54 @@ export class Motion {
     const rate = o.rate ?? (o.dur ? (to - from) / o.dur : 1);
     const group = o.group || name;
     for (const x of this.shots) if (x.group === group && !x.out) x.out = Math.max(1e-3, x.fadeOut);
-    const shot = { name, s, t: from, from, to, rate, mask: this.maskOf(o.mask || 'full'), full: (o.mask || 'full') === 'full', w: o.w ?? 1, fadeIn: o.fadeIn ?? 0.12, fadeOut: o.fadeOut ?? 0.2, hold: !!o.hold, loop: !!o.loop, group, age: 0, out: 0, k: 0 };
+    const maskName = o.mask || 'full';
+    const lf = Math.min(to, Math.max(0, (o.loopFrom ?? o.from ?? 0) * s.dur));
+    const exitTo = o.exitTo !== undefined ? Math.min(1, o.exitTo) * s.dur : 0;
+    const shot = { name, s, t: from, from, to, lf, rate, dir: 1, pp: !!o.pingpong, exitTo, mask: this.maskOf(maskName), maskName, full: maskName === 'full', pos: maskName === 'full' || maskName === 'lower', soft: !!o.soft, w: o.w ?? 1, fadeIn: o.fadeIn ?? 0.12, fadeOut: o.fadeOut ?? 0.2, hold: !!o.hold, loop: !!o.loop, group, age: 0, out: 0, k: 0 };
     this.shots.push(shot);
     return shot;
   }
-  /** Belirli bir tek seferlik klibi sönümle bitir */
-  stopShot(x) { if (x && !x.out) x.out = Math.max(1e-3, x.fadeOut); }
+  /**
+   * Belirli bir tek seferlik klibi sönümle bitir. exit (varsayılan): çıkış aralığı (exitTo) olan klipte önce
+   * to…exitTo kısmı '<grup>/exit' grubunda oynar ve döngüyle çapraz sönümlenir (diz çökmüşken ayağa kalkar). Çıkış
+   * yalnız döngü aralığına varılmışsa (t ≥ loopFrom: diz çökme bitmiş) oynar; giriş sürerken (erken bırakılan arama/
+   * kaldırma) klip yalnız söner — ayaktaki karakter çıkış için diz çöküp yeniden kalkmasın.
+   * Hareket halinde, ölümde ya da yerine yeni eylem geldiğinde exit = false verilir. Döner: çıkış klibi (yoksa null).
+   */
+  stopShot(x, exit = true) {
+    if (!x || x.out) return null;
+    let ex = null;
+    if (exit && x.exitTo > x.to + 1e-3 && x.t >= x.lf - 1e-3) {
+      ex = this.play(x.name, { mask: x.maskName, group: x.group + '/exit', from: x.to / x.s.dur, to: x.exitTo / x.s.dur, rate: Math.abs(x.rate) || 1, fadeIn: 0.18, fadeOut: 0.25, w: x.w });
+      if (ex) ex.isExit = true;
+    }
+    x.out = ex ? 0.18 : Math.max(1e-3, x.fadeOut);
+    return ex;
+  }
+  /** Süren çıkış kliplerini (ayağa kalkma) kes: yürümeye başlayınca, ölünce, moda göre */
+  stopExits() { for (const x of this.shots) if (x.isExit && !x.out) x.out = Math.max(1e-3, x.fadeOut); }
   /** Gruptaki/adlı klibi sönümle bitir */
   stop(groupOrName) { for (const x of this.shots) if ((x.group === groupOrName || x.name === groupOrName) && !x.out) x.out = Math.max(1e-3, x.fadeOut); }
   playing(groupOrName) { return this.shots.some((x) => (x.group === groupOrName || x.name === groupOrName) && !x.out); }
 
   _shots(dt) {
     const B = this.bones;
-    this.fullW = 0; this.upperW = 0;
+    this.fullW = 0; this.upperW = 0; this.lowerW = 0;
     for (let n = 0; n < this.shots.length; n++) {
       const x = this.shots[n];
       x.age += dt;
-      x.t += dt * x.rate;
-      if (x.t >= x.to) {
-        if (x.loop) x.t = x.from + ((x.t - x.from) % Math.max(1e-3, x.to - x.from));
-        else if (x.hold || x.out) x.t = x.to;
-        else { this.shots.splice(n--, 1); continue; } // bitti (son kısmı zaten sönümlendi)
+      if (x.pp && x.loop) {
+        // gidip gelen döngü: to'ya varınca geri, loopFrom'a varınca ileri (aralığın dışına çıkmaz, sıçrama yok)
+        x.t += dt * x.rate * x.dir;
+        if (x.t >= x.to) { x.t = Math.max(x.lf, 2 * x.to - x.t); x.dir = -1; }
+        else if (x.dir < 0 && x.t <= x.lf) { x.t = Math.min(x.to, 2 * x.lf - x.t); x.dir = 1; }
+      } else {
+        x.t += dt * x.rate;
+        if (x.t >= x.to) {
+          if (x.loop) x.t = x.lf + ((x.t - x.lf) % Math.max(1e-3, x.to - x.lf));
+          else if (x.hold || x.out) x.t = x.to;
+          else { this.shots.splice(n--, 1); continue; } // bitti (son kısmı zaten sönümlendi)
+        }
       }
       // ağırlık: giriş sönümü × bitişe yaklaşırken çıkış sönümü × durdurma sönümü
       let w = Math.min(1, x.age / Math.max(1e-3, x.fadeIn));
@@ -266,13 +342,17 @@ export class Motion {
         if (mw >= 0.999) b.set(r[0], r[1], r[2], r[3]);
         else { _q.set(r[0], r[1], r[2], r[3]); b.slerp(_q, mw); }
       }
-      if (x.full) {
+      if (x.pos) {
         for (const it of x.s.p) {
+          const pw = M[it.i] * w;
+          if (pw <= 0) continue;
           const r = it.f.evaluate(t), p = B[it.i].position;
-          if (w >= 0.999) p.set(r[0], r[1], r[2]); else { _v.set(r[0], r[1], r[2]); p.lerp(_v, w); }
+          if (pw >= 0.999) p.set(r[0], r[1], r[2]); else { _v.set(r[0], r[1], r[2]); p.lerp(_v, pw); }
         }
-        this.fullW = Math.max(this.fullW, w);
-      } else this.upperW = Math.max(this.upperW, w);
+      }
+      if (x.full) { if (!x.soft) this.fullW = Math.max(this.fullW, w); }
+      else if (x.maskName === 'lower') this.lowerW = Math.max(this.lowerW, w);
+      else this.upperW = Math.max(this.upperW, w);
     }
   }
 
@@ -292,6 +372,7 @@ export class Motion {
     for (const key of Object.keys(this.sw)) { this.sw[key] = damp(this.sw[key], key === target ? 1 : 0, k, dt); if (this.sw[key] < 1e-3 && key !== target) delete this.sw[key]; else tot += this.sw[key]; }
     if (!(target in this.sw)) { this.sw[target] = 1 - Math.min(1, tot); tot += this.sw[target]; }
     this._begin();
+    this._idleWeights(dt, a);
     const s = a.speed || 0, ang = a.moveAngle || 0;
     for (const [key, w0] of Object.entries(this.sw)) {
       const w = w0 / tot;
@@ -299,7 +380,7 @@ export class Motion {
         case 'stand': {
           if (this.zombie) {
             const run = smooth(1.7, 3.0, s), idleW = 1 - smooth(0.1, 0.4, s);
-            if (idleW > 1e-3) this._standIdle(idleW * w, dt, a);
+            if (idleW > 1e-3) this._standIdle(idleW * w);
             this._loco('stand', [{ set: this.sets.walk, w: 1 - run }, { clip: 'Zombie_Run_Fwd_Loop', w: run }], ang, s, null, idleW, w, dt, this.rateMul);
             break;
           }
@@ -311,7 +392,7 @@ export class Motion {
           const idleW = 1 - smooth(0.12, 0.5, sEff);
           const jog = smooth(1.5, 2.9, s), spr = smooth(5.0, 6.3, s) * Math.max(0, Math.cos(ang));
           const pr = (this.persona.rate || 1) * this.rateMul;
-          if (idleW > 1e-3) this._standIdle(idleW * w, dt, a);
+          if (idleW > 1e-3) this._standIdle(idleW * w);
           this._loco('stand', [{ set: this.sets.walk, w: 1 - jog }, { set: this.sets.jog, w: jog * (1 - spr) }, { clip: 'Sprint_Loop', w: jog * spr }], aEff, sEff, null, idleW, w, dt, pr);
           break;
         }

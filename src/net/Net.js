@@ -11,7 +11,7 @@ import { CHARACTERS, CHARACTER_IDS } from '../entities/CharacterFactory.js';
 import { LocalTransport, PeerTransport } from './Transport.js';
 import { Voice } from './Voice.js';
 
-export const PROTOCOL = 6; // 6: yer altı sığınakları (dünya yerleşimi + 'shelter' eylemi); 5: dünya yerleşimi değişti (girilebilir yeni binalar, gerçek araç olan terk edilmiş arabalar); 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
+export const PROTOCOL = 7; // 7: eylem çeşitleri (tür:çeşit, gönderen çözer), yeni eylemler (laugh/point/guitar/fidget/knock), isabet tepkisi eylemden ayrı alanda (anim.hit [sayaç, klip]), yakın dövüş sırası vuruş sayacıyla (act[4], bot_fx n), bot kıpırdanması (a[16]), ağır yük carryBox 2, taban/ikinci renk ve omuz çantası görünümü; 6: yer altı sığınakları (dünya yerleşimi + 'shelter' eylemi); 5: dünya yerleşimi değişti (girilebilir yeni binalar, gerçek araç olan terk edilmiş arabalar); 4: hayvan anlık görüntüsü, takas eşitlemesi, eylem başlangıç zamanı (actT)
 export const MAX_PLAYERS = 6;
 const RECENT_KEY = 'kiyamet_recent_rooms';
 
@@ -644,8 +644,10 @@ export class Net {
 
   summaryOf(st) { const S = this.session; return { health: Math.round(st.health), maxHealth: st.maxHealth, hunger: Math.round(st.hunger), thirst: Math.round(st.thirst), downed: !!st.downed, radio: S && S.inventory && S.inventory.has && S.inventory.has('radio') ? 1 : 0 }; }
 
+  // carryBox: 0 yok, 1 hafif kutu/kasa, 2 ağır yük (geriye yaslanma, ağır adım); act: son eylem [sıra, tür, süre, çeşit,
+  // (yakın dövüşte) vuruş sayacı]; hit: isabet tepkisi [sayaç, klip dizini] — eylem yuvasından ayrı (eylemi ezmesin)
   compactAnim(a) {
-    return { mode: a.mode, speed: Math.round(a.speed * 10) / 10, vy: Math.round((a.vy || 0) * 10) / 10, yaw: Math.round(a.yaw * 100) / 100, pitch: Math.round((a.pitch || 0) * 100) / 100, aim: !!a.aim, steer: Math.round((a.steer || 0) * 100) / 100, emote: a.emote || null, carrying: !!a.carrying, moveAngle: Math.round((a.moveAngle || 0) * 100) / 100, roll: a.roll ? 1 : 0, tired: a.tired ? 1 : 0, carryBox: a.carryBox ? 1 : 0, act: a.act || null, actT: a.act ? Math.round((a.actT || 0) * 100) / 100 : 0 };
+    return { mode: a.mode, speed: Math.round(a.speed * 10) / 10, vy: Math.round((a.vy || 0) * 10) / 10, yaw: Math.round(a.yaw * 100) / 100, pitch: Math.round((a.pitch || 0) * 100) / 100, aim: !!a.aim, steer: Math.round((a.steer || 0) * 100) / 100, emote: a.emote || null, carrying: !!a.carrying, moveAngle: Math.round((a.moveAngle || 0) * 100) / 100, roll: a.roll ? 1 : 0, tired: a.tired ? 1 : 0, carryBox: a.carryBox === 2 ? 2 : a.carryBox ? 1 : 0, act: a.act || null, actT: a.act ? Math.round((a.actT || 0) * 100) / 100 : 0, hit: Array.isArray(a.hit) ? [a.hit[0], a.hit[1]] : null };
   }
 
   sendState() {

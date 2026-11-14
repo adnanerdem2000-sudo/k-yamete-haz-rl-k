@@ -43,7 +43,7 @@ export class Combat {
       this.reloading.t -= dt;
       if (this.reloading.t <= 0) this.finishReload();
     }
-    const canAct = !blocking && input.locked && !S.localStats.downed && (pl.mode === 'ground' || pl.mode === 'crouch' || pl.mode === 'air' || pl.mode === 'prone');
+    const canAct = !blocking && input.locked && !S.localStats.downed && !(pl.knockT > 0) && (pl.mode === 'ground' || pl.mode === 'crouch' || pl.mode === 'air' || pl.mode === 'prone');
     const st = this.held;
     const def = st ? ITEMS[st.id] : null;
     // nişan

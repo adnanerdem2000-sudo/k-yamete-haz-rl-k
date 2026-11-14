@@ -71,16 +71,19 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     window.__step(5);
     window.__setTime(6, 1);
     window.__step(5);
+    // karşılaştırma şafak anında yaşayanlarla: 05:59 adımlarında hâlâ gece olduğundan yeni bir zombi topraktan çıkabilir
+    // (alive0 o adımlardan önce sayılır, yalnız bilgi için)
+    const atDawn = window.__natural().length;
     const marked = window.__natural().filter((z) => z.burrowAt).length;
     // testi kısaltmak için dönüş zamanları öne çekilir (oyunda 3–90 sn yayılır)
     for (const zb of window.__natural()) zb.burrowAt = S.t;
     let sawBurrow = 0;
     for (let k = 0; k < 20; k++) { window.__step(15); sawBurrow += window.__natural().filter((z) => z.state === 'burrow').length; }
     const pop1 = Z.zones.reduce((a, z) => a + z.pop, 0), killed1 = Z.zones.reduce((a, z) => a + z.killed, 0);
-    return { once: alive0, isaretli: marked, gomulme: sawBurrow, kalan: window.__natural().length, nufusArtisi: pop1 - pop0, olu: killed1 - killed0, dawn: Z.lastDawn };
+    return { once: alive0, safakta: atDawn, isaretli: marked, gomulme: sawBurrow, kalan: window.__natural().length, nufusArtisi: pop1 - pop0, olu: killed1 - killed0, dawn: Z.lastDawn };
   });
   log('şafak', dawn);
-  check(dawn.once > 0 && dawn.isaretli === dawn.once, 'şafakta yaşayan bütün zombilere toprağa dönüş zamanı verilmeli', dawn);
+  check(dawn.safakta > 0 && dawn.isaretli === dawn.safakta, 'şafakta yaşayan bütün zombilere toprağa dönüş zamanı verilmeli', dawn);
   check(dawn.gomulme > 0 && dawn.kalan === 0 && dawn.olu === 0 && dawn.nufusArtisi > 0, 'zombiler toprağa dönmeli (öldürülmüş sayılmadan nüfusa eklenerek)', dawn);
 
   // 5) gündüz tehditleri: yağmacı devriyesi ve başıboş köpek sürüsü

@@ -11,7 +11,7 @@ import { Inventory } from './systems/Inventory.js';
 import { Player } from './entities/Player.js';
 import { Avatar } from './entities/Avatar.js';
 import { ITEMS, makeStack } from './data/items.js';
-import { CHARACTERS } from './entities/CharacterFactory.js';
+import { CHARACTERS, migrateLook } from './entities/CharacterFactory.js';
 import { Loot } from './systems/Loot.js';
 import { GroundItems } from './systems/GroundItems.js';
 import { PhysProps } from './systems/PhysProps.js';
@@ -43,7 +43,7 @@ import { DIFFICULTY } from './data/difficulty.js';
 import { Crafting } from './systems/Crafting.js';
 import { Timeline } from './systems/Timeline.js';
 import { StoryWorld } from './systems/StoryWorld.js';
-import { BIOME } from './world/Terrain.js';
+import { STEP_SOUND } from './systems/AudioManager.js';
 
 export { DIFFICULTY }; // menü ekranları buradan alır (tanım: data/difficulty.js)
 
@@ -80,7 +80,8 @@ export class Session {
     // ---- yerel oyuncu
     const prof = cfg.local;
     const cdef = CHARACTERS[prof.charId] || CHARACTERS.mert;
-    const look = { ...cdef.look, ...(prof.look || {}) };
+    // eski kayıt/profil görünümünden kaldırılmış varsayılanlar ayıklanır (migrateLook)
+    const look = migrateLook(cdef.id, { ...cdef.look, ...(prof.look || {}) });
     this.localProfile = { id: this.localId, name: prof.name, charId: cdef.id, look, stats: cdef.stats };
     this.localStats = new PlayerStats(cdef.stats, this.diff.needs);
     this.inventory = new Inventory(30, 30 * (cdef.stats.carry || 1));
@@ -234,7 +235,7 @@ export class Session {
     this.onEvt('rel', (e) => { this.relations[e.faction] = clamp((this.relations[e.faction] || 0) + e.delta, -100, 100); this.quests.onFlag('rel:' + e.faction); });
     this.onEvt('toast', (e) => { if (e.to && e.to !== this.localId) return; this.ui.toast(e.text, e.kind || 'info', e.dur); }); // to: yalnız o oyuncuya
     this.onEvt('noise', (e) => { if (this.zombies) this.zombies.hearNoise(e.x, e.z, e.r, e.src); if (e.r > 25 && this.living) this.living.birds.scare(e.x, e.z, e.r); });
-    this.onEvt('dmg_player', (e) => { this.damageLocal(e.amount, e.kind, e.from); if (Array.isArray(e.push) && !this.localStats.downed && this.local.mode !== 'drive') { this.local.vel.x += e.push[0]; this.local.vel.z += e.push[1]; this.local.vel.y = Math.max(this.local.vel.y, e.push[2] || 0); } if (e.grab && !this.localStats.downed && this.local.mode !== 'drive') { this.local.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); } });
+    this.onEvt('dmg_player', (e) => this.hitLocal(e));
     this.onEvt('revived', (e) => {
       if (e.target === this.localId) { this.audio.play('revive', { vol: 0.7 }); this.localStats.revive(e.hp || 30); this.local.mode = 'ground'; this.local.carriedBy = null; if (this.local.body && !this.local.body.enabled) { this.local.body.setEnabled(true); this.local.pos.y = this.world.physics.groundHeight(this.local.pos.x, this.local.pos.z, this.local.pos.y + 0.5); this.local.syncBody(); } this.ui.toast(`${e.byName} seni ayağa kaldırdı!`, 'good'); }
       if (this.local.carrying === e.target) { this.local.carrying = null; this.selectHotbar(this.hotbarIndex); }
@@ -322,8 +323,9 @@ export class Session {
       this.tickNeeds(dt * this.time.rate * this.time.ff);
       this.weather.blend(dt);
     }
-    // yerel oyuncu
+    // yerel oyuncu (süreli kilitler her modda aynı yerde azalır)
     const pl = this.local;
+    pl.tickTimers(dt);
     if (pl.vault) pl.stepVault(dt);
     else if (pl.mode === 'drive' || pl.mode === 'seat') this.vehicles.updateLocalDriving(dt, input, blocking);
     else pl.update(dt, input, blocking);
@@ -504,6 +506,22 @@ export class Session {
   }
 
   // ======================================================================= hasar / yere düşme
+  /**
+   * Yerel oyuncuya gelen darbe (zombi, hayvan, mermi): hasar, yere serilme, itme, yakalanma. 'dmg_player' olayı da
+   * hayvanın host'taki kendi oyuncusuna vuruşu da (NPCs) buradan geçer: host, tek oyunculu ve istemci aynı kurala uyar.
+   * Yere serilme kurbanın istemcisinde seçilir ('knock' eylemiyle yansır): hücum eden hayvanın itişi her zaman, ağır
+   * darbe (ağır zombi/sürü lideri, ayı, ≥ 30 hasar) %35 olasılıkla. e: {amount, kind, from, push?: [vx, vz, vy], grab?}
+   */
+  hitLocal(e) {
+    this.damageLocal(e.amount, e.kind, e.from);
+    const pl = this.local;
+    if (this.localStats.downed || pl.mode === 'drive') return;
+    const push = Array.isArray(e.push) ? e.push : null;
+    if (push || ((e.kind === 'heavy' || e.amount >= 30) && Math.random() < 0.35)) pl.knockdown();
+    if (push) { pl.vel.x += push[0]; pl.vel.z += push[1]; pl.vel.y = Math.max(pl.vel.y, push[2] || 0); }
+    if (e.grab) { pl.grabT = 1.1; this.ui.toast('Bir zombi seni yakaladı! Kurtul!', 'danger', 1.2); }
+  }
+
   damageLocal(amount, kind = 'zombie', from = null) {
     const st = this.localStats;
     if (st.downed || this.local.mode === 'sleep' && kind === 'internal') return;
@@ -520,7 +538,9 @@ export class Session {
   }
 
   onLocalDamaged(amount, kind) {
-    this.local.avatar.flinch(1);
+    // isabet tepkisi kendi sayacıyla yansıtılır (anim durumunun hit alanı; eylem yuvasını kullanmaz, hemen önce yazılan
+    // serilme/durdurma/basılı tutmayı ezmez): uzak oyuncular aynı klibi (dizin) görür
+    this.local.avatar.play('hit', 0.45, Math.floor(Math.random() * 5));
     this.local.camShake = Settings.get('gameplay.cameraShake') ? Math.min(1, amount / 25) : 0;
     this.ui.damageFlash();
     if (this.localStats.downed && !this._downNotified) this.onDowned();
@@ -605,6 +625,8 @@ export class Session {
   useItem(slot, target = null) {
     const s = this.inventory.slots[slot];
     if (!s) return;
+    // yere serilmişken eşya kullanılmaz: yeme/içme, not, telsiz, uyku tulumu (kalkış eylemi bölünmesin, uyku kilidi dondurmasın)
+    if (this.local.knockT > 0) return;
     const def = ITEMS[s.id];
     if (def.wear) { this.equip(s.id, slot); return; }
     if (s.id === 'note' || def.cat === 'misc' && s.noteId) { this.quests.readNote(s.noteId || 'random_diary'); return; }
@@ -620,7 +642,9 @@ export class Session {
     const dur = (use.time || 1) / (use.heal && this.localProfile.stats.heal ? this.localProfile.stats.heal : 1);
     this._using = true;
     const anim = def.cat === 'med' ? 'bandage' : def.cat === 'drink' ? 'drink' : 'consume';
-    this.local.avatar.play(anim, dur);
+    const av = this.local.avatar, before = av.action;
+    av.play(anim, dur);
+    const act = av.action && av.action !== before ? av.action : null; // iptalde yalnız bu eylem biter
     this.audio.play(def.cat === 'drink' ? 'splash' : def.cat === 'med' ? 'click' : 'eat', { vol: 0.5 });
     this.ui.progress(def.cat === 'food' ? 'Yiyor…' : def.cat === 'drink' ? 'İçiyor…' : 'Tedavi ediliyor…', dur, () => {
       this._using = false;
@@ -633,7 +657,7 @@ export class Session {
       if (use.gives) this.giveLocal(use.gives, 1);
       if (s.id === 'stew' && this.isInBase(this.local.pos)) { this.act('team_morale', { amount: 8 }); }
       this.ui.toast(spoiled ? `${def.name} bozulmuştu… Tadı berbattı.` : `${def.name} kullanıldı.`, spoiled ? 'warn' : 'good', 2);
-    }, () => { this._using = false; });
+    }, () => { this._using = false; if (act && this.local.avatar.action === act) this.local.avatar.action = null; });
   }
 
   equip(id, slot = -1) {
@@ -658,6 +682,7 @@ export class Session {
   }
 
   dropSlot(slot, qty = Infinity) {
+    if (this.local.knockT > 0) return; // yere serilmişken bırakılmaz (eğilip bırakma klibi kalkışı bölmesin)
     const s = this.inventory.takeAt(slot, qty);
     if (!s) return;
     if (slot === this.hotbarIndex) this.selectHotbar(slot);
@@ -681,12 +706,15 @@ export class Session {
     if (input.wasPressed('build') && this.local.mode !== 'drive') this.build.toggleMenu();
     if (input.wasPressed('pause') && !this.build.placing) this.ui.openPause();
     if (input.wasPressed('chat')) this.ui.openChat();
-    if (input.wasPressed('emote')) this.ui.openEmotes();
+    if (input.wasPressed('emote') && this.canEmote()) this.ui.openEmotes();
     if (input.wasPressed('flashlight')) this.toggleFlashlight();
     if (input.wasPressed('quickHeal') && this.local.mode !== 'drive') this.quickHeal();
     if (input.wasPressed('drop') && this.heldStack) this.dropSlot(this.hotbarIndex, 1);
     if (input.wasPressed('ping')) this.pingAim();
   }
+
+  /** İfade (çark ya da kısayol) yapılabilir mi: yere serilmişken ve yaralı yerdeyken değil (eylem kalkışı/yerde sürünmeyi bölmesin) */
+  canEmote() { return !(this.local.knockT > 0) && !this.localStats.downed; }
 
   toggleFlashlight() {
     const has = this.inventory.has('flashlight');
@@ -763,7 +791,7 @@ export class Session {
     const p = av.root.position, L = this.audio.listener;
     if (Math.abs(p.x - L.x) > 32 || Math.abs(p.z - L.z) > 32) return;
     const local = av === this.local.avatar;
-    this.audio.footstep(local ? null : { x: p.x, y: p.y + 0.1, z: p.z }, this.surfaceAt(p, local ? this.local.inside : null), speed, mode === 'crouch');
+    this.audio.footstep(local ? null : { x: p.x, y: p.y + 0.1, z: p.z }, this.stepSurface(p), speed, mode === 'crouch');
   }
 
   /** Zombi ayak sesi: sürüklenen, düzensiz adımlar (yalnızca yakındakiler, kare başına en fazla 3) */
@@ -772,35 +800,12 @@ export class Session {
     if (Math.abs(p.x - L.x) > 20 || Math.abs(p.z - L.z) > 20) return;
     if (this._zsFrame !== this.t) { this._zsFrame = this.t; this._zsN = 0; }
     if (++this._zsN > 3) return;
-    const surface = this.surfaceAt(p);
+    const surface = this.stepSurface(p);
     this.audio.play('step', { at: { x: p.x, y: p.y + 0.1, z: p.z }, vol: (crawl ? 0.08 : 0.1) + Math.min(0.12, speed * 0.025), surface: surface === 'grass' ? 'dirt' : surface, range: 20 });
   }
 
-  /** Zemin türü: bina zemini, yapı, yol, su, biyom (çim/kum/toprak/kaya/kar) */
-  surfaceAt(p, inside = null) {
-    const T = this.world.terrain;
-    const th = T.heightAt(p.x, p.z);
-    if (p.y < th - 1 && this.world.under) { const Z = this.world.under.zoneAt(p.x, p.y + 0.5, p.z); if (Z) return Z.cave ? 'gravel' : 'hard'; }
-    if (p.y - th > 0.35) {
-      const b = inside || this.world.buildingAt(p.x, p.z);
-      if (b) { const f = b.tpl && b.tpl.style && b.tpl.style.floor; return f === 'woodfloor' || f === 'wood' ? 'wood' : f === 'tiles' ? 'tile' : 'hard'; }
-      return p.y - th > 1.2 ? 'metal' : 'wood'; // araç tavanı, iskele, yapı platformu
-    }
-    if (T.waterLevelAt(p.x, p.z) > th + 0.05) return 'water';
-    const ix = Math.round((p.x + T.half) / T.cell), iz = Math.round((p.z + T.half) / T.cell);
-    const k = T.idx(Math.max(0, Math.min(T.N, ix)), Math.max(0, Math.min(T.N, iz)));
-    const rm = T.roadMask[k];
-    if (rm >= 1) return 'hard';
-    if (rm > 0) return 'gravel';
-    switch (T.biome[k]) {
-      case BIOME.SAND: return 'sand';
-      case BIOME.ROCK: return 'hard';
-      case BIOME.SNOW: return 'snow';
-      case BIOME.URBAN: return 'hard';
-      case BIOME.DIRT: case BIOME.FIELD: return 'dirt';
-      default: return 'grass';
-    }
-  }
+  /** Ayağın bastığı yerin ayak sesi türü: dünyanın tek yüzey sınıflayıcısından (World.surfaceAt), STEP_SOUND ile */
+  stepSurface(p) { return STEP_SOUND[this.world.surfaceAt(p.x, p.y, p.z)] || 'grass'; }
 
   // ======================================================================= zaman olayları
   onTime(type, d) {
@@ -881,8 +886,9 @@ export class Session {
   addRemotePlayer(info) {
     if (this.players.has(info.id) && this.players.get(info.id).avatar) return this.players.get(info.id);
     const cdef = CHARACTERS[info.charId] || CHARACTERS.mert;
-    const look = { ...cdef.look, ...(info.look || {}) };
-    const avatar = new Avatar(this.game, look, { name: info.name, color: cdef.color });
+    const look = migrateLook(cdef.id, { ...cdef.look, ...(info.look || {}) });
+    // remote: kıpırdanma zamanlamaz (sahibinin yansıttığını oynar); player: oyuncu yönü yalnız hareketle döner (yerinde dönüş klibi yok)
+    const avatar = new Avatar(this.game, look, { name: info.name, color: cdef.color, remote: true, player: true });
     this.game.scene.add(avatar.root);
     const rec = { ...info, look, avatar, pos: new THREE.Vector3(info.x || 0, info.y || 0, info.z || 0), target: null, anim: null, summary: info.summary || null };
     avatar.root.position.copy(rec.pos);

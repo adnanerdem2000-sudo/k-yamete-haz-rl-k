@@ -70,6 +70,19 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   (yanmış araç enkazı).
 - **Çarpışma ızgarası:** AABB/daire çarpıştırıcılar (yürünebilir zeminler, merdivenler, köprü karoları);
   her çarpıştırıcı Rapier'de statik bir kopya olarak aynalanır (açılan kapılar vb. eşzamanlı).
+- **Yüzey sınıflayıcı (`World.surfaceAt(x, y, z, reach)`):** ayak sesleri (yerel/uzak oyuncu, bot, NPC, zombi), araç
+  tutunması/lastik sesi/tozu ve Benchmark için tek kaynak. Sıra: yer altı sığınağı bölgesi (beton; mağara/maden çakıl;
+  ev sığınağı 1. aşamada toprak) → ayağı taşıyan basılabilir çarpıştırıcı (`CollisionWorld.groundHeight`, ayağın
+  0,35 m üstüne kadar, 0,15 m ayak izi yarıçapı: kapı eşiğindeki duvar kalınlığı da döşemeyi bulur) → bina
+  döşemesinde odanın çizilen zemini (`rooms[].surface`: ahşap/karo/beton/halı), etiketli yüzey (`Collider.surface`:
+  veranda, iskele, kule platformu ahşap; otopark, köprü asfalt; fener galerisi, konteyner, tank, varil, çöp konteyneri,
+  akaryakıt pompası, trafo metal; havuz kenarı karo; basamaklar, çeşme, saksı beton; oyuncunun serdiği halı halı —
+  içinden geçilen 5 cm'lik ince zemin, Rapier'e aynalanmaz), yoksa türün malzemesi (kaya, araç enkazı metal, eşya ahşap,
+  oyuncu yapısı türüne göre: sebze tarhı toprak, metal yapılar metal, diğerleri ahşap) → su → yol şeridi (`Roads.roadSurfaceAt`: görünen şerit
+  asfalt/çakıl, kentsel kaldırım beton; 16 m kovalı dizin, kesin uzaklık) → biyom (`Terrain.biomeMaterial`). Taşıyan yüzey ayağın `reach` (0,45 m) altındaysa karakter çarpışma
+  dünyasında olmayan bir şeyin (araç tavanı, dinamik kasa) üstündedir: 1,2 m üstü metal, altı ahşap. Malzemeyi ayak
+  sesi `AudioManager.STEP_SOUND`, sürüş `Vehicles.driveSurface` kendi tablosuna çevirir. Ağ verisi gerekmez: her eş
+  aynı deterministik dünyayı kopyalanan konumlarla sınıflar.
 - **Menteşeli kapılar (`physics/DoorPhysics`):** ahşap/metal/lab bina kapıları Rapier'de dinamik kanat gövdesi +
   dönel eklem (menteşe, açı sınırı). E ile aç/kapat eklem motorunu hedef açıya sürer; oyuncu yürüyerek iter
   (karakter denetleyicisi 80 kg itki), nesne/araç çarpınca savrulur, zombi yumruklayınca sarsılır (her
@@ -93,7 +106,8 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   açılan bagaj kapağı (`vehicle_set {trunkOpen}` ile herkeste; panel kapanınca kapanır), far camı ışıması (F ile)
   ve hasar görselleri ekler: sağlık eşiklerinde gövde ağına göçük (geometri araç başına kopyalanır, çarpma yönüne
   göre), boya matlaşır/koyulaşır, %50 altında çatlak cam ve bir far söner; onarım sıfırlar. Sürüş yüzeye göre:
-  `Terrain.surfaceAt` (asfalt/beton/toprak/çim/kum/kaya/kar; toprak yol = toprak) → `SURFACES` tablosundan tutunma
+  `World.surfaceAt` (gövde tabanının 0,5 m üstünden; köprü tabliyesi, otopark, garaj da) → `driveSurface` (çakıl yol
+  = toprak, su = kum, ahşap/karo/halı = beton, metal = asfalt) → `SURFACES` tablosundan tutunma
   çarpanı, yuvarlanma direnci (kum/kar yavaşlatır; arazi aracı daha az etkilenir), ıslak/karlı çarpanı ve toz
   yoğunluğu; aracın `offroad` yeteneği çim/toprak tutunmasını kısmen telafi eder. Çarpışmada Δv'den hasar ve çarpma
   yönü (göçük yeri); önündeki üs yapısı, bina kapısı ya da pencere `vehicle_ram` ile hasar alır (host uygular).
@@ -165,7 +179,10 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   gölgelendiricide salınım; fırtınada daha sert). Sokak lambalarının ~%10'u yanmaz, ~%14'ü kesik kesik titrer
   (konuma göre deterministik; sprite rengi + ışık havuzu).
 - **Taşınabilir nesneler:** hafif fizik nesneleri (≤ 20 kg) E ile alınır; gövde kinematiğe geçer ve oyuncu
-  kapsülüyle çarpışmaz, önde taşınır (üst gövde Walk_Carry), E ile bırakılır, sol tıkla fırlatılır. Basamak
+  kapsülüyle çarpışmaz (taşınan nesnenin süzgecinde `PLAYER` yok; karakter denetleyicisinin sorgu üyeliği `G.PLAYER` —
+  üyelik `ALL` iken oyuncu elindeki kutuya dayanıp 2,9 m/sn yerine ~0,3–0,5 m/sn yürüyordu), önde taşınır (üst gövde
+  Walk_Carry), E ile bırakılır, sol tıkla fırlatılır. 14 kg üstü ağır yük (büyük kutu, fıçı) en çok 1,7 m/sn ile ağır
+  adımla taşınır: `carryBox` 2 (anim durumunda ve ağda), taşıma döngüsü 0,8 hızda, gövde geriye yaslanır. Basamak
   inerken havada kalma, zıplama ve eğilme taşımayı bozmaz; yüzme, tırmanma, araç ve yatma bırakır. Görsel her
   karede taşıyanın fizik sonrası konumuna yerleşir (gecikmesiz), kinematik gövde bir adım arkadan gelir.
   **Çok oyunculu:** `prop_carry` eylemi host'ta doğrulanır (aynı nesneyi iki kişi alamaz; geç kalana gerçek
@@ -176,25 +193,61 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
 ## Karakterler
 - **Yüz ve malzeme ayrıntısı:** göz merkezleri ve ağız yeri kafa setinin geometrisinden ölçülür (`combo.face`);
   göz akı + iris + göz bebeği + parıltı + kapak çizgisi + dudaklar tek ağda (karakter başına 1 çizim çağrısı,
-  `buildFace`). Saç köklerden uçlara açılan ton ve tel tel fark; yüzde hafif ten varyasyonu. Deri malzemesi
+  `buildFace`). Göz yuvası erkekte `Eye`, kadında `Brown` malzemesidir (kadın Formal kafasında kaşlar da aynı ağda:
+  `refineSlots` bileşen şekliyle ayırır; kadın kafasındaki `Black` dudak halkası/boyunluktur, göz değil). İris ve
+  göz bebeği göz kutusunun eğik ön yüzüne, yüz normali yönünde 1–2,2 mm önde oturur. Gözlükler aynı yüz verisinden
+  yerleşir (camlar göz merkezlerinde; gözsüz Swat kaskında gözlük çizilmez). Saç köklerden uçlara açılan ton ve tel tel fark; yüzde hafif ten varyasyonu. Deri malzemesi
   köşe başına pürüzlülük taşır (`aRough`: ten yarı mat, göz ıslak, kumaş mat, metal parlak) — tek malzeme.
-- **Koleksiyonlar:** cinsiyete göre gerçek modüler set + renk/aksesuar (`COLLECTIONS.outfit.{men,women}`); yüz/saç
-  korunur. Kafa × gövde setlerinin tümü boyun/bel boşluğu, derin iç içe geçme ve NaN için ölçülür (`tests/e2e/outfits.mjs`,
+- **Koleksiyonlar:** cinsiyete göre gerçek modüler gövde/bacak/ayak seti + renk/aksesuar (`COLLECTIONS.outfit.{men,women}`);
+  karakterin kafa parçası (yüz/saç) korunur, İşçi bareti ve Askerî kaskı şapka yuvasından gelir. Eski kayıt ve
+  profillerde kalmış, sonradan kaldırılmış varsayılanlar (Mert'in sarı ikinci rengi) okunurken ayıklanır
+  (`migrateLook`: oturum, uzak oyuncu ve menü önizlemesi aynı yoldan). Kafa × gövde setlerinin tümü boyun/bel boşluğu, derin iç içe geçme ve NaN için ölçülür (`tests/e2e/outfits.mjs`,
   CI'da her gönderimde).
-- **Kişilik kıpırdanmaları (`Avatar.updateFidget`):** ayakta boş beklerken 12–26 sn'de bir 2,6–4,2 sn: Mert
-  elindeki anahtarı kurcalar, Elif dürbünle tarar, Bora gerinir, Deniz gard alıp yumruk atar, Ceren saate
-  bakar, Zülal ayak ucunda etrafı kolaçan eder (`Animations.fidget`, üst gövde maskesi, aletler eşya
-  modelinden). Her istemci kendi zamanlamasıyla oynatır (kozmetik, ağ verisi yok).
+- **Kişilik (`Motion.PERSONA`) ve kıpırdanmalar (`Avatar.updateFidget`):** her ana karakterin kendi temel beklemesi
+  (Deniz kollarını kavuşturur, Elif etrafı süzer, Bora yorgun ağırlıkla, Ceren elleri önde sakin, Zülal kılıç
+  beklemesiyle karışık tetik duruş, Mert gevşek), yürüyüşü (Walk_Fwd / Walk_Formal karışımı, tempo ±%8 içinde) ve
+  duruş eki (bel/göğüs/baş açısı, yürürken kol açıklığı) var; elde eşya ya da yük varken kolları meşgul eden
+  bekleme serbest beklemeye döner (`idleFree`). Kıpırdanmanın **tek zamanlayıcısı** `Avatar.updateFidget`: ayakta
+  boş beklerken ilki 10–24 sn, sonrakiler 12–26 sn arayla (sakin değilken sayaç en az 2,5 sn'de bekler) kişilik
+  havuzundan ağırlıklı tür seçer (`FIDGETS`: üst gövde pozu — Mert anahtar
+  kurcalar, Elif dürbünle tarar, Deniz gard alır, kol saati takan saate bakar (`needs`: Ceren'de steteskop olduğundan
+  onun havuzunda telsiz ve kolaçan kalır), Zülal kolaçan eder — ya da bekleme çeşidi klibi — kollarını kavuşturma,
+  telsizle konuşma, gece fener; aletler eşya modelinden, elde eşya varken aletli tür seçilmez; kıpırdanma sürerken eşya
+  kuşanılırsa kolu meşgul eden ya da aletli tür biter, eşya ağda gittiği için uzakta da). Bekleme ağırlık haritası her
+  karede (yürürken ve başka durumdayken de) ilerler: yürüyüşle biten çeşit bir sonraki duruşta yeniden belirmez. Motion zamanlamaz, yalnız `setIdleVariant` ile çeşidi oynatır. **Ağda:** sahibi `play('fidget', süre,
+  tür)` eylemini yazar (oyuncu: anim durumu; bot: anlık görüntüde `a[16]`, `Avatar.netFidget`); uzak avatarlar ve
+  bot vekilleri hiç zamanlamaz, gelen türü oynar. Yağmacılar `observer` kişiliğinde.
 - **Etkileşim hizası ve zaman çizelgesi:** etkileşimde oyuncu önce hedefe döner (`Player.faceTo`, hareket
   yoksa 0,5 sn); yerden alma eşyayı klibin eğilme anında (0,42 sn; yürürken 0,28) envantere ekler, kapı el kola
   değince (0,22 sn) hareket eder (`Interact.later`). Basılı tutmalı işler zaten bitişte uygulanır.
+- **Etkileşim klipleri çeşide göre (`UAL_ACTIONS` 'tür:çeşit'):** arama/işler hedefin yüksekliğine ve türüne göre
+  kendi klibini oynar — yerde diz çöküp onarma (`search`/`search:low`), sandık/kapaklı kutu (`search:chest`,
+  Chest_Open), tezgâh/raf (`search:mid`, `search:high`), yakıt ve sulama (`search:pour`, Farm_Watering), ekme ve hasat
+  (Farm_PlantSeed/Farm_Harvest), levye (`search:pry`), el işi (`search:hands`); masadan alma (`pickup:table`), olta
+  çekme/kaçırma (`fish:reel`/`fish:fail`), üretimde tarife göre çekiç/balta/el (`Crafting.animFor`), inşa eden bot
+  çekiçle. Çeşidi **gönderen** çözer (`Avatar.resolveKind`: yürürken tam gövde yerine üst gövde çeşidi, koşarken iniş
+  yok) ve eylemle birlikte gönderir; alıcı kendi hızına bakmadan aynısını oynar. Yumruk/kılıç sırası yalnız vuruşla artan
+  sayaçtan gelir (oyuncuda `act[4]`, botta `bot_fx` olayındaki `n`): araya giren isabet, zıplama, kıpırdanma sırayı
+  bozmaz, her istemcide ve geç katılanda aynıdır. Diz çökme döngüsü ayağa kalkışı tekrarlamaz (döngü aralığı + gidip gelme) ve
+  bitince çıkış klibiyle kalkar (yalnız ayakta dururken ve diz çökme bittiyse; döngü aralığına varmadan bırakılan
+  arama/kaldırma/levye yalnız söner). Basılı tutma kendi eylemini bitirir (`hold.act`), atlama/
+  takla/havada/tırmanmada iptal olur. Gitar prosedürel çalma pozuyla (`Animations.guitar`).
 - **Modeller:** Quaternius "Ultimate Modular Men/Women" (CC0) — kafa/gövde/bacak/ayak kıyafet setleri tek
   62 kemikli iskelette (`tools/pack-characters.mjs` → `assets/models/rigged/men.glb`, `women.glb`).
   `CharacterFactory.ModularBase` parçaları bağlama pozunda doğrusal deri dönüşümüyle tek ağa birleştirir;
   karakter başına seçilen 4 parça sıkı bir geometride paylaşılır (kombinasyon önbelleği). Renk yuvaları
-  (ten, saç, üst, alt, ayakkabı…) köşe renkleriyle boyanır; `null` yuva setin özgün rengini korur.
-  Aksesuarlar (çanta, şapka, gözlük, dürbün, stetoskop…) kemik bağlantı noktalarına takılır ve yaylı
-  sönümlü ikincil hareketle sallanır. Zombiler aynı hattan solmuş/kanlı kıyafetle üretilir.
+  (ten, saç, üst, gövdenin ikinci kumaşı — gömlek/yelek, `look.top.color2` —, alt, ayakkabı, taban —
+  `look.soleColor`; ayakkabının yere değen yüzleri, `refineSlots`) köşe renkleriyle boyanır; `null` yuva setin
+  özgün rengini korur. Aksesuarlar (çanta, şapka, gözlük, dürbün, stetoskop…) kemik bağlantı noktalarına takılır
+  ve yaylı sönümlü ikincil hareketle sallanır. Gövde yüzeyini izleyen kayışlar (sırt çantası askıları, omuz
+  çantası) ise gövdenin iskeletine bağlı tek derili ağdır (`strapMesh`: köşeler altlarındaki gövde üçgeninin deri
+  ağırlıklarını alır, omuz/göğüs/karınla birlikte bükülür, sallanmaz). Omuz üstünden geçen parçada her kenar kendi
+  ızgara sütunlarının profilini izler (trapez kası dışa doğru alçalır; iki kenar aynı satırlarda eşlenir, en büyük
+  boşluk ~1,3 cm). Omuz çantasının kendisi de kalçada sabit grup (sallanınca uyluğa giriyordu), iç yüzü kalça
+  genişliğinin çantanın tüm yüksekliğindeki en büyüğüne göre yerleşir. Kol saati ön kola (LowerArmL) takılır. Bu
+  yüzey verisi (`ModularBase.surface`: gövde ızgarası + bilek kesiti) tembel hesaplanır, zombiler ödemez.
+  Zombiler aynı hattan solmuş/kanlı kıyafetle üretilir; yağmacının kiti (`raiderLook`) zombieLook'un tohumla seçtiği
+  tabanla (kadın/erkek) giydirilir.
 - **Hareket kütüphanesi:** Quaternius "Universal Animation Library" 1+2 (CC0) — UE tipi iskelet için 154 klip,
   `tools/retarget-ual.mjs` + `tests/dev/retarget.html` ile oyunun iskeletine aktarılır: dünya uzayında dinlenme
   pozuna göre göreli dönüş, kalça çevirisi boy oranıyla, IK ayak kemikleri incik ucuna. Araç ayrıca her
@@ -206,13 +259,36 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   ölçülmüş adım mesafesi ile ilerler (ayak kayması en aza iner). 8 yön karışımı (komşu iki yön), hıza göre
   yürüme ↔ koşu ↔ depar. Kişiliğe göre bekleme ve ara sıra kıpırdanma klipleri, yorgunken nefes nefese bekleme.
   Durum geçişlerinde yatma/kalkma/eğilme klipleri. Eylemler (`Avatar.playMotion`): maskeli tek seferlik klipler
-  (tam/üst gövde/kollar), giriş/çıkış sönümü, döngü ve sonda bekleme (ölüm, uyku). Silah tutuş ve nişanları,
+  (tam/üst gövde/kollar/alt gövde), giriş/çıkış sönümü, döngü (aralık `loopFrom`, uçlarda geri dönme `pingpong`,
+  çıkış kısmı `exitTo`) ve sonda bekleme (ölüm, uyku). Yeni eylem başka grupta da olsa öncekinin çekimleri söner
+  (`endMotionAct`; eskiden duygu hareketi döngülü aramayı yetim bırakıp ayak IK'sını kapatıyordu); tam gövde döngü ve
+  ifadeler karakter yürüyünce durur, dış sistemin erken bitirdiği eylem uzaklara `stop` olarak
+  hemen yansır; son 0,25 sn içinde başka eylem (zıplama, iniş…) yazıldıysa o alıcılara ulaşana dek bekletilir. **Hareket hissi:** hızlanırken öne, yavaşlarken geriye
+  eğilme; yokuşta gövde eğimi ve basan ayağın tabanı zemine hizalı (`FootIK.alignFoot`, en çok 20°, basamak kenarında
+  düz); depardan duruşta Sprint_Exit adımı (0,4 ağırlık, `soft`: tutuş pozlarını bastırmaz); koşarak atlayış hızın %85'ini
+  atlayış yolu boyunca korur, her atlayış ve tırmanmanın sonunda girdi kilidi kalkar; 3,4–6 m düşüşte sert iniş (iniş
+  klibi koşmaya başlayınca, hız > 0,9 m/sn, kesilir). Hücum eden hayvan, ağır vuruş (%35), yakın patlama ve 6 m üstü
+  düşüş yere serer (Hit_Knockback → KipUp, 1,95 sn hareketsiz; KipUp tam girince Hit_Knockback bırakılır, kalkış
+  sonunda yeniden yatmaz; kalktıktan sonra 3,5 sn yeniden serilmez). Kurbanın istemcisi karar verir — host'un ve tek
+  oyunculunun kendi oyuncusu da aynı yoldan (`Session.hitLocal`: hasar, serilme, itiş, yakalanma) — ve `knock`
+  eylemiyle yansır; kurban bu sırada yaralı düşer, taşınır, yüzer, araca biner, uyur ya da ölürse serilme ve kalkış
+  klibi çıkışsız söner (havadayken değil). Süreli kilitler araçta, sırtta ve uykuda da azalır (`Player.tickTimers`);
+  serilmişken bırakma, ifade, üretim, eşya kullanma ve basılı tutma kapalı, balık tutma, havadaki vuruş ve bekleyen
+  uzanma iptal olur. Yerinde dönüş
+  (Turn90/Turn180, `lower` maskesi) yalnız bot ve NPC'lerde: uzak oyuncunun yönü paket adımlarıyla geldiğinden
+  izleyende sahibinin hiç görmediği dönüş klipleri oynardı. Hedef sarılmadan izlenir (±π dikişinde kök sıçramaz; hedef
+  bir karede 0,5 rad'dan çok değişirse dönüş kesilir, yenisi başlar); dönüş bitince açısal hız sıfırlanır (klibin
+  kuyruğunda yan adım yürüyüşüne atlamaz). Yerel isabet tepkisi anim durumunun kendi alanında (`hit`:
+  [sayaç, klip dizini]) gider, eylem yuvasını kullanmaz (hemen önce yazılan serilme/durdurma/basılı tutmayı ezmez);
+  uzak avatar sayaç değişince bir kez sarsılır, ilk görüşte eski isabeti oynamaz. El sallama bir kez (2,4 sn) her
+  istemcide aynı; yeni avatar ilk karede bakış yönüne oturur. Silah tutuş ve nişanları,
   taşınma pozu ve baş eğimi prosedürel katman (`CharacterRig`, kemik başına ağırlık) olarak üstte kalır.
   Kütüphane yüklenemezse eski klip + prosedürel düzen yedek olarak çalışır. Karakter başına güncelleme ~0,05 ms.
 - **Zombiler (`ZombieView`):** aynı denetleyici zombi kümesiyle (bekleme/yürüme/koşu, tırmalama/ısırma, kapı
   yumruklama, isabet, ölüm, çığlık, yerden çıkış); türe göre oynatma hızı (şişko/iri ağır, koşucu seri) ve
   bireysel sapma; sürünenler sürünme klipleriyle. Zombi başına güncelleme ~0,03 ms.
-- Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar.
+- Ayak yere bastığında (faz 0 ve 0,5) oturum zemine göre ayak sesi çalar (`Session.stepSurface` →
+  `World.surfaceAt`; yerel oyuncu, uzak oyuncu, bot, NPC ve zombi aynı yoldan).
 
 ## Çok oyunculu (Aşama 7 ekleri)
 - **ICE/TURN:** `PeerTransport.iceServers()` varsayılan STUN listesine `window.KIYAMET_ICE`, localStorage
@@ -242,10 +318,12 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   `animal_fx` olayıyla herkese. Göçte `promoteAnimals` kopyaları gerçek simülasyona çevirir (son anlık görüntü konumu).
 - **Tüccar stoğu:** `NPCs.tradeStock(npc, gün)` tohumdan aynı başlangıcı verir; satın alma `trade_buy` eylemi →
   host stoğu düşer → `trade_stock` olayı (alıcıda para/eşya); ödenemezse `trade_refund`. Stok hoş geldin paketinde.
-- **Eylem başlangıç zamanı:** anim durumunda `act` [sayaç, klip, süre, tür] + `actT` (paket gönderilirken eylemin
+- **Eylem başlangıç zamanı:** anim durumunda `act` [sıra, tür, süre, çeşit, (yakın dövüşte) vuruş sayacı] + `actT` (paket gönderilirken eylemin
   üzerinden geçen süre); alıcı `Avatar.play(..., off = actT)` ile klibi o kadar ileriden başlatır. Ağ gecikmesi
   ayrıca eklenmez: konum da aynı gecikmeyle gösterildiğinden klip, aynı paketteki konumla eş zamanlı kalır (atlama,
-  tırmanma gibi hareket klipleri öne geçmez). Protokol sürümü 4.
+  tırmanma gibi hareket klipleri öne geçmez). Protokol sürümü 7 (eylem çeşitleri, `laugh`/`point`/`guitar`/`fidget`/
+  `knock` eylemleri, ayrı isabet alanı `hit` [sayaç, klip dizini], vuruş sayacı `act[4]`/`bot_fx.n`, bot kıpırdanması
+  `a[16]`, `carryBox` 2, taban/ikinci renk ve omuz çantası).
 - **Bağlantı sağlamlığı:** ping duvar saatiyle 2 sn'de bir; gösterge = max(son ölçüm, cevapsız en eski ping). Yerel
   taşıyıcıda host tarafı takılma koruması (kendi zamanlayıcısı 10 sn gecikirse eş süreleri sıfırlanır) ve
   `Net.peerTimeout`: hoş geldin almış ama oturumunu kurmakta olan ve katıldıktan sonraki ilk 2 dk içindeki eşe 4 dk,
@@ -342,7 +420,7 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   zombi/bot/NPC çarpışmasında engeldir, boşken mermi ve görüşü de keser. Boşken `blocksNav` açıktır: vekiller yer
   değiştirince ya da doluluk değişince `NavGrid.rebuildArea` eski + yeni alanı yeniden çizer (park etmiş araç ızgarada
   engel, zombi içinde doğmaz; sürülen araç ızgarada yok). `dispose` Rapier araç denetleyicisini ve vekilleri kaldırır.
-  Ağ protokolü 6.
+  Güncel ağ protokolü 7 (`Net.PROTOCOL`; sürüm notları orada).
 - **Atış ve yol araması:** mermi ışını kameradan çıkar (`Combat.fire` → `raycastTargets(o, d, range, near)`); dünya
   engelleri oyuncunun ışın üzerindeki izdüşümünün 0,5 m önünden itibaren sayılır (kamera araçların ve ağaçların
   içinden geçebildiği için arkadaki araç/ağaç atışı kesmesin). Zombi yol araması (`Zombies.navigate`): `findPath`

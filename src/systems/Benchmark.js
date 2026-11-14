@@ -27,7 +27,7 @@ export class Benchmark {
         const a = (k / Math.max(1, r * 1.5)) * Math.PI * 2;
         const x = x0 + Math.cos(a) * r, z = z0 + Math.sin(a) * r;
         if (T.isWater(x, z) || (W.buildingAt && W.buildingAt(x, z))) continue;
-        const road = T.surfaceAt ? T.surfaceAt(x, z) === 'asphalt' : false;
+        const road = W.surfaceAt ? W.surfaceAt(x, T.heightAt(x, z), z) === 'asphalt' : false;
         if (road) { best = { x, z }; break; }
         if (!best && r >= 24) best = { x, z };
       }

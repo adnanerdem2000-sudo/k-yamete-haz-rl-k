@@ -54,8 +54,10 @@ export class Building {
     if (y !== null && (y < this.floorY - 1.2 || y > this.floorY + this.tpl.H + 0.5)) return false;
     return true;
   }
-  roomAt(x, z) {
+  /** Noktayı içeren oda; yoksa pad > 0 ise en çok pad uzaktaki oda (kapı eşiği: dış duvar kalınlığı oda dışında kalır) */
+  roomAt(x, z, pad = 0) {
     for (const r of this.rooms) if (x >= r.minX && x <= r.maxX && z >= r.minZ && z <= r.maxZ) return r;
+    if (pad > 0) for (const r of this.rooms) if (x >= r.minX - pad && x <= r.maxX + pad && z >= r.minZ - pad && z <= r.maxZ + pad) return r;
     return null;
   }
 }
@@ -117,11 +119,13 @@ export function buildBuilding(spec, ctx) {
     const fk = r.floor || floorFor(r.type, st.floor);
     geo.box(fk, r.x0, F - 0.02, r.z0, r.x1, F, r.z1, r.floorColor || floorColor(fk, r.type), 4);
     const wb = fr.box(r.x0, r.z0, r.x1, r.z1);
-    B.rooms.push({ ...r, ...wb, label: r.name || roomLabel(r.type) });
+    // surface: odanın çizilen zemin malzemesi (ayak sesi; World.surfaceAt)
+    B.rooms.push({ ...r, ...wb, surface: FLOOR_SURFACE[fk] || 'wood', label: r.name || roomLabel(r.type) });
   }
   const fb = fr.box(0, 0, w, d);
   B.box = fb;
-  B.colliders.push(physics.addFloor(fb.minX, fb.minZ, fb.maxX, fb.maxZ, B.floorY, { owner: B }));
+  // döşemenin kendi malzemesi: hiçbir odanın içinde olmayan noktalar için (binanın varsayılan zemini)
+  B.colliders.push(physics.addFloor(fb.minX, fb.minZ, fb.maxX, fb.maxZ, B.floorY, { owner: B, surface: FLOOR_SURFACE[st.floor] || 'wood' }));
 
   // ---------------------------------------------------------- dış duvarlar
   const openings = { F: [], B: [], L: [], R: [] };
@@ -177,7 +181,7 @@ export function buildBuilding(spec, ctx) {
     const p = tpl.porch;
     geo.box('wood', p.x0, F - 0.25, p.z0, p.x1, F - 0.05, p.z1, '#a77b52');
     const pb = fr.box(p.x0, p.z0, p.x1, p.z1);
-    B.colliders.push(physics.addFloor(pb.minX, pb.minZ, pb.maxX, pb.maxZ, baseY + F - 0.05, { owner: B }));
+    B.colliders.push(physics.addFloor(pb.minX, pb.minZ, pb.maxX, pb.maxZ, baseY + F - 0.05, { owner: B, surface: 'wood' }));
     if (p.roof) {
       for (const px of [p.x0 + 0.15, p.x1 - 0.15]) geo.box('wood', px - 0.08, F, p.z1 - 0.25, px + 0.08, H - 0.2, p.z1 - 0.09, trimCol);
       roofGeo.box('wood', p.x0 - 0.2, H - 0.2, p.z0, p.x1 + 0.2, H - 0.05, p.z1 + 0.25, st.roofColor || '#7a3a2a');
@@ -303,10 +307,10 @@ function buildKitBuilding(spec, tpl, ctx, rng) {
   for (const r of tpl.rooms) {
     const fk = r.floor || floorFor(r.type, st.floor);
     geo.box(fk, r.x0, F - 0.02, r.z0, r.x1, F, r.z1, r.floorColor || floorColor(fk, r.type), 4);
-    B.rooms.push({ ...r, ...fr.box(r.x0, r.z0, r.x1, r.z1), label: r.name || roomLabel(r.type) });
+    B.rooms.push({ ...r, ...fr.box(r.x0, r.z0, r.x1, r.z1), surface: FLOOR_SURFACE[fk] || 'wood', label: r.name || roomLabel(r.type) });
   }
   const ib = fr.box(0, 0, w, d);
-  B.colliders.push(physics.addFloor(ib.minX, ib.minZ, ib.maxX, ib.maxZ, B.floorY, { owner: B }));
+  B.colliders.push(physics.addFloor(ib.minX, ib.minZ, ib.maxX, ib.maxZ, B.floorY, { owner: B, surface: FLOOR_SURFACE[st.floor] || 'wood' }));
   geo.box('interior', 0, F + H, 0, w, F + H + 0.1, d, st.ceilColor || '#d8d3ca', 4 | 8); // tavan (alt + üst yüz: kapı üstü camdan bakınca delik görünmesin)
   // tavan döşemesi: üçüncü şahıs kamerası içerideyken kulenin boş üst katlarına çıkmasın (görüş ışınını keser)
   B.colliders.push(physics.addBox(ib.minX, ib.minZ, ib.maxX, ib.maxZ, baseY + F + H, baseY + F + H + 0.3, { kind: 'wall', owner: B, walkable: false }));
@@ -340,11 +344,11 @@ function buildKitBuilding(spec, tpl, ctx, rng) {
   }
   // eşik: duvar kalınlığı boyunca kapı boşluğunda zemin (iç zemin duvarın iç yüzünde biter; küçük kulede zemin 1 m yüksekte
   // olduğu için tek noktadan zemin arayan zombi/NPC/bot eşikteki 17 cm'lik boşluğa düşüp takılıyordu)
-  { const th = wbox(dx0, iz1 - 0.05, dx1, ez1 + 0.05); B.colliders.push(physics.addFloor(th.minX, th.minZ, th.maxX, th.maxZ, B.floorY, { owner: B })); }
+  { const th = wbox(dx0, iz1 - 0.05, dx1, ez1 + 0.05); B.colliders.push(physics.addFloor(th.minX, th.minZ, th.maxX, th.maxZ, B.floorY, { owner: B, surface: 'concrete' })); }
   // kapı önü basamakları (küçük kulede zemin 1 m yüksekte): yürünebilir, yol ızgarasını kapatmaz
   for (const [z0, z1, top] of K.steps || []) {
     const b = wbox(dx0 - 0.5, z0, dx1 + 0.5, z1);
-    B.colliders.push(physics.addBox(b.minX, b.minZ, b.maxX, b.maxZ, baseY - 0.3, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false }));
+    B.colliders.push(physics.addBox(b.minX, b.minZ, b.maxX, b.maxZ, baseY - 0.3, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false, surface: 'concrete' }));
   }
 
   // ---------------------------------------------------------- kapı ve açıklıklar (mobilya yerleşimi için)
@@ -601,7 +605,7 @@ function addDoorstep(B, fr, side, op, tpl, geo, ctx, baseY, F) {
   const top = F - 0.08;
   geo.box('concrete', box[0], -0.6, box[1], box[2], top, box[3], '#a39d92', 63 & ~8);
   const wb = fr.box(box[0], box[1], box[2], box[3]);
-  B.colliders.push(ctx.physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY - 0.6, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false, blocksBullets: false }));
+  B.colliders.push(ctx.physics.addBox(wb.minX, wb.minZ, wb.maxX, wb.maxZ, baseY - 0.6, baseY + top, { kind: 'prop', owner: B, walkable: true, blocksNav: false, blocksSight: false, blocksBullets: false, surface: 'concrete' }));
 }
 
 function createInteriorDoor(B, fr, seg, op, ctx) {
@@ -835,6 +839,9 @@ function addSign(B, fr, tpl, text, ctx, H, F) {
 }
 
 // ======================================================================= yardımcılar
+
+/** Zemin malzemesi anahtarı (Geo) → yüzey (World.surfaceAt: ayak sesi, araç tutunması) */
+export const FLOOR_SURFACE = { woodfloor: 'wood', wood: 'wood', tiles: 'tile', concrete: 'concrete', carpet: 'carpet' };
 
 function floorFor(type, def) {
   if (['bathroom', 'kitchen', 'ward', 'surgery', 'lab', 'lobby_med', 'pharmacy_store', 'shop_hall', 'restaurant_hall', 'cafe_hall', 'cells'].includes(type)) return 'tiles';

@@ -24,6 +24,24 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   });
   log('eşya bırakıldı', r0);
   await simWait(30);
+  // eşya rastgele dönüyle düşüp yuvarlanır (GroundItems.add spin): durmasını bekle. Yuvarlanan eşya alma menzilinin
+  // (1,7 m) dışına çıkabilir: oyuncuyu duran eşyaya giden doğru üzerinde 1,1 m'ye taşı ve eşya ~55° sağında kalacak
+  // biçimde çevir (kamera arkada). Beklenen son yön duran eşyanın gerçek yönüdür, sabit 0,95 değil.
+  for (let i = 0; i < 40; i++) {
+    if (await evalJS(page, () => { const it = [...window.__game.session.ground.items.values()][0]; return !it || it.rest; })) break;
+    await simWait(15);
+  }
+  const aim = await evalJS(page, () => {
+    const S = window.__game.session, pl = S.local, it = [...S.ground.items.values()][0];
+    if (!it) return { err: 'eşya yok' };
+    const d0 = Math.hypot(it.x - pl.pos.x, it.z - pl.pos.z);
+    const want = Math.atan2(it.x - pl.pos.x, it.z - pl.pos.z);
+    pl.spawnAt(it.x - Math.sin(want) * 1.1, pl.pos.y, it.z - Math.cos(want) * 1.1, want - 0.95);
+    return { rest: it.rest, want: +want.toFixed(3), yaw0: +pl.yaw.toFixed(3), d0: +d0.toFixed(2), d: +Math.hypot(it.x - pl.pos.x, it.z - pl.pos.z).toFixed(2) };
+  });
+  log('duran eşya', aim);
+  check(aim.rest === true, 'bırakılan eşya durmalı (yuvarlanması bitmeli)', aim);
+  await simWait(6);
   const tgt = await evalJS(page, () => { try { const t = window.__game.session.interact.findTarget(); return t && { kind: t.kind, label: t.label, at: t.at && [+t.at.x.toFixed(2), +t.at.z.toFixed(2)] }; } catch (e) { return { err: e.stack.split('\n').slice(0, 4).join(' | ') }; } });
   log('hedef', tgt);
   check(tgt && tgt.kind === 'ground', 'yerdeki eşya hedef olmalı', tgt);
@@ -61,7 +79,8 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   const late = { bandage: await count(), yaw: await evalJS(page, () => +window.__game.session.local.yaw.toFixed(2)), ground: await evalJS(page, () => window.__game.session.ground.items.size) };
   log('E sonrası 1,3 sn', late);
   check(late.bandage === r0.bandage + 1, 'eşya eğilme anında envantere girmeli', late);
-  check(Math.abs(late.yaw - 0.95) < 0.45, 'oyuncu eşyaya dönmeli (~0,95 rad)', late);
+  const turnErr = Math.abs(Math.atan2(Math.sin(late.yaw - aim.want), Math.cos(late.yaw - aim.want)));
+  check(turnErr < 0.2, 'oyuncu duran eşyaya dönmeli (başlangıçta ~0,95 rad yanda)', { ...late, want: aim.want, yaw0: aim.yaw0, hata: +turnErr.toFixed(3) });
   await shot(page, '/tmp/interact-pickup.png');
   // 2) kapı: en yakın kapının önüne, kapıya 40° açıyla dur; E → önce dön, 0,22 sn sonra kapı hareket eder
   const d0 = await evalJS(page, () => {

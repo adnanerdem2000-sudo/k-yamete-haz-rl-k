@@ -3,7 +3,7 @@
 import { h, clear, portrait, bar, button, banner } from './dom.js';
 import { Settings, DEFAULT_BINDINGS, ACTION_LABELS, applyQualityPreset } from '../core/Settings.js';
 import { keyLabel } from '../core/Input.js';
-import { CHARACTERS, CHARACTER_IDS, OPTIONS, PALETTES, COLLECTIONS, BASE_FACES, OUTFIT_SETS, OUTFIT_NAMES } from '../entities/CharacterFactory.js';
+import { CHARACTERS, CHARACTER_IDS, OPTIONS, PALETTES, COLLECTIONS, BASE_FACES, OUTFIT_SETS, OUTFIT_NAMES, migrateLook } from '../entities/CharacterFactory.js';
 import { SaveSystem, SLOT_NAMES } from '../systems/SaveSystem.js';
 import { MAX_PLAYERS } from '../net/Net.js';
 import { DIFFICULTY } from '../Session.js';
@@ -274,7 +274,7 @@ export class Menus {
     const ov = (Settings.get('player.appearance') || {})[charId] || {};
     const look = { ...c.look, ...ov, top: { ...c.look.top, ...(ov.top || {}) }, pants: { ...c.look.pants, ...(ov.pants || {}) } };
     if (c.look.outfit || ov.outfit) look.outfit = { ...(c.look.outfit || {}), ...(ov.outfit || {}) };
-    return look;
+    return migrateLook(c.id, look);
   }
 
   saveLook(charId, look) {
@@ -300,10 +300,11 @@ export class Menus {
       if (this.custTab === 'collections') {
         body = h('div.cust-body', h('p.muted', 'Hazır kıyafet koleksiyonları (karakterin yüzü ve saçı korunur):'),
           h('div.collections', Object.entries(COLLECTIONS).map(([name, c]) => button(name, () => {
-            // koleksiyon: cinsiyete göre modüler set + renk/aksesuar; yüz, saç ve ten korunur
+            // koleksiyon: cinsiyete göre modüler gövde/bacak/ayak seti + renk/aksesuar; yüz, saç ve ten korunur (kafa
+            // parçası karakterinki kalır; koleksiyonun başlığı/kaskı şapka yuvasından gelir)
             const o = c.outfit && c.outfit[gender(look)];
             const { outfit: _o, ...rest } = c;
-            set({ ...rest, outfit: o ? { head: o.head, body: o.body, legs: o.legs || o.body, feet: o.feet || o.body } : look.outfit, top: { ...look.top, ...c.top }, pants: { ...look.pants, ...c.pants } });
+            set({ ...rest, outfit: o ? { head: look.outfit && look.outfit.head, body: o.body, legs: o.legs || o.body, feet: o.feet || o.body } : look.outfit, top: { ...look.top, ...c.top }, pants: { ...look.pants, ...c.pants } });
             if (this.game.menu) this.game.menu.showcase(this.lookFor(id));
             render();
           }, 'coll'))),
@@ -327,13 +328,17 @@ export class Menus {
         const G = OUTFIT_SETS[gender(look)];
         const names = Object.fromEntries(G.body.map((k) => [k, OUTFIT_NAMES[k] || k]));
         const orig = (label, fn) => button(label, () => { fn(); render(); }, 'small ghost');
+        // ikinci renk (gömlek/yelek: gövde parçasının ikinci kumaşı) yalnız böyle bir kumaşı olan üstlerde gösterilir
+        const sec = this.game.charFactory ? this.game.charFactory.bodySecondary(gender(look), look.outfit.body) : null;
         body = h('div.cust-body',
           sel('Üst', names, look.outfit.body, (v) => set({ outfit: { ...look.outfit, body: v } })),
           h('div.opt-label', 'Üst rengi'), swatches(PALETTES.cloth, look.top.color, (v) => setNested('top', { color: v })), orig('Özgün renk', () => setNested('top', { color: null })),
+          sec !== false ? [h('div.opt-label', 'İkinci renk (gömlek / yelek)'), swatches(PALETTES.cloth, look.top.color2, (v) => setNested('top', { color2: v })), orig('Özgün renk', () => setNested('top', { color2: null }))] : null,
           sel('Alt', names, look.outfit.legs || look.outfit.body, (v) => set({ outfit: { ...look.outfit, legs: v } })),
           h('div.opt-label', 'Alt rengi'), swatches(PALETTES.cloth, look.pants.color, (v) => setNested('pants', { color: v })), orig('Özgün renk', () => setNested('pants', { color: null })),
           sel('Ayakkabı', names, look.outfit.feet || look.outfit.body, (v) => set({ outfit: { ...look.outfit, feet: v } })),
-          h('div.opt-label', 'Ayakkabı rengi'), swatches(PALETTES.cloth, look.shoes, (v) => set({ shoes: v })), orig('Özgün renk', () => set({ shoes: null })));
+          h('div.opt-label', 'Ayakkabı rengi'), swatches(PALETTES.cloth, look.shoes, (v) => set({ shoes: v })), orig('Özgün renk', () => set({ shoes: null })),
+          h('div.opt-label', 'Taban rengi'), swatches(PALETTES.cloth, look.soleColor, (v) => set({ soleColor: v })), orig('Özgün renk', () => set({ soleColor: null })));
       } else if (this.custTab === 'clothes') {
         body = h('div.cust-body',
           sel('Üst', OPTIONS.topStyle, look.top.style, (v) => setNested('top', { style: v })),

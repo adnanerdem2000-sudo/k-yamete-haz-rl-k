@@ -23,6 +23,11 @@ export const SURFACES = {
   rock: { grip: 0.85, roll: 0.03, dust: 0.3, wet: 0.7 },
   snow: { grip: 0.42, roll: 0.1, dust: 0.4, wet: 0.9 },
 };
+// World.surfaceAt malzemesi → SURFACES anahtarı (tabloda olmayanlar): çakıl yol toprak gibi, sığ su kum gibi;
+// ahşap iskele, karo ve halı (bina zemini, havuz kenarı) beton gibi; metal (konteyner, enkaz üstü) asfalt gibi
+const DRIVE_ALIAS = { gravel: 'dirt', water: 'sand', wood: 'concrete', tile: 'concrete', carpet: 'concrete', metal: 'asphalt' };
+/** Sürüş yüzeyi: World.surfaceAt malzemesi → SURFACES anahtarı */
+export const driveSurface = (m) => (SURFACES[m] ? m : DRIVE_ALIAS[m] || 'asphalt');
 
 export const VEHICLE_TYPES = {
   sedan: { name: 'Aile Arabası', mass: 1250, drive: 'fwd', model: 'sedan', scale: 1.7, maxSpeed: 27, accel: 7.5, fuelCap: 45, trunk: 16, hp: 100, grip: 1.0, offroad: 0.55, seats: 4, len: 4.2, wid: 2.2 },
@@ -548,7 +553,7 @@ export class Vehicles {
           S.act('vehicle_set', { id: v.id, fuel: v.fuel + add });
           if (v.type === 'boat') S.act('flag', { flag: 'boat_fuel', value: Math.round(v.fuel + add) });
           S.ui.toast(`${Math.round(add)} L yakıt eklendi.`, 'good');
-        }, 'search');
+        }, 'search:pour'); // bidondan depoya dökme
         break;
       }
       case 'repair': {
@@ -561,7 +566,7 @@ export class Vehicles {
           const nh = v.wrecked ? v.maxHealth * 0.4 : Math.min(v.maxHealth, v.health + v.maxHealth * 0.35 * mul);
           S.act('vehicle_set', { id: v.id, health: nh, wrecked: false });
           S.ui.toast('Araç onarıldı.', 'good');
-        }, 'hammer');
+        }, 'search:low'); // aracın yanında diz çöküp onarma
         break;
       }
       case 'fix': {
@@ -577,7 +582,7 @@ export class Vehicles {
           S.quests.onRepair('vehicle:' + v.id);
           if (tm.extra) S.time.advance(tm.extra);
           S.ui.toast(`${v.def.name} çalışıyor!`, 'good', 3);
-        }, 'hammer');
+        }, 'search:low');
         break;
       }
       case 'upgrade': S.ui.openVehicle(v); break;
@@ -747,8 +752,11 @@ export class Vehicles {
     // uyuyan şasi: araç denetleyicisi uyuyan gövdeyi hareket ettirmez (düz zeminde 2 sn durunca uyur) → sürücü girdi verince uyandır
     if (local && (thr || steerIn || hb) && v.body.isSleeping()) v.body.wakeUp();
     const force = v.mass * d.accel * (v.upgrades.engine ? 1.2 : 1) * 0.62;
-    // zemin tipi: yüzey sınıfı (asfalt/beton/toprak/çim/kum/kaya/kar) × aracın arazi yeteneği; ıslakta kayganlaşır
-    const surf = T.surfaceAt ? T.surfaceAt(t.x, t.z) : 'asphalt';
+    // zemin tipi: yüzey sınıfı (asfalt/beton/toprak/çim/kum/kaya/kar) × aracın arazi yeteneği; ıslakta kayganlaşır.
+    // Tek yüzey sınıflayıcı (World.surfaceAt): gövde kökü modelin tabanında, +0,5 m yoklama zemine ya da tabliyeye
+    // (köprü, otopark, iskele, garaj) ~0,3 m içinde kalır; reach sınırsız (araç her zaman bir şeyin üstündedir)
+    const W = S.world;
+    const surf = W.surfaceAt ? driveSurface(W.surfaceAt(t.x, t.y + 0.5, t.z, Infinity)) : 'asphalt';
     const SF = SURFACES[surf] || SURFACES.asphalt;
     v.surface = surf;
     const offCap = Math.min(1, d.offroad + (v.upgrades.tires ? 0.25 : 0));
@@ -881,8 +889,8 @@ export class Vehicles {
     const tg = v.netTarget;
     if (!tg) return;
     // zemin türü uzaktan sürülen araçta da güncel kalsın (yolcunun lastik sesi asfalt/çim ayrımı)
-    const T = this.s.world.terrain;
-    if (T.surfaceAt) v.surface = T.surfaceAt(tg.x, tg.z);
+    const W = this.s.world;
+    if (W.surfaceAt) v.surface = driveSurface(W.surfaceAt(tg.x, tg.y + 0.5, tg.z, Infinity));
     const t = v.body.translation();
     const k = Math.min(1, h * 12);
     v.body.setNextKinematicTranslation({ x: t.x + (tg.x - t.x) * k, y: t.y + (tg.y - t.y) * k, z: t.z + (tg.z - t.z) * k });
@@ -1014,11 +1022,9 @@ export class Vehicles {
   dustTrail(v, dt) {
     const sp = Math.abs(v.speed || 0);
     if (sp < 6 || v.def.water || !v.pos) return;
-    const S = this.s, T = S.world.terrain;
+    const S = this.s;
     if (S.env && S.env.weather && S.env.weather.rain > 0.2) return;
-    const ix = Math.round((v.pos.x + T.half) / T.cell), iz = Math.round((v.pos.z + T.half) / T.cell);
-    const k = T.idx(clamp(ix, 0, T.N), clamp(iz, 0, T.N));
-    if (T.roadMask[k] >= 1) return; // asfalt (yol kenarı/toprak geçişte toz olur)
+    // v.surface (stepCar/stepRemote: World.surfaceAt): asfaltta toz katsayısı 0
     const dustK = (SURFACES[v.surface || 'grass'] || SURFACES.grass).dust;
     if (dustK <= 0 || Math.random() > dt * sp * 0.9 * dustK) return;
     const bx = v.pos.x - Math.sin(v.yaw) * v.def.len * 0.45, bz = v.pos.z - Math.cos(v.yaw) * v.def.len * 0.45;

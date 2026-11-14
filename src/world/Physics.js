@@ -15,10 +15,12 @@ export class Collider {
     this.minY = o.minY ?? -50; this.maxY = o.maxY ?? 100;
     this.kind = o.kind || 'static';     // wall | prop | door | window | structure | tree | vehicle | fence | rock
     this.owner = o.owner || null;
+    this.surface = o.surface || null;     // yüzey malzemesi (World.surfaceAt): yoksa türden ya da bina odasından
     this.walkable = o.walkable !== false; // üstüne çıkılabilir mi
     this.blocksNav = o.blocksNav !== false;
     this.blocksSight = o.blocksSight !== false;
     this.blocksBullets = o.blocksBullets !== false;
+    if (o.noPhysics) this.noPhysics = true; // Rapier'e aynalanmaz (araç vekili, oyuncu halısının ince zemini)
     this.enabled = true;
     this.cells = [];
   }

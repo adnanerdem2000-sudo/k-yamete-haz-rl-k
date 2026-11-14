@@ -271,7 +271,8 @@ export class PhysProps {
     this.burst(x, y + 0.5, z, 'metal', 6);
     const p = S.local.pos, at = { x, y, z };
     const dl = dist(p.x, p.z, x, z), same = S.sameLevel(p, at); // toprağın öbür yanındaki (sığınaktaki) patlamadan etkilenmez
-    if (dl < radius && same) { S.damageLocal((1 - dl / radius) * 55, 'explosion'); S.local.camShake = 1; }
+    // yakın patlama yere serer (her istemci kendi oyuncusu için karar verir, 'knock' eylemiyle yansır)
+    if (dl < radius && same) { S.damageLocal((1 - dl / radius) * 55, 'explosion'); S.local.camShake = 1; if (dl < radius * 0.6 && S.local.knockdown) S.local.knockdown(); }
     else if (dl < radius * 3) S.local.camShake = Math.max(S.local.camShake, 0.6 * (1 - dl / (radius * 3)));
     if (S.isHost) {
       for (const zb of S.zombies.list.values()) {

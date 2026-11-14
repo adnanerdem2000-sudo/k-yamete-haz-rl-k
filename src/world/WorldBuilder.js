@@ -7,7 +7,7 @@ import { NavGrid } from './NavGrid.js';
 import { Instancer } from './Instancer.js';
 import { buildBuilding, DoorRenderer } from './BuildingGen.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { buildRoads, onRoad } from './Roads.js';
+import { buildRoads, onRoad, roadSurfaceAt } from './Roads.js';
 import { Vegetation } from './Vegetation.js';
 import { Water } from './Water.js';
 import { Sky } from './Sky.js';
@@ -30,6 +30,19 @@ const W_CONTAINER_BASE = 747;
 const ABANDONED_TYPE = { car_sedan: 'sedan', car_hatchback: 'hatchback', car_stationwagon: 'suvlux', car_taxi: 'taxi' };
 // tozlu, solmuş boyalar (terk edilmiş arabalar)
 const DUSTY_PAINTS = ['#7a2e2a', '#2f4f6f', '#4a5d3a', '#8a7a5a', '#5c5c5c', '#c8c2b0', '#6b3f5a', '#30363d', '#9a6a2a', '#3f6b6b'];
+
+// ---- yüzey sınıflayıcı (World.surfaceAt)
+/** Yüzey malzemeleri: ayak sesi (AudioManager.STEP_SOUND) ve sürüş (Vehicles.driveSurface) kendi tablosuna eşler */
+export const SURFACE_MATERIALS = ['asphalt', 'concrete', 'rock', 'gravel', 'dirt', 'grass', 'sand', 'snow', 'water', 'wood', 'tile', 'carpet', 'metal'];
+// etiketsiz (surface verilmemiş) basılabilir çarpıştırıcının türüne göre malzemesi; listede olmayan tür (zemin, duvar,
+// baraj…) 'concrete'
+const KIND_SURFACE = { rock: 'rock', tree: 'wood', fence: 'wood', prop: 'wood', vehicle: 'metal' };
+// oyuncu yapıları: sebze tarhı; adında metal geçenler (metal duvar/barikat) metal; diğerleri tahta. Halının yapı kutusu
+// yok (içinden geçilir): ince zemini 'carpet' etiketini kendisi taşır (Build.buildVisual)
+const STRUCT_SURFACE = { garden_plot: 'dirt' };
+// ayak izi yarıçapı: dış kapı boşluğunda duvar kalınlığı döşemenin ve basamağın dışında kalır (≈0,12 m'lik şerit);
+// yarıçap ayağı taşıyan yüzeyi bulur, eşikteki adım araziyi (çim) okumaz
+const FOOT_R = 0.15;
 
 export class World {
   constructor(assets, scene) {
@@ -339,6 +352,36 @@ export class World {
     return null;
   }
 
+  /**
+   * Tek yüzey sınıflayıcı: ayak sesleri (yerel/uzak oyuncu, bot, NPC, zombi), araç tutunması/lastik sesi/tozu, Benchmark.
+   * Dönüş: SURFACE_MATERIALS'tan biri. y: ayak (ya da yoklama) yüksekliği. Sıra: yer altı sığınağı bölgesi → ayağı
+   * taşıyan basılabilir çarpıştırıcı (bina odasının zemini, etiketli yapı, türün malzemesi) → su → yol şeridi/kaldırım
+   * → biyom. reach: taşıyan yüzey y'nin en çok bu kadar altında olabilir; daha aşağıdaysa karakter çarpışma dünyasında
+   * olmayan bir şeyin (araç tavanı, dinamik kasa) üstündedir. Araçlar reach = Infinity verir. Ağ verisi gerekmez: her eş
+   * aynı deterministik dünya verisini, kopyalanan konumlarla sınıflar.
+   */
+  surfaceAt(x, y, z, reach = 0.45) {
+    const T = this.terrain, P = this.physics;
+    const th = T.heightAt(x, z);
+    if (this.under && y < th - 1) {
+      const Z = this.under.zoneAt(x, y + 0.5, z);
+      if (Z) return Z.surface || (Z.cave ? 'gravel' : 'concrete');
+    }
+    // ayağın 0,35 m üstüne kadar: karakter denetleyicisi payı (0,03), ağ yuvarlaması ve ara değerleme gecikmesi
+    const top = P.groundHeight(x, z, y, 0.35, FOOT_R);
+    const c = P.lastSurface;
+    if (y - top > reach) return y - top > 1.2 ? 'metal' : 'wood';
+    if (c) {
+      const O = c.owner;
+      if (c.kind === 'floor' && O && O.roomAt) { const r = O.roomAt(x, z, FOOT_R); if (r && r.surface) return r.surface; }
+      if (c.surface) return c.surface;
+      if (c.kind === 'structure') { const t = (O && O.type) || ''; return STRUCT_SURFACE[t] || (/metal/.test(t) ? 'metal' : 'wood'); }
+      return KIND_SURFACE[c.kind] || 'concrete';
+    }
+    if (T.waterLevelAt(x, z) > th + 0.05) return 'water';
+    return roadSurfaceAt(x, z) || T.biomeMaterial(x, z);
+  }
+
   homeSpawn() {
     const h = this.home;
     const p = h.frame.pt(5, 14.6);
@@ -562,7 +605,7 @@ export class World {
     // yağmur suyu deposu yeri, jeneratör, sığınak kapağı
     const gx = -268, gz = 137.5;
     P.generatorModel(g, gx, T.heightAt(gx, gz), gz, Math.PI / 2, true);
-    this.physics.addBoxC(gx, gz, 0.5, 0.75, T.heightAt(gx, gz), T.heightAt(gx, gz) + 1.15, { kind: 'prop' });
+    this.physics.addBoxC(gx, gz, 0.5, 0.75, T.heightAt(gx, gz), T.heightAt(gx, gz) + 1.15, { kind: 'prop', surface: 'metal' });
     this.interactable('generator', gx, T.heightAt(gx, gz) + 0.9, gz, { name: 'Eski Jeneratör' });
     const bx = -284, bz = 128;
     P.bunkerHatch(g, bx, T.heightAt(bx, bz), bz);
@@ -600,9 +643,9 @@ export class World {
     // park
     const px = -194, pz = 212;
     this.instancer.place('buildings', 'pavement-fountain', px, T.heightAt(px, pz), pz, 0, 9);
-    this.physics.addBoxC(px, pz, 3.2, 3.2, T.heightAt(px, pz), T.heightAt(px, pz) + 1.2, { kind: 'prop', walkable: true });
+    this.physics.addBoxC(px, pz, 3.2, 3.2, T.heightAt(px, pz), T.heightAt(px, pz) + 1.2, { kind: 'prop', walkable: true, surface: 'concrete' });
     P.playground(g, -210, T.heightAt(-210, 228), 228);
-    this.physics.addBoxC(-210, 226.5, 0.8, 2.4, T.heightAt(-210, 228), T.heightAt(-210, 228) + 2.2, { kind: 'prop' });
+    this.physics.addBoxC(-210, 226.5, 0.8, 2.4, T.heightAt(-210, 228), T.heightAt(-210, 228) + 2.2, { kind: 'prop', surface: 'metal' });
     for (const [bx2, bz2, br] of [[-186, 200, 0], [-202, 200, 0], [-180, 222, Math.PI / 2], [-176, 205, -Math.PI / 2]]) {
       this.instancer.place('props', 'bench', bx2, T.heightAt(bx2, bz2), bz2, br, 5);
       this.physics.addBoxC(bx2, bz2, br ? 0.4 : 1.0, br ? 1.0 : 0.4, T.heightAt(bx2, bz2), T.heightAt(bx2, bz2) + 0.5, { kind: 'prop' });
@@ -612,10 +655,10 @@ export class World {
     for (const [cx, cz, cr] of [[-200, 166.2, Math.PI / 2 + 0.2], [-120.5, 205, 0.1], [-150, 173.8, -Math.PI / 2 + 0.1], [-236, 238, 0.05]]) this.abandonedCar(cx, cz, cr, rng, rng.chance(0.4));
     // ufak barikatlar ve çöpler
     this.instancer.place('props', 'dumpster', -58, T.heightAt(-58, 160), 160, 0, 6);
-    this.physics.addBoxC(-58, 160, 1.7, 1.05, T.heightAt(-58, 160), T.heightAt(-58, 160) + 1.9, { kind: 'prop' });
+    this.physics.addBoxC(-58, 160, 1.7, 1.05, T.heightAt(-58, 160), T.heightAt(-58, 160) + 1.9, { kind: 'prop', surface: 'metal' });
     this.container('dumpster', -58, 161.5, { h: 1.0 });
     this.instancer.place('props', 'dumpster', -108, T.heightAt(-108, 181), 181, Math.PI, 6);
-    this.physics.addBoxC(-108, 181, 1.7, 1.05, T.heightAt(-108, 181), T.heightAt(-108, 181) + 1.9, { kind: 'prop' });
+    this.physics.addBoxC(-108, 181, 1.7, 1.05, T.heightAt(-108, 181), T.heightAt(-108, 181) + 1.9, { kind: 'prop', surface: 'metal' });
     this.container('dumpster', -108, 179.5, { h: 1.0 });
   }
 
@@ -629,7 +672,7 @@ export class World {
       const y = T.heightAt((x0 + x1) / 2, (z0 + z1) / 2) + 0.08;
       g.box('asphalt', x0, y - 0.1, z0, x1, y, z1, '#55555a');
       for (let x = x0 + 2.8; x < x1 - 1; x += 2.8) g.box('plain', x - 0.05, y, z0 + 0.5, x + 0.05, y + 0.01, z0 + 5.2, '#f0f0f0');
-      this.physics.addFloor(x0, z0, x1, z1, y);
+      this.physics.addFloor(x0, z0, x1, z1, y, { surface: 'asphalt' });
     };
     lot(18, -58, 52, -36);
     lot(92, -42, 120, -34);
@@ -647,7 +690,7 @@ export class World {
     // çöp konteynerleri, banklar, yangın muslukları
     for (const [x, z, r] of [[55, -88, 0], [128, -64, 0], [12, 4, Math.PI / 2], [60, 12, 0], [150, 30, 0], [176, -36, 0], [-60, -20, 0]]) {
       this.instancer.place('props', 'dumpster', x, T.heightAt(x, z), z, r, 6);
-      this.physics.addBoxC(x, z, r ? 1.05 : 1.7, r ? 1.7 : 1.05, T.heightAt(x, z), T.heightAt(x, z) + 1.9, { kind: 'prop' });
+      this.physics.addBoxC(x, z, r ? 1.05 : 1.7, r ? 1.7 : 1.05, T.heightAt(x, z), T.heightAt(x, z) + 1.9, { kind: 'prop', surface: 'metal' });
       this.container('dumpster', x, z + (r ? 0 : 1.5), { h: 1.0 });
     }
     for (const [x, z] of [[6, -40], [64, -36], [76, -24], [134, -24], [146, 32], [204, 32], [6, 44], [64, 44]]) {
@@ -665,14 +708,14 @@ export class World {
     P.busStop(g, 160, T.heightAt(160, -24), -23.5, 0);
     // şehir meydanı: çeşme + ağaç saksıları
     this.instancer.place('buildings', 'pavement-fountain', 35, T.heightAt(35, 55), 55, 0, 10);
-    this.physics.addBoxC(35, 55, 3.6, 3.6, T.heightAt(35, 55), T.heightAt(35, 55) + 1.3, { kind: 'prop', walkable: true });
+    this.physics.addBoxC(35, 55, 3.6, 3.6, T.heightAt(35, 55), T.heightAt(35, 55) + 1.3, { kind: 'prop', walkable: true, surface: 'concrete' });
     if (this.assets.has('city', 'Prop_Planter_Single')) {
       // meydan çevresinde beton saksılar (içinde çalı) ve araç babaları
       for (let i = 0; i < 6; i++) {
         const a = i / 6 * Math.PI * 2 + 0.3, x = 35 + Math.cos(a) * 9.5, z = 55 + Math.sin(a) * 9.5;
         if (this.blocked(x, z, 1.2)) continue;
         this.instancer.place('city', 'Prop_Planter_Single', x, T.heightAt(x, z), z, a, 1, {});
-        this.physics.addBoxC(x, z, 1.0, 1.0, T.heightAt(x, z), T.heightAt(x, z) + 0.6, { kind: 'prop', walkable: true });
+        this.physics.addBoxC(x, z, 1.0, 1.0, T.heightAt(x, z), T.heightAt(x, z) + 0.6, { kind: 'prop', walkable: true, surface: 'concrete' });
         if (this.vegetation) this.vegetation.add('flowerBush', x, z, a, 0.7, T.heightAt(x, z) + 0.55);
         else this._planters = (this._planters || []).concat([[x, z, a, T.heightAt(x, z) + 0.55]]);
       }
@@ -700,7 +743,7 @@ export class World {
     for (const [dx, dz] of [[-5, -2.5], [5, -2.5], [-5, 2.5], [5, 2.5]]) {
       const x = cx + dx, z = cz + dz;
       P.fuelPump(g, x, y, z, 0);
-      this.physics.addBoxC(x, z, 0.5, 0.35, y, y + 1.9, { kind: 'prop' });
+      this.physics.addBoxC(x, z, 0.5, 0.35, y, y + 1.9, { kind: 'prop', surface: 'metal' });
       this.interactable('fuel_pump', x, y + 1.2, z + 0.6, { name: 'Yakıt Pompası' });
     }
     for (const [dx, dz] of [[-8, -4], [8, -4], [-8, 4], [8, 4]]) this.physics.add({ shape: 'circle', x: cx + dx, z: cz + dz, r: 0.3, minY: y, maxY: y + 5.2, kind: 'prop' });
@@ -727,7 +770,7 @@ export class World {
     for (const [x, z] of [[30, -268], [44, -268], [58, -268]]) {
       const y = T.heightAt(x, z);
       P.fuelTank(g, x, y, z, 4.2, 8);
-      this.physics.add({ shape: 'circle', x, z, r: 4.3, minY: y, maxY: y + 8, kind: 'prop', walkable: true });
+      this.physics.add({ shape: 'circle', x, z, r: 4.3, minY: y, maxY: y + 8, kind: 'prop', walkable: true, surface: 'metal' });
     }
     this.container('tank', 44, -262.5, { h: 1.2, label: 'Yakıt Tankı Vanası', special: 'fuel' });
     // konteyner yığınları
@@ -737,7 +780,7 @@ export class World {
       const y = T.heightAt(x, z);
       P.shippingContainer(g, x, y, z, a, cols[k++ % cols.length]);
       const q = Math.abs(Math.sin(a)) > 0.5;
-      this.physics.addBoxC(x, z, q ? 1.22 : 3.05, q ? 3.05 : 1.22, y, y + 2.6, { kind: 'prop', walkable: true });
+      this.physics.addBoxC(x, z, q ? 1.22 : 3.05, q ? 3.05 : 1.22, y, y + 2.6, { kind: 'prop', walkable: true, surface: 'metal' });
       if (rng.chance(0.6)) this.container('container', x + (q ? 1.4 : 3.2), z, { h: 1.0, label: 'Konteyner' });
     }
     P.crane(g, 132, T.heightAt(132, -290), -290, Math.PI, 20, 16, '#f1c40f');
@@ -746,7 +789,7 @@ export class World {
       const x = 40 + rng.next() * 120, z = -312 + rng.next() * 6;
       if (this.buildingAt(x, z) || onRoad(x, z, 1)) continue;
       this.instancer.place('props', rng.pick(['Barrel_A', 'Barrel_B', 'Barrel_C']), x, T.heightAt(x, z) + 0.45, z, rng.next() * 6, 0.9);
-      this.physics.add({ shape: 'circle', x, z, r: 0.45, minY: T.heightAt(x, z), maxY: T.heightAt(x, z) + 0.95, kind: 'prop', walkable: true });
+      this.physics.add({ shape: 'circle', x, z, r: 0.45, minY: T.heightAt(x, z), maxY: T.heightAt(x, z) + 0.95, kind: 'prop', walkable: true, surface: 'metal' });
       this.container('barrel', x, z, { h: 0.9 });
     }
     this.vehicleSpawns.push({ id: 'offroad', type: 'offroad', x: 168, z: -288, rot: Math.PI, fuel: 0.2, health: 0.4, broken: true });
@@ -774,7 +817,7 @@ export class World {
     for (const [tx, tz] of [[x0 + 4, z0 + 4], [x1 - 4, z0 + 4], [x0 + 4, z1 - 4], [x1 - 4, z1 - 4]]) {
       P.watchTower(g, tx, y, tz, 6);
       for (const [dx, dz] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) this.physics.add({ shape: 'circle', x: tx + dx, z: tz + dz, r: 0.15, minY: y, maxY: y + 6, kind: 'prop' });
-      this.physics.addFloor(tx - 1.7, tz - 1.7, tx + 1.7, tz + 1.7, y + 6.15);
+      this.physics.addFloor(tx - 1.7, tz - 1.7, tx + 1.7, tz + 1.7, y + 6.15, { surface: 'wood' });
       this.interactable('ladder', tx + 1.5, y + 3, tz, { top: y + 6.15, bottom: y, name: 'Gözetleme Kulesi' });
       this.lamp(tx, y + 7.5, tz, 'flood', 0xeaf2ff);
     }
@@ -788,7 +831,7 @@ export class World {
     for (const [tx, tz, a] of [[345, -275, 0], [345, -220, Math.PI]]) this.instancer.place('props', 'decoration-tents', tx, y, tz, a, 1.0);
     for (const [x, z] of [[330, -240], [335, -258], [312, -248]]) {
       P.shippingContainer(g, x, y, z, 0, '#556b2f', 4);
-      this.physics.addBoxC(x, z, 2, 1.22, y, y + 2.6, { kind: 'prop', walkable: true });
+      this.physics.addBoxC(x, z, 2, 1.22, y, y + 2.6, { kind: 'prop', walkable: true, surface: 'metal' });
       this.container('military_crate', x + 2.3, z, { h: 0.9 });
     }
     this.vehicleSpawns.push({ id: 'military_truck', type: 'military', x: 300, z: -248, rot: Math.PI / 2, fuel: 0.7, health: 0.9 });
@@ -825,7 +868,7 @@ export class World {
     // (karo aralığı ≤ 1 m ve yarı boyut 3.6 m: korkuluğa kadar boşluksuz kaplar)
     for (let t = -2; t <= L; t += 1.0) {
       const px = S0.x + ux * t, pz = S0.z + uz * t;
-      this.physics.addFloor(px - 3.6, pz - 3.6, px + 3.6, pz + 3.6, deck, { kind: 'floor', bridge: true });
+      this.physics.addFloor(px - 3.6, pz - 3.6, px + 3.6, pz + 3.6, deck, { surface: 'asphalt' });
     }
     for (let t = 0; t <= L; t += 0.8) {
       const px = S0.x + ux * t, pz = S0.z + uz * t;
@@ -848,7 +891,7 @@ export class World {
     const y = REGION_BY_ID.liman.h;
     for (const [x, len, w] of [[300, 34, 4], [336, 46, 6], [372, 30, 4]]) {
       P.dock(g, x, 344, y, len, w, 0);
-      this.physics.addFloor(x - w / 2, 344, x + w / 2, 344 + len, y);
+      this.physics.addFloor(x - w / 2, 344, x + w / 2, 344 + len, y, { surface: 'wood' });
     }
     // iskele sonu: tekne (deniz yoluyla kaçış)
     this.vehicleSpawns.push({ id: 'boat', type: 'boat', x: 345, z: 380, rot: Math.PI, fuel: 0.0, health: 0.45, broken: true, water: true });
@@ -860,7 +903,7 @@ export class World {
       for (let s = 0; s < st; s++) {
         P.shippingContainer(g, x, y + s * 2.6, z, 0, cols[k++ % cols.length]);
       }
-      this.physics.addBoxC(x, z, 3.05, 1.22, y, y + st * 2.6, { kind: 'prop', walkable: true });
+      this.physics.addBoxC(x, z, 3.05, 1.22, y, y + st * 2.6, { kind: 'prop', walkable: true, surface: 'metal' });
       if (rng.chance(0.7)) this.container('container', x + 3.3, z, { h: 1.0, label: 'Liman Konteyneri' });
     }
     P.crane(g, 395, y, 345, -Math.PI / 2, 24, 22, '#e74c3c');
@@ -916,17 +959,17 @@ export class World {
     // göl iskelesi ve sandal
     const lx = LAKE.x + LAKE.r - 2, lz = LAKE.z + 6;
     P.dock(g, lx, lz, LAKE.level + 0.35, 10, 2.4, -Math.PI / 2);
-    this.physics.addFloor(lx - 10, lz - 1.2, lx, lz + 1.2, LAKE.level + 0.35);
+    this.physics.addFloor(lx - 10, lz - 1.2, lx, lz + 1.2, LAKE.level + 0.35, { surface: 'wood' });
     this.interactable('fishing_spot', lx - 9, LAKE.level + 0.6, lz, { name: 'Balık Tutma Noktası (Göl)', water: 'lake' });
     this.placeModel('vehicles', 'boat-small', lx - 6, lz + 2.6, 0, 3, { y: LAKE.level - 0.2 });
     // avcı kulesi
     P.watchTower(g, -120, T.heightAt(-120, -205), -205, 4);
-    this.physics.addFloor(-121.7, -206.7, -118.3, -203.3, T.heightAt(-120, -205) + 4.15);
+    this.physics.addFloor(-121.7, -206.7, -118.3, -203.3, T.heightAt(-120, -205) + 4.15, { surface: 'wood' });
     this.interactable('ladder', -118.5, T.heightAt(-120, -205) + 2, -205, { top: T.heightAt(-120, -205) + 4.15, bottom: T.heightAt(-120, -205), name: 'Avcı Kulesi' });
     // dağ kampı: gözetleme kulesi, kaynak suyu, çadırlar
     const mx = -340, mz = -322;
     P.lookout(g, mx + 14, T.heightAt(mx + 14, mz), mz);
-    this.physics.addFloor(mx + 12.3, mz - 1.7, mx + 15.7, mz + 1.7, T.heightAt(mx + 14, mz) + 7.15);
+    this.physics.addFloor(mx + 12.3, mz - 1.7, mx + 15.7, mz + 1.7, T.heightAt(mx + 14, mz) + 7.15, { surface: 'wood' });
     this.interactable('ladder', mx + 15.5, T.heightAt(mx + 14, mz) + 3, mz, { top: T.heightAt(mx + 14, mz) + 7.15, bottom: T.heightAt(mx + 14, mz), name: 'Dağ Gözetleme Kulesi' });
     this.instancer.place('props', 'decoration-tents', mx + 4, T.heightAt(mx + 4, mz - 14), mz - 14, 1.2, 0.7);
     this.interactable('water_spring', mx - 12, T.heightAt(mx - 12, mz + 10) + 0.3, mz + 10, { name: 'Temiz Su Kaynağı' });

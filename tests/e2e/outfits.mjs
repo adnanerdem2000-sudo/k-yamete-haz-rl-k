@@ -2,19 +2,44 @@
 // oyunun CharacterFactory'siyle kurulur. Denetimler: her kombinasyon kuruluyor ve geometrisi sonlu (NaN yok);
 // boyun ve bel birleşimlerinde görünür boşluk yok (kafa parçasının en alt halkası gövde parçasının en üst halkasının
 // 2 cm'den, gövde altı bacak üstünün 3 cm'den fazla üstünde değil); parçalar birbirinin içine aşırı gömülmüyor
-// (çakışma sınırı ölçülen dağılıma göre). Izgara görüntüsü: /tmp/combos-men.png, /tmp/combos-women.png
+// (çakışma sınırı ölçülen dağılıma göre); gözlü her kafada (Swat kaskı hariç) iki göz bulunur ve yüz ağı (iris, dudak)
+// kurulur (kadın kafalarında göz malzemesi 'Brown'; 'Black' dudak halkası/boyunluk göz sayılmaz); her kombinasyonda
+// ayakkabı tabanı yuvası (SLOT.soles) var. Izgara görüntüsü: /tmp/combos-men.png, /tmp/combos-women.png
 // (eski yoklama tools/dev/outfit-combos.mjs bu senaryoya taşındı).
 export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
   await page.goto(url, { waitUntil: 'load', timeout: 120000 });
   await page.waitForFunction(() => window.__game && window.__game.state === 'menu', null, { timeout: 200000 });
   await wait(800);
+  // Özelleştirme → Koleksiyonlar (gerçek düğmeler): kıyafet seti değişir, karakterin kafası (yüz ve saç) korunur; başlıklı
+  // koleksiyonlar (İşçi baret, Askerî kask) şapka yuvasından. Ayarlar sonunda eski hâline döner.
+  const koleksiyon = await evalJS(page, () => {
+    const g = window.__game, M = g.ui.menus, saved = JSON.stringify(g.settings.get('player.appearance') || {});
+    const out = [];
+    for (const id of ['mert', 'zulal', 'bora']) {
+      M.custChar = id; M.custTab = 'collections'; M.openCustomize();
+      const head0 = M.lookFor(id).outfit.head;
+      for (const b of [...document.querySelectorAll('.collections button')]) {
+        const name = b.textContent.trim();
+        [...document.querySelectorAll('.collections button')].find((x) => x.textContent.trim() === name).click(); // her tıklamada ekran yeniden çizilir
+        const L = M.lookFor(id);
+        out.push({ id, name, head0, head: L.outfit.head, body: L.outfit.body, hat: L.hat });
+      }
+    }
+    g.settings.set('player.appearance', JSON.parse(saved));
+    M.showMain();
+    return out;
+  });
+  log('koleksiyonlar', koleksiyon.length, koleksiyon.filter((k) => k.name === 'İşçi' || k.name === 'Askerî'));
+  const kafa = koleksiyon.filter((k) => k.head !== k.head0);
+  const baslik = koleksiyon.filter((k) => (k.name === 'İşçi' && k.hat !== 'hardhat') || (k.name === 'Askerî' && k.hat !== 'helmet'));
+  if (koleksiyon.length < 24 || kafa.length || baslik.length) errors.push('[assert] koleksiyon karakterin kafasını (yüz/saç) korumalı, İşçi/Askerî başlığı şapka yuvasından gelmeli ' + JSON.stringify({ n: koleksiyon.length, kafa: kafa.slice(0, 4), baslik: baslik.slice(0, 4) }));
   for (const gname of ['men', 'women']) {
     const r = await evalJS(page, async (gname) => {
       const g = window.__game;
       cancelAnimationFrame(g.raf); g.loop = () => {};
       document.getElementById('ui-root').style.display = 'none';
       const { Avatar } = await import('/src/entities/Avatar.js');
-      const { OUTFIT_SETS } = await import('/src/entities/CharacterFactory.js');
+      const { OUTFIT_SETS, SLOT } = await import('/src/entities/CharacterFactory.js');
       for (const { av } of g.menu.avatars) av.root.visible = false;
       if (window.__combos) for (const a of window.__combos) { g.scene.remove(a.root); a.dispose && a.dispose(); }
       const sets = OUTFIT_SETS[gname];
@@ -47,7 +72,10 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
         const neck = ring(0, -1) - ring(1, +1), waist = ring(1, -1) - ring(2, +1);
         let finite = true;
         for (let k = 0; k < P.length; k++) if (!Number.isFinite(P[k])) { finite = false; break; }
-        gaps.push({ head, body, neck: +neck.toFixed(3), waist: +waist.toFixed(3), finite, parts: new Set(part).size });
+        // yüz: iki göz verisi + yüz ağı (iris/dudak; Head noktasında); taban: ayakkabı tabanı yuvası
+        const face = !!(c.face && c.face.eyes.length === 2) && av.ch.anchors.head.children.some((o) => o.name === 'face');
+        const lowEye = c.slot.some((s, k) => s === SLOT.eyes && part[k] === 0 && P[k * 3 + 1] < 1.67);
+        gaps.push({ head, body, neck: +neck.toFixed(3), waist: +waist.toFixed(3), finite, parts: new Set(part).size, face, lowEye, soles: c.slot.includes(SLOT.soles) });
         i++;
       }
       window.__combos = list;
@@ -72,6 +100,13 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
     // ölçülen dağılımın çok dışı)
     const deep = r.gaps.filter((x) => x.neck < -0.25 || x.waist < -0.25);
     if (deep.length) errors.push(`[assert] ${gname}: ${deep.length} kombinasyonda parçalar aşırı iç içe (çakışma) ` + JSON.stringify(deep.slice(0, 4)));
+    // yüz: Swat kaskı dışındaki her kafada iki göz + yüz ağı; göz yuvası çene/boyunda (1,67 m altı) olmamalı
+    const noFace = r.gaps.filter((x) => (x.head !== 'Swat' && !x.face) || (x.head === 'Swat' && x.face) || x.lowEye);
+    if (noFace.length) errors.push(`[assert] ${gname}: ${noFace.length} kombinasyonda yüz verisi hatalı (iki göz/yüz ağı yok ya da göz 1,67 m altında) ` + JSON.stringify(noFace.slice(0, 6).map((x) => [x.head, x.body, x.face, x.lowEye])));
+    // taban: her kombinasyonda ayakkabı tabanı yuvası
+    const noSole = r.gaps.filter((x) => !x.soles);
+    if (noSole.length) errors.push(`[assert] ${gname}: ${noSole.length} kombinasyonda ayakkabı tabanı (SLOT.soles) yok ` + JSON.stringify(noSole.slice(0, 6).map((x) => [x.head, x.body])));
+    log(gname, 'yüz', r.gaps.filter((x) => x.face).length + '/' + r.count, 'taban', r.gaps.filter((x) => x.soles).length + '/' + r.count);
     log(gname, 'boyun aralığı', [Math.min(...r.gaps.map((x) => x.neck)), Math.max(...r.gaps.map((x) => x.neck))], 'bel aralığı', [Math.min(...r.gaps.map((x) => x.waist)), Math.max(...r.gaps.map((x) => x.waist))]);
     await shot(page, `/tmp/combos-${gname}.png`);
   }

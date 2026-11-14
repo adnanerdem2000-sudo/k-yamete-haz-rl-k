@@ -55,6 +55,25 @@ export class Crafting {
     return STATION_NAMES[r.station] + (r.station === 'workbench' && r.level > 1 ? ` (Sv. ${r.level})` : '');
   }
 
+  /**
+   * Üretim animasyonu ('tür' ya da 'tür:çeşit'): su filtresinde dökme; ateşte diz çökme, ocak başında (2,6 m) tezgâh
+   * hizasında; çekiçli tarifte çekiç; baltalı tarifte odun yarma; tezgâhta masa başında uzanma; elde yapılanlarda
+   * eller önde çalışma.
+   */
+  animFor(r) {
+    const S = this.s;
+    if (r.station === 'water_filter') return 'search:pour';
+    if (r.station === 'fire' || r.cat === 'cook') {
+      const p = S.local.pos;
+      const stove = (S.world.containers || []).some((c) => c.type === 'stove' && Math.hypot(c.x - p.x, c.z - p.z) <= 2.6);
+      return stove ? 'search:mid' : 'search:low';
+    }
+    const tools = r.tools || [];
+    if (tools.includes('hammer')) return 'hammer';
+    if (tools.includes('axe')) return 'chop';
+    return r.station === 'workbench' ? 'search:mid' : 'search:hands';
+  }
+
   /** Gerçek süre (sn): oyun dakikasından türetilir, yetenek hızlandırır */
   duration(r) { return clamp(r.time * 0.32, 1.2, 14) / this.perkMul(r); }
 
@@ -68,7 +87,7 @@ export class Crafting {
   craft(id) {
     const S = this.s;
     const r = RECIPE_BY_ID[id];
-    if (!r) return false;
+    if (!r || S.local.knockT > 0) return false; // yere serilmişken üretime başlanmaz (üretim eylemi kalkışı bölmesin)
     const c = this.check(r);
     if (!c.ok) { S.ui.toast(c.why || 'Üretilemez.', 'warn'); S.audio.play('error', { vol: 0.5 }); return false; }
     // malzemeleri hemen ayır (iptalde iade)
@@ -81,8 +100,10 @@ export class Crafting {
     }
     const dur = this.duration(r);
     this.busy = { id, t: 0, dur };
-    const anim = r.station === 'fire' || r.cat === 'cook' ? 'search' : 'hammer';
-    S.local.avatar.play(anim, dur);
+    const [type, kind] = this.animFor(r).split(':');
+    const av = S.local.avatar, before = av.action;
+    av.play(type, dur, kind || null);
+    const act = av.action && av.action !== before ? av.action : null; // iptalde yalnız bu eylem biter
     S.audio.play(r.station === 'fire' ? 'fire_whoosh' : 'craft', { vol: 0.6 });
     S.ui.progress(`${r.name}…`, dur, () => {
       this.busy = null;
@@ -94,8 +115,9 @@ export class Crafting {
       S.quests.onCraft(r.out);
       if (r.cat === 'weapon' || r.out === 'radio') S.act('noise', { x: S.local.pos.x, z: S.local.pos.z, r: 8, src: 'craft' });
     }, () => {
-      // iptal: malzemeleri geri ver
+      // iptal: malzemeleri geri ver; üretim animasyonu da biter (uzaklaşırken diz çöküp çalışmaya devam etmesin)
       this.busy = null;
+      if (act && S.local.avatar.action === act) S.local.avatar.action = null;
       for (const [it, n] of r.in) S.giveLocal(it, n);
       if (fuelTaken) { const jc = S.inventory.slots.find((s) => s && s.id === 'jerrycan'); if (jc) { jc.fuel += fuelTaken; S.inventory.changed(); } }
       S.ui.toast('Üretim iptal edildi.', 'info', 2);

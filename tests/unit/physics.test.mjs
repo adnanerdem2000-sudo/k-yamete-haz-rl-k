@@ -101,7 +101,13 @@ test('statik aynalama: oyun çarpıştırıcıları Rapier\'e kopyalanır; devre
   assert.ok(!pw.links.has(late));
   pw.update(STEP);
   assert.ok(Math.abs(pw.raycast(6.5, 10, -8, 0, -1, 0, 20).dist - 10) < 1e-3, 'kaldırılınca araziye');
-  assert.deepEqual(navCalls, [['door', false], ['door', true], ['wall', true], ['wall', false]]);
+  // köprüden sonra seçenekle (noPhysics) eklenen ince zemin (oyuncu halısı): aynalanmaz, kaldırması da sorunsuz
+  const rug = physics.addFloor(-8, -8, -6, -6.6, 0.05, { surface: 'carpet', noPhysics: true });
+  assert.ok(rug.noPhysics && !pw.links.has(rug));
+  pw.update(STEP);
+  assert.ok(Math.abs(pw.raycast(-7, 10, -7.3, 0, -1, 0, 20).dist - 10) < 1e-3, 'ışın halıdan geçip araziye');
+  physics.remove(rug);
+  assert.deepEqual(navCalls, [['door', false], ['door', true], ['wall', true], ['wall', false], ['floor', true], ['floor', false]]);
 });
 
 test('yükseklik alanı Terrain.heightAt ile birebir: yön (i↔x, j↔z) ve ters köşegen üçgenleme (gerçek 2048 m ızgara)', () => {
@@ -211,6 +217,38 @@ test('taşıma: gövde kinematiğe geçer ve hedefi izler; bırakınca dinamik o
   pw.moveCarried(d, { x: 9, y: 9, z: 9 }, { x: 0, y: 0, z: 0, w: 1 }); // taşınmayan gövdeye etkisiz
   pw.update(STEP);
   assert.ok(d.body.translation().x < 3);
+});
+
+test('taşınan kutu taşıyanın kapsülünü durdurmaz (oyunun sırası: kare içinde adımlar, kare sonunda tutma hedefi); duvar ve yerdeki kutu durdurur', async () => {
+  const { carryTarget } = await import('../../src/systems/PhysProps.js');
+  // kare başına n adım (60 fps → 1, 10 fps → 6): Player.physicsStep her adımda yürür, Player.updateCarry kare sonunda tutar
+  const walk = (wallZ, carried, fps) => {
+    const { pw } = world((P) => { if (wallZ != null) P.addBox(-3, wallZ, 3, wallZ + 0.4, -1, 3, { kind: 'wall' }); });
+    const ch = pw.createCharacter(0, 0, 0);
+    const def = { h: 0.75 }, tv = new THREE.Vector3(), tq = new THREE.Quaternion();
+    carryTarget(def, ch.feet, 0, tv, tq);
+    const d = pw.addDynamic(null, { type: 'box', hx: 0.375, hy: 0.375, hz: 0.375 }, tv.x, carried ? tv.y : 0.375, tv.z, { group: G.PROP, mass: 12 });
+    if (carried) pw.setCarried(d, true);
+    for (let i = 0; i < 30; i++) { ch.move(0, -0.05, 0); pw.update(STEP); }
+    const z0 = ch.feet.z, n = Math.round(60 / fps);
+    for (let f = 0; f < fps; f++) {
+      for (let i = 0; i < n; i++) { ch.move(0, -0.02, 2.9 * STEP); pw.update(STEP); }
+      if (carried) { carryTarget(def, ch.feet, 0, tv, tq); pw.moveCarried(d, tv, tq); }
+    }
+    return ch.feet.z - z0;
+  };
+  for (const fps of [60, 20, 10]) {
+    const z = walk(null, true, fps);
+    assert.ok(z > 2.7, `${fps} fps: kutuyla 1 sn × 2,9 m/sn yürüyüş ${z.toFixed(2)} m (kutu kapsülü durdurmamalı)`);
+  }
+  assert.ok(walk(2.0, true, 60) < 1.75, 'taşırken duvar yine durdurur (kapsül duvarın önünde)');
+  // yerdeki (taşınmayan, dinamik) kutu kapsülle çarpışır: KCC onu iter ya da ona takılır, içinden geçmez
+  const { pw } = world();
+  const ch = pw.createCharacter(0, 0, 0);
+  const d = pw.addDynamic(null, { type: 'box', hx: 0.375, hy: 0.375, hz: 0.375 }, 0, 0.375, 1.2, { group: G.PROP, mass: 12 });
+  for (let i = 0; i < 90; i++) { ch.move(0, -0.02, 2.0 * STEP); pw.update(STEP); }
+  const t = d.body.translation();
+  assert.ok(t.z - ch.feet.z > 0.3, `yerdeki kutu kapsülün önünde kalır (itilir), içinden geçilmez: kutu z ${t.z.toFixed(2)}, oyuncu z ${ch.feet.z.toFixed(2)}`);
 });
 
 test('karakter gövdesi: duvarda durur, 0,3 m basamağa çıkar, yere basar; alçak tavan altında ayağa kalkamaz', () => {

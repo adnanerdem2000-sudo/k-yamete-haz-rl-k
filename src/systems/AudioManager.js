@@ -13,6 +13,9 @@ const SOUND_ALIAS = { jump: 'jump_a', craft: 'build', open: 'pickup', close: 'to
 // sentezlenen döngü türleri (örnek ses dosyası gerekmeyenler; diğerleri buffers[kind] ile)
 const LOOP_KINDS = new Set(['engine', 'engine-motorcycle', 'rain', 'wind', 'fire', 'static', 'gravel', 'generator']);
 
+/** Yüzey malzemesi (World.surfaceAt) → ayak sesi türü (footstep / sentez 'step' tablosu) */
+export const STEP_SOUND = { asphalt: 'hard', concrete: 'hard', rock: 'hard', gravel: 'gravel', dirt: 'dirt', grass: 'grass', sand: 'sand', snow: 'snow', water: 'water', wood: 'wood', tile: 'tile', carpet: 'carpet', metal: 'metal' };
+
 export class AudioManager {
   constructor(game) {
     this.game = game;
@@ -311,8 +314,8 @@ export class AudioManager {
     S.impact_plastic = (v, p) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'square'; o.frequency.setValueAtTime(640, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.05); const g = c.createGain(); self.env(g, t, 0.001, v * 0.35, 0.07); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 2200; o.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.1); };
     S.impact_body = (v, p) => { const c = self.ctx, t = c.currentTime; const o = c.createOscillator(); o.type = 'sine'; o.frequency.setValueAtTime(120, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.14); const g = c.createGain(); self.env(g, t, 0.003, v * 0.9, 0.18); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t); o.stop(t + 0.22); const n = self.noiseSrc(0.12); const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 500; const g2 = c.createGain(); self.env(g2, t, 0.002, v * 0.4, 0.1); n.connect(f); f.connect(g2); g2.connect(self.out('sfx', 1, p)); n.start(t, Math.random()); n.stop(t + 0.13); };
     S.glass = (v, p) => { const c = self.ctx, t = c.currentTime; for (let i = 0; i < 6; i++) { const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = 2500 + Math.random() * 4000; const g = c.createGain(); self.env(g, t + i * 0.02, 0.001, v * 0.12, 0.3 + Math.random() * 0.4); o.connect(g); g.connect(self.out('sfx', 1, p)); o.start(t + i * 0.02); o.stop(t + 1); } const n = self.noiseSrc(0.3); const f = c.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 3000; const g = c.createGain(); self.env(g, t, 0.001, v * 0.6, 0.25); n.connect(f); f.connect(g); g.connect(self.out('sfx', 1, p)); n.start(t); n.stop(t + 0.3); };
-    // ayak sesi: zemine göre süzgeç/uzunluk; ahşapta boğuk tok ses, metalde çınlama, kumda/çimde hışırtı
-    const STEP = { grass: ['bandpass', 1900, 0.8, 0.09, 0], dirt: ['lowpass', 1000, 0.7, 0.07, 70], gravel: ['bandpass', 2600, 1.2, 0.08, 60], sand: ['highpass', 2400, 0.6, 0.12, 0], wood: ['lowpass', 750, 1.1, 0.06, 110], hard: ['lowpass', 2400, 0.8, 0.05, 90], tile: ['bandpass', 3000, 1.4, 0.04, 120], metal: ['bandpass', 3400, 9, 0.12, 0], water: ['bandpass', 1300, 1.0, 0.16, 0], snow: ['lowpass', 1400, 0.7, 0.1, 0] };
+    // ayak sesi: zemine göre süzgeç/uzunluk; ahşapta boğuk tok ses, metalde çınlama, kumda/çimde hışırtı, halıda boğuk
+    const STEP = { grass: ['bandpass', 1900, 0.8, 0.09, 0], dirt: ['lowpass', 1000, 0.7, 0.07, 70], gravel: ['bandpass', 2600, 1.2, 0.08, 60], sand: ['highpass', 2400, 0.6, 0.12, 0], wood: ['lowpass', 750, 1.1, 0.06, 110], hard: ['lowpass', 2400, 0.8, 0.05, 90], tile: ['bandpass', 3000, 1.4, 0.04, 120], metal: ['bandpass', 3400, 9, 0.12, 0], water: ['bandpass', 1300, 1.0, 0.16, 0], snow: ['lowpass', 1400, 0.7, 0.1, 0], carpet: ['lowpass', 600, 0.7, 0.05, 45] };
     S.step = (v, p, o = {}) => {
       const c = self.ctx, t = c.currentTime;
       const [type, fq, q, dur, thump] = STEP[o.surface] || STEP.grass;

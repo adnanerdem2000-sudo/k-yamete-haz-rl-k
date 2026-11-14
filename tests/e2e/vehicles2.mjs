@@ -28,7 +28,7 @@ export default async ({ page, url, wait, evalJS, log, shot, errors }) => {
         let ok = true;
         for (let s = -2; s <= len + 2 && ok; s += 1) {
           if (Math.abs(T.heightAt(x + s, z) - h) > 0.06 * Math.abs(s) + 0.05) ok = false;
-          if (surf && T.surfaceAt(x + s, z) !== surf) ok = false;
+          if (surf && S.world.surfaceAt(x + s, T.heightAt(x + s, z), z) !== surf) ok = false; // sürüşle aynı sınıflayıcı
           if (P.overlapsBox(x + s - 0.6, z - hw, x + s + 0.6, z + hw, h + 0.05, h + 2)) ok = false;
           if (S.world.buildingAt(x + s, z)) ok = false;
           // başka araçlar (Rapier gövdeleri AABB dünyasında yok): şeride 6 m'den yakın araç varsa reddet

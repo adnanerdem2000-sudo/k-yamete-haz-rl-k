@@ -141,9 +141,11 @@
   Katı'nda uyumak için uyku tulumu gerekir (sığınaktaki hızlı gece uykusu tulumla da geçerli). Kat ayrımı (`Session.levelOf` ya da yükseklik farkı) alan hasarına, hayvanlara, botların
   hedeflerine, ateş/yapı ışıklarına, tuzak ve alarma uygulanır; yer altındaki silah sesi yine yüzeyde duyulur
   (bilinçli).
-- **Sürüm uyumu:** ağ protokolü 6'ya çıktı; eski sürümle açık kalmış bir sekme yeni host'a katılamaz ("Oyun sürümleri
-  farklı" uyarısı) — sayfa yenilenmeli. Eski kayıtlar yüklenir: eski "araç bagajı" konteynerlerinin durumu aynı yerdeki
-  terk edilmiş arabanın bagajına taşınır.
+- **Sürüm uyumu:** ağ protokolü 7'ye çıktı (Tur 2 Aşama 2: eylem çeşitleri, yeni eylemler, ayrı darbe alanı, bot
+  kıpırdanması, ağır yük taşıma, yeni görünüm alanları); eski sürümle açık kalmış bir sekme yeni host'a katılamaz ("Oyun
+  sürümleri farklı" uyarısı) — sayfa yenilenmeli. Eski kayıtlar yüklenir: eski "araç bagajı" konteynerlerinin durumu
+  aynı yerdeki terk edilmiş arabanın bagajına taşınır; eski kayıttaki Mert görünümünün kaldırılmış sarı ikinci rengi
+  okunurken ayıklanır.
 - Deniz seviyesinin altına inen sığınaklarda deniz/göl yüzeyleri yer altındayken gizlenir; yüzeye çıkınca yeniden
   görünür.
 - **Bitki yerleşimi kısmen değişti:** ağaç/çalı/çimen dağılımı tek bir rastgele sayı dizisiyle üretildiği için orman
@@ -153,7 +155,32 @@
   kaldığı için o görüntü farklı, taban yenilendi. Oynanışa ve kayıtlara etkisi yok (ağaç durumu kaydedilmez); ileride
   orman/açık araziye eklenecek her çarpıştırıcı dağılımı yine kaydırır (hücre başına bağımsız dizi düşünülebilir).
 
+## Tur 2 Aşama 2 — karakter ve hareket: bilinen sınırlar (14 Kasım 2026)
+- **Yere serilme bağışıklığı her kaynağa uygulanır:** kalktıktan sonraki 3,5 sn içinde 6 m üstü düşüş ya da yakın patlama
+  yalnız hasar verir (düşüş sert iniş oynar), yeniden sermez. Serilmiş 1,95 sn boyunca eşya kullanma (kuşanma dahil),
+  envanterden bırakma, ifade, üretim ve basılı tutma sessizce reddedilir. İleride eklenecek her yeni eylem girişi
+  serilme denetimini kendisi yapmalı (`Avatar.play` başka eylemi yine kabul eder).
+- **Uzakta isabet tepkisi paket başına bir kez:** aynı durum paketine sığan birden çok isabet uzak oyuncuda tek sarsılma
+  olarak görünür (ayrı sayaç birleştirir); yeniden kurulan avatarın sayacı sıfırlandığından en çok bir fazla sarsılma.
+- **Halı yalnız çarpışma dünyasında 5 cm'lik ince zemin** (Rapier'e aynalanmaz): yapay zekâ, zombiler ve uzak kopyalar
+  halının üstünde, yerel oyuncunun kapsülü 5 cm aşağıda durur (yalnız görsel). İnşa yerleştirme ve işaretler halının
+  üstüne düşer.
+- **Koleksiyon kafayı artık değiştirmez,** ama önceki sürümde koleksiyon uygulanmış kayıtlı görünümler o koleksiyonun
+  kafasını oyuncu değiştirene dek korur. Eski kayıtlar değişmeden yüklenir.
+- **Kıpırdanma pozlarının alt gövde kısmı uygulanmıyor** (önceden de böyleydi): 'peek' parmak ucu yükselişi ve kalça
+  kayması üst gövde maskesinin dışında kalıyor, hiçbir eşte görünmüyor (ölü kod; ağda fark yaratmaz).
+- **Yerinde dönüş yeniden hedeflemesi:** dönüş sırasında hedef bir karede 0,5 rad'dan çok değişirse dönüş kesilir ve
+  yeni hedefe çapraz sönümle yeniden başlar.
+- **Erken bırakılan diz çökme:** döngü aralığına varmadan bırakılan arama/kaldırma çıkış klibi oynamadan 0,2 sn'de söner;
+  uzak avatar kendi klip zamanına göre karar verir, birkaç kare farklı olabilir.
+- **Oyuncunun izleme kulesi zemini** yıkılınca, kayıt yüklenince ve oturum bitince kaldırılmıyor (görünmez yürünebilir
+  platform kalıyor); Aşama 3'te düzeltilecek (inceleme bulgusu, doğrulandı).
+- **Ceren saate bakmıyor:** saate bakma kıpırdanması yalnız kol saati takan karakterde seçilir; Ceren'in tek aksesuar
+  yuvasında steteskop olduğundan onun havuzunda telsiz ve kolaçan kalır (bilinçli).
+
 ## Teslimden sonraki denetimin bulduğu hatalar (düzeltilmeyenler)
+Tur 2 Aşama 2'de düzeltilenler: kadın kafalarında göz/kaş ayrımı ve Punk/SciFi çene rengi (`charlook` testi), iki
+kıpırdanma zamanlayıcısı (tek karar noktası `Avatar.updateFidget`).
 Bu turda düzeltilenler (`42085cf`): direksiyon simidi sürücü tarafında ve kollu, dönüşü görünüyor; patinaj (kayma)
 sesi çalıyor; göçük boyalı gövde kabuğuna araç çerçevesinde uygulanıyor; bozuk farın ışığı sönüyor. Göçük ve bozuk far
 `vehicles3` ile denetleniyor; direksiyon ve patinaj sesi otomatik testte denetlenmiyor.
@@ -161,10 +188,8 @@ Ayrıntı ve kanıt: `docs/DENETIM_NL2.md`.
 - Kayıttan yüklemede ve sonradan katılımda kapı durumu fiziğe uygulanmıyor: açık kaydedilen kapı fizikte kapalı kalabilir
   ve oyuncu yaklaşınca herkes için kapanabilir; kırık kapının kanadı menteşede kalabilir.
 - Patlamalar her nesneye kütlesinden bağımsız aynı hızı veriyor (ağır nesne hafif gibi savruluyor).
-- Bazı kadın karakter kafalarında gözler saç rengine yakın boyanıyor; Punk ve SciFi kafalarında çene/boyun açık gri.
 - Host göçünden sonra gün kilitli görevler (ör. laboratuvar görevi) başlamayabilir; botların çantası ve silahları
   varsayılana döner.
-- Kişilik kıpırdanması için iki ayrı zamanlayıcı ve zemin türü için iki ayrı sınıflayıcı var (biri kaldırılmalı).
 - 32 uçtan uca senaryonun 15'i yalnız çökme/zaman aşımıyla başarısız olabilir (değer denetimi yok; bu turda eklenen
   beş senaryonun hepsinde ve `multiplayer-local`'de denetim var).
 

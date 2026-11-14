@@ -440,7 +440,7 @@ function surfaceEntrance(W, def, entry, wp) {
   };
   if (def.entry === 'hatch') {
     P.bunkerHatch(g, def.x, y, def.z);
-    phys.addBoxC(def.x, def.z, 1.3, 1.3, y - 0.2, y + 0.35, { kind: 'prop', walkable: true }); // bitki/kaya saçılımı kapağın üstüne düşmesin
+    phys.addBoxC(def.x, def.z, 1.3, 1.3, y - 0.2, y + 0.35, { kind: 'prop', walkable: true, surface: 'metal' }); // bitki/kaya saçılımı kapağın üstüne düşmesin
     return;
   }
   if (def.entry === 'stairs') {
@@ -492,7 +492,7 @@ function surfaceEntrance(W, def, entry, wp) {
   }
   if (def.entry === 'cellar') {
     // ahşap kanatlı mahzen kapağı (beton çerçeve, demir şeritler, kulplar)
-    B(-0.95, -0.25, -1.05, 0.95, 0.3, 1.05, '#9e9a90', 'concrete', { kind: 'prop', walkable: true });
+    B(-0.95, -0.25, -1.05, 0.95, 0.3, 1.05, '#9e9a90', 'concrete', { kind: 'prop', walkable: true, surface: 'wood' });
     for (const sx of [-1, 1]) B(sx > 0 ? 0.03 : -0.83, 0.3, -0.92, sx > 0 ? 0.83 : -0.03, 0.37, 0.92, '#7a5230', 'wood');
     for (const lz of [-0.62, 0, 0.62]) B(-0.83, 0.37, lz - 0.04, 0.83, 0.39, lz + 0.04, '#2b2b2b', 'metal');
     for (const sx of [-1, 1]) B(sx * 0.2 - 0.05, 0.37, -0.32, sx * 0.2 + 0.05, 0.44, -0.16, '#3d3d3d', 'metal');

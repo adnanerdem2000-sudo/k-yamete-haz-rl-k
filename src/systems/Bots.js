@@ -1,7 +1,7 @@
 // Yapay zekâ takım arkadaşları: oyuncuyu takip eder, zombilerle savaşır, yere düşeni kaldırır,
 // verilen yiyecek/ilacı kullanır. Host simüle eder; istemciler anlık görüntüden çizer.
 import * as THREE from 'three';
-import { Avatar } from '../entities/Avatar.js';
+import { Avatar, FIDGET_KEYS } from '../entities/Avatar.js';
 import { CHARACTERS, CHARACTER_IDS } from '../entities/CharacterFactory.js';
 import { PlayerStats } from './PlayerStats.js';
 import { ITEMS } from '../data/items.js';
@@ -92,7 +92,8 @@ class BotProxy {
     this.target = this.pos.clone();
     this.stats = { health: 100, maxHealth: 100, hunger: 100, thirst: 100, downed: false };
     this.anim = { mode: 'ground', speed: 0, yaw: 0 };
-    this.avatar = new Avatar(S.game, this.def.look, { name: this.name, color: this.def.color });
+    // remote: kıpırdanmayı kendisi zamanlamaz, anlık görüntüdeki türü oynar (netFidget)
+    this.avatar = new Avatar(S.game, this.def.look, { name: this.name, color: this.def.color, remote: true });
     S.game.scene.add(this.avatar.root);
   }
   dispose() { this.avatar.dispose(); }
@@ -133,7 +134,7 @@ export class Bots {
     if (!b || !b.stats || b.stats.downed || !(b instanceof Bot)) return;
     const S = this.s;
     const res = b.stats.damage(dmg * S.diff.dmg * 0.8, 'zombie');
-    S.emit({ k: 'bot_fx', id: b.id, a: 'hit' });
+    S.emit({ k: 'bot_fx', id: b.id, a: 'hit', i: Math.floor(Math.random() * 5) });
     if (res.downed || b.stats.downed) {
       b.stats.downed = true; b.downT = 0; b.mode = 'downed';
       b.say('downed');
@@ -454,7 +455,8 @@ export class Bots {
       const m = ITEMS[b.kit.melee].melee;
       if (d > (m.range || 1.6) + 0.35 || b.cool > 0) return;
       b.cool = 1.05 / (m.speed || 1) + Math.random() * 0.25;
-      S.emit({ k: 'bot_fx', id: b.id, a: 'melee', kind: ITEMS[b.kit.melee].hold });
+      // n: botun vuruş sayacı (host tutar) — her eşte (geç katılanda da) aynı kılıç/yumruk sırası
+      S.emit({ k: 'bot_fx', id: b.id, a: 'melee', kind: ITEMS[b.kit.melee].hold, n: (b.meleeN = (b.meleeN || 0) + 1) });
       const dmg = Math.round(m.dmg * (b.def.stats.melee || 1));
       S.applyAction('zombie_hit', { id: z.id, dmg, dir: [(z.x - b.pos.x) / (d || 1), (z.z - b.pos.z) / (d || 1)], kind: 'melee' }, b.id);
     }
@@ -549,14 +551,20 @@ export class Bots {
       const mx = b.pos.x + Math.sin(b.yaw) * 0.6, my = b.pos.y + 1.45, mz = b.pos.z + Math.cos(b.yaw) * 0.6;
       if (e.w !== 'bow') { S.fx.muzzle(mx, my, mz); S.fx.tracer(mx, my, mz, e.x, e.y, e.z); }
       S.audio.play(e.w === 'bow' ? 'bow' : e.w, { at: b.pos, vol: 0.8 });
-    } else if (e.a === 'melee') { av.play('melee', 0.45, e.kind); S.audio.play('swing', { at: b.pos, vol: 0.6 }); }
-    else if (e.a === 'hit') { av.flinch(1); S.audio.play('hit', { at: b.pos, vol: 0.5 }); }
+    } else if (e.a === 'melee') {
+      // inşaattaki bot çekiç sallar (kılıç/yumruk değil); vuruş klibi olaydaki sayaçtan (e.n: oyuncu eylemindeki act[4]
+      // ile aynı yol), eşin kendi eylem sayacından değil
+      if (e.kind === 'hammer') av.play('hammer', 1.2); else av.play('melee', 0.45, e.kind, 0, 0, e.n);
+      S.audio.play('swing', { at: b.pos, vol: 0.6 });
+    } else if (e.a === 'hit') { av.flinch(1, e.i); S.audio.play('hit', { at: b.pos, vol: 0.5 }); } // e.i: klip dizini (herkeste aynı)
     else if (e.a === 'revive') av.play('revive', 4);
   }
 
   // ======================================================================= ağ (istemci)
   snapshot() {
-    return this.list.map((b) => [b.id, b.charId, +b.pos.x.toFixed(2), +b.pos.y.toFixed(2), +b.pos.z.toFixed(2), +b.yaw.toFixed(2), +b.speed.toFixed(1), b.mode, b.held, Math.round(b.stats.health), b.stats.maxHealth, Math.round(b.stats.hunger), Math.round(b.stats.thirst), b.stats.downed ? 1 : 0, b.aim ? 1 : 0, b.vehicleId || 0]);
+    // a[16]: süren kıpırdanma (FIDGET_KEYS dizini + 1; 0: yok) — vekiller host'taki botla aynı kıpırdanmayı oynar
+    const fid = (b) => { const F = b.avatar && b.avatar.fidget; return F && F.kind ? FIDGET_KEYS.indexOf(F.kind) + 1 : 0; };
+    return this.list.map((b) => [b.id, b.charId, +b.pos.x.toFixed(2), +b.pos.y.toFixed(2), +b.pos.z.toFixed(2), +b.yaw.toFixed(2), +b.speed.toFixed(1), b.mode, b.held, Math.round(b.stats.health), b.stats.maxHealth, Math.round(b.stats.hunger), Math.round(b.stats.thirst), b.stats.downed ? 1 : 0, b.aim ? 1 : 0, b.vehicleId || 0, fid(b)]);
   }
 
   applySnapshot(arr) {
@@ -571,6 +579,7 @@ export class Bots {
       if (p.held !== a[8]) { p.held = a[8]; p.avatar.hold(a[8]); }
       Object.assign(p.stats, { health: a[9], maxHealth: a[10], hunger: a[11], thirst: a[12], downed: !!a[13] });
       p.vehicleId = a[15] || null;
+      if (p.avatar.netFidget) p.avatar.netFidget(a[16] ? FIDGET_KEYS[a[16] - 1] : null);
     }
     for (let i = this.list.length - 1; i >= 0; i--) {
       const p = this.list[i];

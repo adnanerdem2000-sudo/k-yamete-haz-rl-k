@@ -9,6 +9,7 @@ import * as A from './Animations.js';
 import { ClipLayer } from './Avatar.js';
 import { Motion } from './Motion.js';
 import { AnimalView } from './AnimalView.js';
+import { raiderLook, isFemaleBase } from './CharacterFactory.js';
 import { damp, dampAngle } from '../core/util.js';
 
 const M = (c, o = {}) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, ...o });
@@ -37,10 +38,13 @@ export class ZombieView {
     this.pose = new Pose();
     // tür hızı: iri/şişko ağır, koşucu/gece türü seri; her zombiye ufak rastgele sapma
     const kindRate = type.bloat ? 0.75 : type.hunch ? 0.85 : type.style === 2 ? 1.1 : 1;
-    this.motion = this.ch.anim ? new Motion(this.ch, { kind: type.human ? 'human' : 'zombie', rate: kindRate * (0.9 + Math.random() * 0.2) }) : null;
+    // yağmacı: gözcü kişiliği (etrafı kolaçan eden bekleme; kıpırdanma zamanlayıcısı yok — Motion kendisi zamanlamaz)
+    this.motion = this.ch.anim ? new Motion(this.ch, { kind: type.human ? 'human' : 'zombie', persona: type.human ? 'observer' : undefined, rate: kindRate * (0.9 + Math.random() * 0.2) }) : null;
     this.ms = { mode: 'ground', speed: 0, moveAngle: 0 };
     this.weights = new Float32Array(RIG_BONES.length);
-    if (type.human) game.charFactory.applyLook(this.ch, raiderLook());
+    // yağmacı kiti, zombieLook'un (tohumlu) seçtiği tabanla: kadın tabanlı yağmacıya 'male' görünüm verilince applyLook
+    // yeniden kurulum isteyip dönüyordu (kit, yüz ağı ve iris hiç kurulmuyordu, göz kutuları boş beyaz kalıyordu)
+    if (type.human) game.charFactory.applyLook(this.ch, raiderLook(isFemaleBase(this.ch.base.name)));
     this.addExtras(type);
   }
 
@@ -203,16 +207,6 @@ export class ZombieView {
   attack() { this.attackT = 0; }
   flinch() { this.hitT = 0; }
   dispose() { if (this.animal) this.animal.mixer.stopAllAction(); if (this.root.parent) this.root.parent.remove(this.root); }
-}
-
-function raiderLook() {
-  const tops = ['#1b1b1b', '#3a2a2a', '#2c3a2c', '#4a3a2a'];
-  return {
-    base: 'male', skin: ['#e0a07a', '#c98a5e', '#a86b45'][Math.floor(Math.random() * 3)], hairStyle: 'short', hairColor: '#1d1410',
-    beard: Math.random() < 0.6 ? 'stubble' : 'full', hat: Math.random() < 0.6 ? 'bandana' : 'beanie', hatColor: '#7a1a1a',
-    top: { style: 'vest', color: tops[Math.floor(Math.random() * tops.length)], color2: '#5a3a2a' }, pants: { style: 'cargo', color: '#2c2c2c' }, shoes: '#1b1b1b',
-    backpack: 'tactical', backpackColor: '#2c2c2c', glasses: Math.random() < 0.4 ? 'sunglasses' : 'none', gloves: 'tactical', accessory: 'bandolier', build: 1.05, dirt: 0.6,
-  };
 }
 
 export { damp };

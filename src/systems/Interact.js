@@ -9,6 +9,8 @@ import { clamp } from '../core/util.js';
 
 // kapı türüne göre açılma/kapanma sesi (ahşap: gıcırtı; metal/hücre/kasa/garaj: metalik; cam)
 const DOOR_SOUND = { metal: 'door_metal', cell: 'door_metal', vault: 'door_metal', lab: 'door_metal', garage: 'door_metal', glass2: 'door_glass' };
+// üstten kapaklı konteynerler: aranırken eğilip kapağı açma klibi (Chest_Open)
+export const LIDDED = new Set(['crate', 'cabin_chest', 'ammo_crate', 'military_crate', 'cooler', 'fishing_box', 'toolbox', 'car_trunk', 'dumpster', 'trash_can', 'barrel', 'container']);
 
 export class Interact {
   constructor(session) {
@@ -272,16 +274,17 @@ export class Interact {
         S.world.doorRenderer.updateDoor(d);
       }
     }
-    if (blocking || S.localStats.downed) { this.cancelHold(); S.ui.setPrompt(null); return; }
-    // bekleyen basılı tutma
+    if (blocking || S.localStats.downed || pl.knockT > 0) { this.cancelHold(); S.ui.setPrompt(null); return; } // yere serilmişken etkileşim yok
+    // bekleyen basılı tutma: yürüyünce, engel atlayınca, zıplayınca/düşünce, takla atınca ya da tırmanınca kesilir
+    // (atlama sırasında hız donuk kalır: yalnız hıza bakılırsa 1,9 m ötede arama tamamlanıyordu)
     if (this.hold) {
       const h = this.hold;
-      const moved = pl.speed > 0.6;
+      const moved = pl.speed > 0.6 || !!pl.vault || !!pl.roll || pl.mode === 'air' || pl.mode === 'climb';
       if (!input.isDown('interact') && !h.auto || moved) { this.cancelHold(); }
       else {
         h.t += dt;
         S.ui.setPrompt({ label: h.label, key: 'E', progress: Math.min(1, h.t / h.dur) });
-        if (h.t >= h.dur) { const fn = h.onDone; this.hold = null; S.local.avatar.action = null; fn(); }
+        if (h.t >= h.dur) { const fn = h.onDone; this.hold = null; this.endHoldAct(h); fn(); }
         return;
       }
     }
@@ -313,16 +316,42 @@ export class Interact {
     if (t && input.wasPressed('interact')) this.activate(t);
   }
 
+  /**
+   * Basılı tutmalı eylem. anim: 'tür' ya da 'tür:çeşit' (ör. 'search:chest' sandık kapağı, 'search:pour' dökme);
+   * çeşitsiz arama yerde diz çökmedir. Tutma kendi başlattığı avatar eylemini hatırlar: bitince/iptalde yalnız onu
+   * bitirir (arada başlayan yeme/sargı kesilmez).
+   */
   startHold(label, dur, onDone, anim = 'search', auto = false) {
-    this.hold = { label, dur, t: 0, onDone, auto };
-    if (anim) this.s.local.avatar.play(anim, dur + 0.3, anim === 'search' ? 'low' : null);
-    if (this.s.local.avatar.action) this.s.local.avatar.action.loop = true;
+    if (this.s.local.knockT > 0) return; // yere serilmişken başlamaz (yerleştirme sonrası kendiliğinden başlayan inşa da)
+    const [type, kind] = (anim || '').split(':');
+    const av = this.s.local.avatar, before = av.action;
+    this.hold = { label, dur, t: 0, onDone, auto, act: null };
+    if (type) av.play(type, dur + 0.3, kind || (type === 'search' ? 'low' : null));
+    if (av.action && av.action !== before) { av.action.loop = true; this.hold.act = av.action; }
   }
-  cancelHold() {
+  /** Tutmanın başlattığı avatar eylemini bitir (başka eylem araya girdiyse ona dokunma) */
+  endHoldAct(h) {
+    const av = this.s.local.avatar;
+    if (h && h.act && av.action === h.act) av.action = null;
+  }
+  /** pending: henüz gerçekleşmemiş uzanma eylemleri de (yerden alma, kapı kolu) iptal (yere serilince) */
+  cancelHold(pending = false) {
+    if (pending && this.pending) this.pending.length = 0;
     if (!this.hold) return;
+    const h = this.hold;
     this.hold = null;
-    if (this.s.local.avatar.action) this.s.local.avatar.action = null;
+    this.endHoldAct(h);
     this.s.ui.setPrompt(null);
+  }
+
+  /**
+   * Konteynerin üst yüzeyinin ayağa göre yüksekliğine göre arama çeşidi: yerde diz çökme ('low'), kapaklı sandıkta
+   * eğilip kapak açma ('chest'), tezgâh/çekmece yüksekliğinde uzanma ('mid'), yüksek dolapta yukarı uzanma ('high').
+   * Bina içi mobilyada çerçeve yüksekliği (fy + fh, en çok 1,9 m) kullanılır; dış konteynerde y zaten zemin + yükseklik.
+   */
+  reachKind(c, lid = false) {
+    const top = (c.fh && c.fy !== undefined ? c.fy + Math.min(c.fh, 1.9) : c.y) - this.s.local.pos.y;
+    return top < 0.65 ? 'low' : lid ? 'chest' : top < 1.25 ? 'mid' : 'high';
   }
 
   /** Oyun dakikası maliyetini gerçek süreye çevir (tek oyunculuda zaman da ilerler) */
@@ -343,10 +372,13 @@ export class Interact {
     if (t.at && t.kind !== 'vehicle') pl.faceTo(t.at.x, t.at.z);
     switch (t.kind) {
       case 'ground': {
-        // eşya, eğilip uzanma anında (klibin ~%45'i) envantere girer; yürürken masadan alma klibi daha erken
+        // eşya, eğilip uzanma anında (klibin ~%45'i) envantere girer; yürürken ya da eşya masa/raf yüksekliğindeyse
+        // (ayaktan 0,45 m yukarıda) eğilmeden masadan alma klibi, uzanma daha erken
         const moving = pl.speed > 0.6;
-        pl.avatar.play('pickup', 0.5);
-        this.later(moving ? 0.28 : 0.42, () => { S.act('ground_pickup', { id: t.id }); S.audio.play('pickup', { vol: 0.5 }); });
+        const it = S.ground.items.get(t.id);
+        const table = !!it && it.y - pl.pos.y > 0.45;
+        pl.avatar.play('pickup', 0.5, table ? 'table' : null);
+        this.later(moving || table ? 0.28 : 0.42, () => { S.act('ground_pickup', { id: t.id }); S.audio.play('pickup', { vol: 0.5 }); });
         break;
       }
       case 'revive': {
@@ -382,12 +414,15 @@ export class Interact {
     const S = this.s;
     const c = t.c;
     const inv = S.inventory;
+    // alçak konteynerde diz çökülür; tezgâh yüksekliği ve üstünde ayakta (kilit/şifre el hizasında)
+    const low = this.reachKind(c) === 'low';
     if (t.locked) {
       if (t.locked >= 2) {
-        if (c.type === 'safe' && inv.has('vault_code')) { this.startHold('Şifre giriliyor…', 1.5, () => { S.act('unlock', { id: c.id }); S.ui.toast('Kasa açıldı!', 'good'); }, 'search'); return; }
+        if (c.type === 'safe' && inv.has('vault_code')) { this.startHold('Şifre giriliyor…', 1.5, () => { S.act('unlock', { id: c.id }); S.ui.toast('Kasa açıldı!', 'good'); }, low ? 'search:low' : 'search:mid'); return; }
         if (inv.has('crowbar')) {
           const tm = this.timed(30);
-          this.startHold('Levyeyle zorlanıyor… (gürültülü)', tm.real + 2, () => { S.act('unlock', { id: c.id }); S.act('noise', { x: c.x, z: c.z, r: 30, src: 'pry' }); S.ui.toast('Kasa zorla açıldı!', 'good'); }, 'search');
+          // levye: alçak kasada diz çöküp zorlama (hızlı), yüksekte gövdeyle yüklenme
+          this.startHold('Levyeyle zorlanıyor… (gürültülü)', tm.real + 2, () => { S.act('unlock', { id: c.id }); S.act('noise', { x: c.x, z: c.z, r: 30, src: 'pry' }); S.ui.toast('Kasa zorla açıldı!', 'good'); }, low ? 'search:pry' : 'push');
           return;
         }
         S.ui.toast('Bu kasa için şifre ya da levye gerekli.', 'warn');
@@ -395,7 +430,7 @@ export class Interact {
       }
       if (inv.has('lockpick')) {
         const skill = S.localProfile.stats.lockpick || 1;
-        this.startHold('Kilit açılıyor…', 2.5 / skill, () => { if (Math.random() < 0.4 / skill) inv.remove('lockpick', 1); S.act('unlock', { id: c.id }); }, 'search');
+        this.startHold('Kilit açılıyor…', 2.5 / skill, () => { if (Math.random() < 0.4 / skill) inv.remove('lockpick', 1); S.act('unlock', { id: c.id }); }, low ? 'search:low' : 'search:mid');
         return;
       }
       S.ui.toast('Kilitli. Maymuncuk ya da levye gerekli.', 'warn');
@@ -411,7 +446,7 @@ export class Interact {
       S.act('search_done', { id: c.id });
       if (tm.extra) S.time.advance(tm.extra);
       S.act('noise', { x: c.x, z: c.z, r: 8, src: 'search' });
-    }, 'search');
+    }, 'search:' + this.reachKind(c, LIDDED.has(c.type))); // yerde diz çök / kapaklıda eğil / tezgâhta / yüksekte uzan
     if (this.hold) this.hold.container = c; // çekmece fiziği: aranan dolabın çekmecesi açılır
   }
 
@@ -429,7 +464,7 @@ export class Interact {
       if (d.building && d.building.id === 'armory' && inv.has('armory_key')) { S.act('door', { id: d.id, open: true, unlock: true }); S.ui.toast('Anahtar uydu!', 'good'); return; }
       if (inv.has('lockpick')) {
         const skill = S.localProfile.stats.lockpick || 1;
-        this.startHold('Kilit açılıyor…', 3 / skill, () => { if (Math.random() < 0.5 / skill) inv.remove('lockpick', 1); S.act('door', { id: d.id, open: true, unlock: true }); }, 'search');
+        this.startHold('Kilit açılıyor…', 3 / skill, () => { if (Math.random() < 0.5 / skill) inv.remove('lockpick', 1); S.act('door', { id: d.id, open: true, unlock: true }); }, 'search:mid'); // kilit kol hizasında
         return;
       }
       if (inv.has('crowbar')) {
@@ -457,7 +492,7 @@ export class Interact {
         const i = inv.slots.findIndex((s) => s && s.id === 'jerrycan' && (s.fuel || 0) < 20);
         if (i < 0) { S.ui.toast('Doldurulacak yakıt bidonun yok.', 'warn'); return; }
         if (S.time.day >= 11 && !S.flags.gas_power) { S.ui.toast('Pompalar elektriksiz çalışmıyor (11. gün sonrası). Tankerleri dene.', 'warn'); return; }
-        this.startHold('Yakıt dolduruluyor…', 3, () => { const s = inv.slots[i]; if (s) { s.fuel = 20; inv.changed(); S.ui.toast('Bidon doldu (20 L).', 'good'); S.act('noise', { x: it.x, z: it.z, r: 10, src: 'pump' }); } }, 'search');
+        this.startHold('Yakıt dolduruluyor…', 3, () => { const s = inv.slots[i]; if (s) { s.fuel = 20; inv.changed(); S.ui.toast('Bidon doldu (20 L).', 'good'); S.act('noise', { x: it.x, z: it.z, r: 10, src: 'pump' }); } }, 'search:pour'); // ayakta, tabanca/bidonla dökme
         break;
       }
       case 'water_spring': {

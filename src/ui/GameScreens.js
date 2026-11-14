@@ -304,7 +304,12 @@ export class GamePanels {
     const wheel = h('div.wheel');
     list.forEach(([k, ic, n], i) => {
       const a = (i / list.length) * Math.PI * 2 - Math.PI / 2;
-      wheel.append(h('button.wheel-item', { type: 'button', style: { left: `calc(50% + ${Math.cos(a) * 110}px)`, top: `calc(50% + ${Math.sin(a) * 110}px)` }, on: { click: () => { this.ui.closePanel(); S.local.avatar.play(k, 2.4); S.local.emote = k === 'point' || k === 'laugh' ? null : k; clearTimeout(this._em); this._em = setTimeout(() => { if (this.S) this.S.local.emote = null; }, 2600); } } }, h('span', ic), h('small', n)));
+      wheel.append(h('button.wheel-item', { type: 'button', style: { left: `calc(50% + ${Math.cos(a) * 110}px)`, top: `calc(50% + ${Math.sin(a) * 110}px)` }, on: { click: () => {
+        // gülme/gösterme eylem olarak oynar (ağda yansıtılır); el sallama, sevinç ve dans ifade alanıyla her istemcide aynı yoldan.
+        // Çark açıkken yere serilen ya da yaralı yere düşen oyuncu ifade yapmaz (kalkış/sürünme bölünmesin)
+        this.ui.closePanel(); if (!S.canEmote()) return;
+        const ev = k === 'point' || k === 'laugh'; if (ev) S.local.avatar.play(k, 2.4); S.local.emote = ev ? null : k; clearTimeout(this._em); this._em = setTimeout(() => { if (this.S) this.S.local.emote = null; }, 2600);
+      } } }, h('span', ic), h('small', n)));
     });
     wheel.append(h('div.wheel-center', 'İfade'));
     el.append(wheel);

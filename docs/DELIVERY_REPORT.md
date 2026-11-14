@@ -198,7 +198,8 @@ Tur başı `bf132f4` ile tur sonu arasında (`git diff --stat bf132f4..HEAD`): o
   ölçülür (göz/ağız yuvaları), tek ağ (karakter başına +1 çizim çağrısı). Saçta kök–uç tonu ve tel tel fark;
   yüzde hafif ten varyasyonu. Deri malzemesine köşe başına pürüzlülük (ten yarı mat, göz ıslak, kumaş mat).
 - **Kıyafet koleksiyonları:** 8 koleksiyon artık gerçek modüler set değişikliği (cinsiyete göre) + renk/aksesuar;
-  yüz/saç korunur. Nadir kombinasyon testi: 63 erkek + 40 kadın kafa×gövde kombinasyonunun hepsinde boyun ve bel
+  yüz/saç korunur. (Tur 2 Aşama 2 düzeltmesi: o sırada koleksiyonlar kafa parçasını da değiştiriyordu, yani yüz ve saç
+  aslında korunmuyordu; artık kafa parçası korunuyor, İşçi bareti ve Askerî kaskı şapka yuvasından geliyor.) Nadir kombinasyon testi: 63 erkek + 40 kadın kafa×gövde kombinasyonunun hepsinde boyun ve bel
   birleşimi ölçüldü, görünür boşluk yok (`tests/e2e/outfits.mjs`; Tur 2'den beri CI'da her gönderimde koşuyor).
 - **Kişilik:** oyun içinde boş beklerken Mert anahtar kurcalar, Elif dürbünle bakar, Bora gerinir, Deniz gard alıp
   yumruk atar, Ceren saate bakar, Zülal ayak ucunda etrafı kolaçan eder (aletler eşya modelinden, elde belirir).

@@ -50,6 +50,8 @@ Doğrulayıcıların kodda gösterdiği ve aşağıdakilerin ilk dördü elle de
   değişimini alıyor, ağır nesne hafif nesne gibi savruluyor.
 - **Kadın karakter kafalarında gözler kaş sayılıp saç rengine yakın boyanıyor; Punk ve SciFi kafalarında bu turda
   eklenen göz rengi kuralı çene/boyun bölgesini açık griye boyuyor** (`CharacterFactory` sınıflama ve renk eşlemesi).
+  **Giderildi (Tur 2 Aşama 2):** kadın kafalarında 'Brown' göz, 'Black' ayrıntı sayılır; `refineSlots` göz ile kaşı
+  bileşen şekliyle ayırır, iris/göz bebeği göz kutusunun ön yüzüne oturur (`tests/unit/charlook.test.mjs`).
 - **Host bilerek ayrılınca göç yok.** Göç yalnız host sekmesi kapanınca/düşünce (`Net.tryReconnect` →
   `migrateToHost`) çalışıyor; "Ana Menüye Dön" `Net.leave()` ile herkese 'host_left' yolluyor ve oyun herkes için
   kapanıyor. 'migrate' iletisinin işleyicisi var ama hiçbir yerde gönderilmiyor.
@@ -58,8 +60,11 @@ Doğrulayıcıların kodda gösterdiği ve aşağıdakilerin ilk dördü elle de
   host'ta hiç başlamaz. Göçte botların çantası, cephanesi ve verilen silahları da varsayılana dönüyor.
 - **Aynı işi yapan ikinci sistemler (istemin 9. kuralı):** iki ayrı kişilik kıpırdanması zamanlayıcısı
   (`Motion` PERSONA.fidget ve `Avatar` FIDGETS, eşgüdümsüz), iki zemin sınıflayıcı (`Session.surfaceAt` ve bu turda
-  eklenen `Terrain.surfaceAt`).
-- **Ayakkabı tabanı yuvası (`SLOT.soles`) ölü kod**: hiçbir köşeye atanmıyor.
+  eklenen `Terrain.surfaceAt`). **İkisi de giderildi (Tur 2 Aşama 2):** zemin için ikisi de kaldırıldı, tek kaynak
+  `World.surfaceAt` (ayak sesleri `STEP_SOUND`, araçlar `driveSurface`, Benchmark); kıpırdanmanın tek karar noktası
+  `Avatar.updateFidget` (Motion yalnız `setIdleVariant` ile çeşidi oynatır; ağda sahibi yansıtır, uzaklar zamanlamaz).
+- **Ayakkabı tabanı yuvası (`SLOT.soles`) ölü kod**: hiçbir köşeye atanmıyor. **Giderildi (Tur 2 Aşama 2):** her
+  ayak setinde taban köşeleri `SLOT.soles`'a atanır, `look.soleColor` yalnız tabanı boyar (`charlook` testi).
 
 ## Süreç
 - İstem ayrı bir geliştirme dalı istiyordu. Bütün iş tek dalda (`claude/kiyametten-once-game-0yng28`) yapıldı ve bu dal
@@ -89,6 +94,13 @@ Her maddede durum (kısmi/yok) ve doğrulayıcının gerekçesinden kısa bir al
 - **Kısmi: Bekleme animasyonları ve hareketler kişiliğe uygun olsun** — İddia kısmen doğru: çekirdek gerçek ama eksikler var. Yeni kıpırdanma sistemi gerçek ve oyun içinde çalışıyor: Avatar.updateFidget (717) updateMotion:686'dan çağrılıyor, Animations.fidget 447-484'te; motion günlüğünde tinker ve binoculars pervaneleri görünür. …
 - **Kısmi: Deniz daha kendinden emin bir duruş sergilesin** — İddia doğrulandı. PERSONA.confident (Motion.js:32) tur öncesinden ve dosya bu turda değişmedi: bekleme klibi 'Idle_Loop', varsayılanla aynı; ara sıra oynayan 'Idle_FoldArms_Loop' Bora ve formal ile ortak. Bu turda eklenen tek şey …
 - **Kısmi: Bora ağır ve güçlü hareket etsin** — İddia doğrulandı. FIDGETS.heavy=['stretch'], FIDGETS.default ile aynı (Avatar.js:82-83); Bora'ya özgü yeni bir davranış yok. Yürüyüş tur öncesinden kalma PERSONA.heavy (Motion.js:34): Mert ile aynı 'Walk_Loop' klibi, faz hızı 0.95; bekleme kıpırdanması …
+- **Tur 2 Aşama 2 sonrası durum (§3):** kadın gözleri/kaşları ayrıldı, iris göz kutusunun ön yüzünde, gözlükler yüz
+  verisinden; her ayakkabıda taban yuvası ve taban rengi; ikinci kumaş rengi (gömlek/yelek); kol saati (ön kol) ve
+  omuz çantası, sırt çantası askıları ve omuz kayışı gövdeyle bükülen derili şerit (kenarlar omuz eğimini izler);
+  koleksiyonlar gerçek set değiştirir ve kafa (yüz/saç) korunur, kadın Günlük/Sportif farklı setler, İşçi/Askerî
+  başlığı şapka yuvasından; her ana karakterin kendi bekleme/yürüyüş/duruşu ve kıpırdanma havuzu (tek zamanlayıcı)
+  — `charlook` (13 birim testi), `outfits`, `smoke-menu`, `motion`. Kalan: kafa modelleri (Quaternius) ve kumaş/normal
+  haritası değişmedi; yüz geometrisi aynı.
 
 ### §4–5 Hareket motoru, etkileşim animasyonları (19)
 - **Yok: Mevcut Motion ve Player sistemlerini birlikte inceleyip iyileştir; yeni hareket motoru yazma** — Doğrulandı. `git log bf132f4..HEAD` Motion.js, FootIK.js, CharacterRig.js, AnimPack.js ve tests/unit/motion.test.mjs için boş. Player.js diff'inde yalnız faceTo() (Player.js:184, etkileşim yönelmesi), faceT dalı ve animState.actT (ağ) var. Değişmeyenler: hız …
@@ -110,6 +122,15 @@ Her maddede durum (kısmi/yok) ve doğrulayıcının gerekçesinden kısa bir al
 - **Yok: Ağır nesneyi iki kişiyle taşıma** — Doğrulandı. Host'taki prop_carry işleyicisi (PhysProps.js:55-61) taşıyıcı varken ikinci alana gerçek taşıyıcıyı bildiriyor; tek taşıyıcı kuralı. nearestCarryable >20 kg nesneleri dışlıyor. carry-mp.mjs:74 'aynı anda almada tek taşıyıcı olmalı' diye assert …
 - **Kısmi: El ve nesne arasında doğru hizalama** — Hizalama yalnız gövde yaw'ı: Player.faceTo (Player.js:184-189), Interact.js:341'den çağrılıyor. El IK'sı yok; rig.setArmIK yalnız tüfekte sol el için (Avatar.js:511/528/669/786). Yaklaşma ya da mesafe ayarı yok: yerdeki eşyaya 1,7 m'ye, kapıya 1,8 m'ye, …
 - **Kısmi: Animasyon tamamlanmadan eşya envantere eklenmesin; animasyon ve oyun eylemi aynı zaman çizelgesini kullansın** — Var olan: Interact.later sabit gecikmeleri (Interact.js:348'de 0,42/0,28 sn, :442'de 0,22 sn); basılı tutmalı işler bitişte uygulanıyor. interact.mjs 0,2–0,9 ve 0,1–0,6 sn pencerelerini assert ediyor. Doğrulanan sınırlar: - pending kuyruğu Interact.update'in …
+- **Tur 2 Aşama 2 sonrası durum (§4–5):** depardan duruş adımı (Sprint_Exit), hızlanma/yavaşlamada gövde eğilmesi,
+  yokuşta gövde eğimi ve ayak tabanı hizası (`FootIK.alignFoot`), bot/NPC'de yerinde dönüş (Turn90/180), denge kaybı
+  (yere serilme: Hit_Knockback → KipUp, kalkıştan sonra 3,5 sn bağışıklık), atlayışta momentum (%85), ağır yükte
+  (> 14 kg) yavaş ağır adım ve geriye yaslanma; etkileşimler hedefe göre kendi klibiyle (sandık Chest_Open, tezgâh/raf,
+  dökme, ekme/hasat, levye, masadan alma, olta çekme/kaçırma, jeneratör onarımı diz çökerek, kapı zorlama itme),
+  diz çökme döngüsü ayağa kalkışı tekrarlamaz ve bitince çıkış klibiyle kalkar — `motion` (e2e), `motion`/`actions`
+  (birim). Kalan: el IK'sı yok (hizalama gövde yönüyle); barikat/pencere güçlendirme/inşa hâlâ çekiç döngüsü;
+  jeneratöre yakıt koyma ve aç/kapa anında (animasyonsuz); kapıyı fiziksel itmenin avatar hareketi yok; FootIK yalnız
+  basamak ve doğal yamaçta test ediliyor (merdiven/moloz yok); ağır nesneyi iki kişiyle taşıma Aşama 3'te.
 
 ### §6 Fizik (8)
 - **Kısmi: Kapının açılma açısı ve çarpışma alanı doğru eşleşsin** — Hata doğrulandı. Canlı oyunda görsel kanadın gövdesinden yazılıyor (DoorPhysics.writeVisual :181-192). Ancak refresh yalnız 'door' olayında çalışıyor (:29). Session.js:123'te kapı gövdeleri varsayılan durumla kuruluyor. Sonra load (:148→:886) ve applyWelcome …
@@ -183,7 +204,7 @@ Her maddede durum (kısmi/yok) ve doğrulayıcının gerekçesinden kısa bir al
 
 ### §16–18 Aşamalı plan, kabul kriterleri, teslim raporu (8)
 - **Kısmi: Aşama 1 – Test ve güvenlik: mevcut kodu incele, çalışan sürümü yedekle, test bağımlılıklarını düzelt, CI'yı iyileştir, başlangıç test raporu oluştur** — Küçük ama gerçek ve belgelenmemiş bir açık. Depoda yedek izi yok: `git tag -l` boş. Yerelde ve origin'de tek dal var (claude/kiyametten-once-game-0yng28) ve Pages bu dalı doğrudan yayınlıyor (README 'Deploy from a branch'). İstemin s.63'teki 'ayrı bir …
-- **Kısmi: Aşama 2 – Karakter kalitesi: model detayları, kıyafet, yüz, animasyon, FootIK, etkileşim hizalaması** — İstem s.169-170: 'FootIK sistemini geliştir ve farklı arazi türlerinde test et'. `git log bf132f4..HEAD -- src/entities/FootIK.js src/entities/Motion.js` boş; turun diff'inde IK ile ilgili satır yok, yani yamaç desteği tur öncesinden kalma. …
+- **Kısmi: Aşama 2 – Karakter kalitesi: model detayları, kıyafet, yüz, animasyon, FootIK, etkileşim hizalaması** — İstem s.169-170: 'FootIK sistemini geliştir ve farklı arazi türlerinde test et'. `git log bf132f4..HEAD -- src/entities/FootIK.js src/entities/Motion.js` boş; turun diff'inde IK ile ilgili satır yok, yani yamaç desteği tur öncesinden kalma. … **Tur 2 Aşama 2:** FootIK (`alignFoot`, yokuş) ve Motion geliştirildi, yamaç/basamak testleri e2e `motion`'da; ayrıntı §3 ve §4–5 sonundaki durum notlarında.
 - **Kısmi: Aşama 3 – Fizik: menteşeli kapılar, çekmeceler, kırılabilir çevre, ağır nesneler, su fiziği, çarpışma sesleri** — Yapılanlar doğrulandı: DoorPhysics, Drawers, Buoyancy ve ContactSounds var; physics2.mjs'te 13 check var; PhysProps enkaz havuzu bu turda eklenmiş. Ağır nesneler için bu turda iş yok: PhysProps.js:148'deki 'mass > 20' taşıma sınırı ve …
 - **Kısmi: Aşama 6 – Zombi ve bot YZ: sürü optimizasyonu, yol bulma, arama davranışı, çeşitli animasyonlar, bağımsız takım arkadaşları** — Yapılanlar doğrulandı: Zombies.js'te uzaklığa göre sıralı bütçe, 60 m ötesinde seyrek düşünme ve resolveOverlaps var; Bots.js'te loot/build/base emirleri var; ai2.mjs'te check var. 'Çeşitli animasyonlar' için bu turda iş yok: `git log bf132f4..HEAD -- …
 - **Kısmi: Aşama düzeni: aşama tamamlanmadan sonrakine geçmeme, aşamalar arasında çalışan sürümü koruma, her aşamayı ayrı commit olarak kaydetme** — Her aşamanın ayrı, adlı commit'i var; bu kısım karşılanmış. Ama 'aşama bitmeden sonrakine geçme' kuralı çiğnenmiş. Aşama 2 commit'i f6d503c, Interact.js'te Aşama 3'ün kancalarını da taşıyor: `if (d.phys) continue; // menteşeli fiziksel kapı … DoorPhysics'ten` …

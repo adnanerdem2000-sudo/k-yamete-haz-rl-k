@@ -38,6 +38,7 @@ const { Bots } = await import('../../src/systems/Bots.js');
 const { Timeline } = await import('../../src/systems/Timeline.js');
 const { StoryWorld } = await import('../../src/systems/StoryWorld.js');
 const { CHARACTERS } = await import('../../src/entities/CharacterFactory.js');
+const { Player } = await import('../../src/entities/Player.js');
 
 const sleep = (ms) => new Promise((r) => _setTimeout(r, ms));
 async function waitFor(cond, what = 'koşul', ms = 4000) {
@@ -198,11 +199,19 @@ async function joinRoom(game, code, name, charId = 'mert') {
 test('Net yardımcıları: compactAnim yuvarlar ve eksikleri doldurur; summaryOf özet + telsiz bayrağı; bağlantı kalitesi sınıfı', (t) => {
   const net = new Net({ ui: fakeUI() });
   t.after(() => net.lobbyBeacon && net.lobbyBeacon.close());
-  const a = net.compactAnim({ mode: 'ground', speed: 3.14159, vy: -2.345, yaw: 1.23456, pitch: 0.98765, aim: 1, steer: 0.33333, emote: 'wave', carrying: 'p_2', moveAngle: -0.7777, roll: true, tired: 'evet', carryBox: {}, act: 'chop', actT: 0.44444, gereksiz: 'x' });
-  assert.deepEqual(a, { mode: 'ground', speed: 3.1, vy: -2.3, yaw: 1.23, pitch: 0.99, aim: true, steer: 0.33, emote: 'wave', carrying: true, moveAngle: -0.78, roll: 1, tired: 1, carryBox: 1, act: 'chop', actT: 0.44 });
+  const a = net.compactAnim({ mode: 'ground', speed: 3.14159, vy: -2.345, yaw: 1.23456, pitch: 0.98765, aim: 1, steer: 0.33333, emote: 'wave', carrying: 'p_2', moveAngle: -0.7777, roll: true, tired: 'evet', carryBox: {}, act: [12, 'melee', 0.55, 'melee1', 5], actT: 0.44444, hit: [7, 3, 'fazla'], gereksiz: 'x' });
+  assert.deepEqual(a, { mode: 'ground', speed: 3.1, vy: -2.3, yaw: 1.23, pitch: 0.99, aim: true, steer: 0.33, emote: 'wave', carrying: true, moveAngle: -0.78, roll: 1, tired: 1, carryBox: 1, act: [12, 'melee', 0.55, 'melee1', 5], actT: 0.44, hit: [7, 3] });
   const b = net.compactAnim({ mode: 'crouch', speed: 0, yaw: -0.004 });
-  assert.deepEqual(b, { mode: 'crouch', speed: 0, vy: 0, yaw: -0, pitch: 0, aim: false, steer: 0, emote: null, carrying: false, moveAngle: 0, roll: 0, tired: 0, carryBox: 0, act: null, actT: 0 });
+  assert.deepEqual(b, { mode: 'crouch', speed: 0, vy: 0, yaw: -0, pitch: 0, aim: false, steer: 0, emote: null, carrying: false, moveAngle: 0, roll: 0, tired: 0, carryBox: 0, act: null, actT: 0, hit: null });
   assert.deepEqual(JSON.parse(JSON.stringify(a)), a, 'ağ üzerinden (JSON) kayıpsız');
+  // oyuncunun anim durumu: isabet tepkisi eylem yuvasından ayrı alanda (hit: [sayaç, klip dizini]) gider; yakın dövüşte
+  // eylemin 5. öğesi vuruş sayacı
+  const pa = Player.prototype.animState.call({ mode: 'ground', speed: 0, vel: new THREE.Vector3(), yaw: 0, camPitch: 0, avatar: { lastAct: [3, 'knock', 1.95, null], lastActAt: performance.now(), lastHit: [5, 2] } });
+  const pc = net.compactAnim(pa);
+  assert.deepEqual([pc.act, pc.hit], [[3, 'knock', 1.95, null], [5, 2]]);
+  assert.equal(net.compactAnim(Player.prototype.animState.call({ mode: 'ground', speed: 0, vel: new THREE.Vector3(), yaw: 0, camPitch: 0, avatar: {} })).hit, null, 'isabet yoksa null');
+  // taşıma türü: 2 ağır yük (fıçı, büyük kasa) olduğu gibi, diğer doğru değerler hafif (1)
+  assert.deepEqual([2, 1, true, 0, null].map((v) => net.compactAnim({ mode: 'ground', speed: 0, yaw: 0, carryBox: v }).carryBox), [2, 1, 1, 0, 0]);
   // özet: tamsayıya yuvarlanır; telsiz, oturumdaki envanterde varsa 1
   const st = new PlayerStats({ health: 125 });
   Object.assign(st, { health: 87.6, hunger: 33.3, thirst: 66.6, downed: 1 });
