@@ -2,6 +2,7 @@
 // aynı eşya sürekli yeniden ortaya çıkmaz. Bölge tehlikesi ve takvim olayları içeriği etkiler.
 import { LOOT, SPECIAL_LOOT } from '../data/loot.js';
 import { ITEMS } from '../data/items.js';
+import { putStack, takeQty } from './Inventory.js';
 import { RANDOM_NOTES } from '../data/story.js';
 import { RNG } from '../core/util.js';
 
@@ -47,8 +48,9 @@ export class Loot {
     S.on('search_done', (p, from) => {
       const c = this.byId.get(p.id);
       if (!c) return;
-      let st = this.state.get(p.id);
-      if (!st) { st = this.generate(c); this.state.set(p.id, st); S.results.searched++; }
+      const prev = this.state.get(p.id);
+      const st = this.ensure(c);
+      if (!prev || prev.pending) S.results.searched++;
       st.searched = true;
       if (p.forced) st.locked = 0;
       S.emit({ k: 'container', id: p.id, slots: st.slots, searched: true, locked: st.locked || 0, open: from });
@@ -60,7 +62,7 @@ export class Loot {
       const idx = p.slot;
       const s = st.slots[idx];
       if (!s) return;
-      const qty = Math.min(p.qty || s.qty, s.qty);
+      const qty = takeQty(p.qty, s.qty);
       const taken = { ...s, qty };
       s.qty -= qty;
       if (s.qty <= 0) st.slots[idx] = null;
@@ -79,18 +81,17 @@ export class Loot {
       let st = this.state.get(p.id);
       if (!st) { st = { searched: true, slots: new Array(this.capacity(this.byId.get(p.id) || p)).fill(null) }; this.state.set(p.id, st); }
       const stack = p.stack;
-      // birleştir/boş yuva
-      const def = ITEMS[stack.id];
-      let left = stack.qty;
-      if (def.stack > 1) for (const s of st.slots) { if (s && s.id === stack.id && !s.noteId && left > 0) { const add = Math.min(def.stack - s.qty, left); s.qty += add; left -= add; } }
-      for (let i = 0; i < st.slots.length && left > 0; i++) if (!st.slots[i]) { const add = Math.min(def.stack, left); st.slots[i] = { ...stack, qty: add }; left -= add; }
+      if (!stack || !ITEMS[stack.id]) return;
+      // birleştir/boş yuva (envanterle aynı kural: eski yiyeceğin tazeliği korunur)
+      const left = putStack(st.slots, stack);
       S.emit({ k: 'container', id: p.id, slots: st.slots });
       if (left > 0) S.emit({ k: 'grant', to: from, items: [{ ...stack, qty: left }], silent: true });
     });
     S.on('unlock', (p) => {
-      const st = this.state.get(p.id) || this.generate(this.byId.get(p.id));
+      const c = this.byId.get(p.id);
+      if (!c) return;
+      const st = this.ensure(c);
       st.locked = 0;
-      this.state.set(p.id, st);
       S.emit({ k: 'container', id: p.id, slots: st.slots, locked: 0 });
     });
     // ---- olay uygulama (herkes)
@@ -106,8 +107,23 @@ export class Loot {
   }
 
   init() {
-    // kilitli konteynerler (kasalar) ve 3. gün yağmalama hazırlığı
-    for (const c of this.list) if (c.type === 'safe' || c.locked) this.state.set(c.id, { searched: false, slots: [], locked: c.type === 'safe' ? 2 : c.locked });
+    // kilitli konteynerler (kasalar, kilitli dolaplar) kilitli başlar; içerikleri açılınca üretilir (pending)
+    for (const c of this.list) if (c.type === 'safe' || c.locked) this.state.set(c.id, { searched: false, slots: [], locked: c.type === 'safe' ? 2 : c.locked, pending: true });
+  }
+
+  /**
+   * (host) Konteynerin durumu; içerik henüz üretilmemişse şimdi üretilir. Kilitli başlayan kasa/dolapların durumu baştan
+   * vardır ama içeriği yoktur (pending): eskiden açılınca da üretilmediği için banka kasaları ve silah dolabı hep boştu.
+   */
+  ensure(c) {
+    let st = this.state.get(c.id);
+    if (!st || st.pending) {
+      const g = this.generate(c);
+      if (st) { g.locked = st.locked; g.searched = st.searched; }
+      st = g;
+      this.state.set(c.id, st);
+    }
+    return st;
   }
 
   capacity(c) {
@@ -132,7 +148,8 @@ export class Loot {
       if (i >= 0) slots[i] = { id, qty, ...(data || {}) };
     };
     if (c.special && SPECIAL_LOOT[c.special]) {
-      for (const [id, n, data] of SPECIAL_LOOT[c.special]) put(id, n, data);
+      // özel içerikteki silah/aletler de aşınır (üretilen yağma gibi; bakımlı bulunur: tam dayanıklılık)
+      for (const [id, n, data] of SPECIAL_LOOT[c.special]) put(id, n, ITEMS[id] && ITEMS[id].durability && !(data && data.dur !== undefined) ? { ...(data || {}), dur: ITEMS[id].durability } : data);
       return { searched: false, slots, locked: c.locked || 0 };
     }
     // hikâye belgeleri: boş çıkma zarından önce (belge odası tek konteynerliyse de bulunsun)
@@ -199,15 +216,24 @@ export class Loot {
   get(id) { return this.state.get(id); }
   searched(id) { const s = this.state.get(id); return !!(s && s.searched); }
 
-  /** Takvim olayları: 3. günde yağmalama (bazı evler boşalır) */
+  /**
+   * Takvim olayları: 3., 12. ve 20. günde yağmalama (bazı konteynerler boşalır). Hikâye içerikli konteynerler (özel
+   * içerik: virüs numunesi, cephanelik anahtarı, pilot günlüğü…) ve kilitli kasalar yağmalanmaz; yağmalanan bir belge
+   * tutucuda odanın hikâye belgesi (ve ekleri: anahtar kart, deniz haritası) kalır — yağmacılar kâğıt toplamaz.
+   */
   onDay(day) {
     if (!this.s.isHost) return;
     if (day === 3 || day === 12 || day === 20) {
       const rng = new RNG(this.s.seed + ':loot' + day);
       for (const c of this.list) {
-        if (this.state.get(c.id)?.searched) continue;
-        if (c.building === 'home') continue;
-        if (rng.chance(day === 3 ? 0.15 : 0.12)) this.state.set(c.id, { searched: false, slots: new Array(12).fill(null), looted: true });
+        // yalnız hiç dokunulmamış konteyner yağmalanır: aranmış, kilitli, önceki yağmada boşalmış ya da içine eşya konmuş
+        // olanların durumu vardır (durum kayıtla taşınır: yüklemeden sonra da ikinci yağma belgeyi silemez)
+        if (this.state.get(c.id)) continue;
+        if (c.building === 'home' || c.special || c.type === 'safe' || c.locked) continue;
+        if (!rng.chance(day === 3 ? 0.15 : 0.12)) continue;
+        const slots = new Array(12).fill(null);
+        this.storyDocs(c).forEach(([id, n, data], i) => { slots[i] = { id, qty: n, ...(data || {}) }; });
+        this.state.set(c.id, { searched: false, slots, looted: true, locked: 0 });
       }
     }
   }
@@ -228,6 +254,18 @@ export class Loot {
   }
   load(o) {
     this.state.clear();
-    for (const [id, st] of Object.entries(o || {})) this.state.set(id, { searched: !!st.s, locked: st.l, slots: (st.i || []).map((x) => x || null) });
+    for (const [id, st] of Object.entries(o || {})) {
+      const s = { searched: !!st.s, locked: st.l, slots: (st.i || []).map((x) => x || null) };
+      const c = this.byId.get(id);
+      // aranmamış ve boş durum yalnız iki yoldan gelir: kilitli başlayıp hiç açılmamış kasa/dolap (içeriği açılınca üretilir)
+      // ya da yağmalama. Eski sürümün yağması hikâye konteynerlerini de boşaltıyordu: onlar hiç kurulmamış sayılır (aranınca
+      // içerikleriyle üretilir); yağmalanmış belge tutucuya da binanın/odanın silinmiş hikâye belgesi geri konur (host)
+      if (c && !s.searched && !s.slots.some(Boolean)) {
+        if (c.special) continue;
+        if (c.type === 'safe' || c.locked) s.pending = true;
+        else if (this.s.isHost) this.storyDocs(c).forEach(([iid, n, data], i) => { s.slots[i] = { id: iid, qty: n, ...(data || {}) }; });
+      }
+      this.state.set(id, s);
+    }
   }
 }

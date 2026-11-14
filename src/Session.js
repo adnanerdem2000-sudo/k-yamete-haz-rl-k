@@ -39,16 +39,13 @@ import { MapSystem } from './systems/MapSystem.js';
 import { Weather } from './systems/Weather.js';
 import { Bots } from './systems/Bots.js';
 import { SaveSystem } from './systems/SaveSystem.js';
+import { DIFFICULTY } from './data/difficulty.js';
 import { Crafting } from './systems/Crafting.js';
 import { Timeline } from './systems/Timeline.js';
 import { StoryWorld } from './systems/StoryWorld.js';
 import { BIOME } from './world/Terrain.js';
 
-export const DIFFICULTY = {
-  easy: { name: 'Kolay', zombies: 0.7, dmg: 0.65, needs: 0.8, loot: 1.3 },
-  normal: { name: 'Normal', zombies: 1, dmg: 1, needs: 1, loot: 1 },
-  hard: { name: 'Zor', zombies: 1.35, dmg: 1.35, needs: 1.2, loot: 0.8 },
-};
+export { DIFFICULTY }; // menü ekranları buradan alır (tanım: data/difficulty.js)
 
 export class Session {
   constructor(game, cfg) {
@@ -62,7 +59,7 @@ export class Session {
     this.isHost = cfg.mode !== 'client';
     this.seed = cfg.seed || Math.floor(Math.random() * 1e9);
     this.rng = new RNG(this.seed);
-    this.diff = DIFFICULTY[cfg.difficulty || 'normal'];
+    this.diff = Object.hasOwn(DIFFICULTY, cfg.difficulty) ? DIFFICULTY[cfg.difficulty] : DIFFICULTY.normal; // bilinmeyen zorluk (elle düzenlenmiş kayıt) → normal
     this.time = new TimeSystem({ dayMinutes: cfg.dayMinutes || Settings.get('gameplay.dayMinutes') || 24, startDay: 1, startMinute: 8 * 60 });
     this.handlers = {};
     this.appliers = {};
@@ -224,6 +221,8 @@ export class Session {
     this.onEvt('grant', (e) => {
       for (const s of e.items) {
         if (ITEMS[s.id] && ITEMS[s.id].spoil && s.t0 === undefined) s.t0 = Math.round(this.time.total);
+        // ödül/takas/özel içerikle gelen silah ve aletler de aşınsın (dayanıklılığı yazılmamışsa yeni sayılır)
+        if (ITEMS[s.id] && ITEMS[s.id].durability && s.dur === undefined) s.dur = ITEMS[s.id].durability;
         const left = this.inventory.addStack({ ...s });
         if (left > 0) { this.act('ground_drop', { stack: { ...s, qty: left }, x: this.local.pos.x, y: this.local.pos.y, z: this.local.pos.z }); this.ui.toast('Envanter dolu! Eşya yere bırakıldı.', 'warn'); }
         else if (!e.silent) this.ui.itemToast(s.id, s.qty);
@@ -273,8 +272,16 @@ export class Session {
     this.on('ping', (p, from) => this.emit({ k: 'ping', from, x: p.x, y: p.y, z: p.z, label: p.label, name: this.players.get(from)?.name || '?' }));
     this.onEvt('ping', (e) => { this.fx.ping(e.x, e.y, e.z, e.name, e.label); this.map.addPing(e.x, e.z, e.name); this.audio.play('click', { vol: 0.6 }); });
     this.on('give', (p, from) => {
-      // eşyayı başka oyuncuya ilet
-      if (p.to.startsWith('bot_')) { this.bots.receive(p.to, p.stack); return; }
+      // eşyayı başka oyuncuya ilet. Alıcı bu arada oyundan çıktıysa (ya da yoksa) eşya verene geri döner: veren onu
+      // envanterinden çoktan çıkardı, kaybolmasın
+      if (!p || !p.stack || !ITEMS[p.stack.id] || !(p.stack.qty > 0) || typeof p.to !== 'string') return;
+      const bot = p.to.startsWith('bot_') && this.bots.byId(p.to);
+      if (!bot && !this.players.has(p.to)) {
+        this.emit({ k: 'grant', to: from, items: [p.stack], silent: true });
+        this.emit({ k: 'toast', to: from, text: 'Alıcı artık oyunda değil; eşya sende kaldı.', kind: 'warn' });
+        return;
+      }
+      if (bot) { this.bots.receive(p.to, p.stack); return; }
       this.emit({ k: 'grant', to: p.to, items: [p.stack] });
       this.emit({ k: 'toast', to: p.to, text: `${this.players.get(from)?.name || 'Biri'} sana ${ITEMS[p.stack.id]?.name} verdi.`, kind: 'good' });
     });
@@ -855,7 +862,7 @@ export class Session {
     this.zombies._wasNight = this.time.isNight;
     if (!this.time.isNight && !this.zombies.frenzy && !(this.endings && this.endings.active)) this.zombies.dawn();
     // olay planı: son paylaşılan hâli (katılımdaki eski plan değil)
-    if (this.eventsState) { this.events.done = new Set(this.eventsState.done || []); this.events.schedule = this.eventsState.schedule || []; }
+    if (this.eventsState) this.events.adoptBackup(this.eventsState); // yedekten sonra gösterilen olay yinelenmez
     this.promotedZombies = seen.length;
     if (this.bots && this.bots.promoteProxies) this.bots.promoteProxies();
     // ayrılan oyuncuların koltukları boşalır; sürücüsüz araçlar dinamik gövdeye döner
@@ -880,17 +887,18 @@ export class Session {
     const rec = { ...info, look, avatar, pos: new THREE.Vector3(info.x || 0, info.y || 0, info.z || 0), target: null, anim: null, summary: info.summary || null };
     avatar.root.position.copy(rec.pos);
     this.players.set(info.id, rec);
-    this.ui.toast(`${info.name} oyuna katıldı.`, 'good');
+    if (!info.silent) this.ui.toast(`${info.name} oyuna katıldı.`, 'good'); // silent: zaten oyunda olanların bildirimi
+    delete rec.silent;
     return rec;
   }
 
-  removeRemotePlayer(id) {
+  removeRemotePlayer(id, silent = false) {
     const p = this.players.get(id);
     if (!p || p.isLocal) return;
     if (p.avatar) p.avatar.dispose();
     this.players.delete(id);
     this.sleepVotes.delete(id);
-    this.ui.toast(`${p.name} bağlantısı koptu. (Geri bağlanabilir)`, 'warn');
+    if (!silent) this.ui.toast(`${p.name} bağlantısı koptu. (Geri bağlanabilir)`, 'warn');
   }
 
   teamList() {

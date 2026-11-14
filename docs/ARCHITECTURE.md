@@ -228,6 +228,11 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   `pdata` yedeklerinden gelir (host 8 sn'de bir tüm oyuncuların kayıt verisini herkese yayınlar).
 - **Geç katılan:** karşılama paketi taşınan/yerinden oynamış fizik nesnelerinin pozunu ve taşıyıcısını içerir
   (`PhysProps.serializeDynamic`).
+- **Oyuncu listesi eşitlemesi:** hoş geldin paketi yükleme başlamadan kurulur; lobiden birlikte başlayan ya da biri
+  yüklenirken katılan istemciler o pakette yoktur. Host, oturumunu kuran (`joined`) her istemciye oyundaki diğer
+  istemcileri `pjoin` ile (sessiz, güncel konumla) bildirir, ardından tam oyuncu listesini (`proster`) gönderir: o
+  yüklenirken ayrılan oyuncu onda hayalet olarak kalmaz. Diğerlerine de yeni geleni duyurur. Zaten tanınan oyuncu
+  yinelenmez (`Session.addRemotePlayer`).
 - **Yakınlık sesi:** uzak oyuncuların sesi Web Audio `PannerNode` (HRTF, ters mesafe, 35 m) ile konumlanır; iki
   tarafta da telsiz varsa mesafesiz ve yönsüz (özet paketinde `radio`).
 - **Hayvanlar:** yapay zekâ host'ta (`NPCs.updateAnimals`); algı, saldırı, doğma ve kaybolma bütün oyunculara göre
@@ -355,6 +360,14 @@ süzülür). Aracı süren istemci, aracın fiziğinde otoritedir; host durumu d
   14 NPC (selam, sohbet konuları `lore`, ticaret bayrağı), 29 görev, 38 belge, 7 final.
 - `Events`: takvim etkileri + olay seçimlerinin etkileri (paket, düşen uçak, sarsıntı, Kanlı Ay, sürüler,
   hayvan sürüleri, yangın, gürültü, zula, enfeksiyon…). Hepsi host'ta uygulanır, olaylarla yayılır.
+  Olay kartı kuyruğu: bir kart karar beklerken (`Events.active`, her eşte `event_show` ile kurulur, `event_result` ile
+  kalkar) vakti gelen zamanlanmış olay 3 oyun dakikası aralıklarla sırasını bekler; başka bir panel kartı kapatırsa
+  panel kapanınca kart yeniden açılır. Her kart örneğinin anahtarı (`olay@oyun saniyesi#sayaç`) var; bir kartta tek seçim
+  yapılır, seçim ödenen bedeli (`paid`) taşır. Host kendi açık kartının anahtarına göre kararı bir kez uygular; aynı
+  karta geç gelen ya da eskimiş bir karta ait seçimin ödenen bedeli (en çok seçeneğin bedeli kadar) iade edilir. Karara
+  bağlanmamış kart kayda ve hoş geldin paketine girer (`events.pending`); oturum kapanırken kart da kapanır. Göçte yeni
+  host son yedeği (`pdata`) kendi gördükleriyle birleştirir: yedekten sonra gösterilmiş olay yinelenmez
+  (`Events.adoptBackup`).
 - `StoryWorld`: pist enkazları (Rapier ip eklemiyle araca bağlanıp çekilir), uçak kalkış sekansı, fener
   huzmesi (yumuşak hacimsel gölgelendirici), açıktaki gemi, paraşütlü paket, düşen uçak, sarsıntı,
   dinamik konteynerler. Durumu kayıtta ve istemci katılım paketinde saklanır.
@@ -374,4 +387,15 @@ rastgele yönde köpek, silah, çığlık, inilti ya da korna (sentez, yönlü v
 yapılar, zombi bölgeleri, araçlar, NPC'ler, görevler, olaylar, harita sisi, hava, YZ arkadaşlar, kapı/pencere
 durumları, yer altı sığınaklarının kilit/jeneratör durumu) ve oyuncuları **jeton** ile saklar. Çok oyunculuda istemcilerin envanteri 8 sn'de bir host'a
 yedeklenir; oyuncu düşer ya da sonradan katılırsa eşyaları iade edilir. Kayıtlar `localStorage`'da
-(otomatik + 3 yuva) tutulur, JSON olarak dışa/içe aktarılabilir.
+(otomatik + 3 yuva) tutulur, JSON olarak dışa/içe aktarılabilir. Okunan ve içe aktarılan kayıt `SaveSystem.normalize`
+ile doğrulanır (sürüm 1, sayısal zaman, en az bir oyuncu kaydı); eksik ayarlar (`cfg`: zorluk, gün uzunluğu, YZ sayısı)
+ve kayıtsız host jetonu varsayılanla tamamlanır, yüklenemeyecek kayıt menüde uyarı verir (oyun çökmez).
+- **Eşya aktarımı tek kural:** konteyner, depo sandığı ve bagaj `Inventory.putStack` ile doldurulur (envanterle aynı
+  birleştirme: aynı tür, not/aşınma eşit, birleşen yiyecekte eski tazelik geçerli). Host istemcinin alma miktarını
+  `takeQty` ile kırpar (tam sayı, en az 1, yığından fazla değil); verilen eşyanın alıcısı oyunda yoksa eşya verene
+  döner. Ödül/takas/özel içerikle gelen silah ve aletlere dayanıklılık yazılır (aşınırlar).
+- **Konteyner içeriği** ilk arayışta ya da kilit açılışında host'ta üretilir (`Loot.ensure`); kilitli başlayan kasa ve
+  dolapların durumu baştan vardır ama içerik açılınca üretilir.
+- **Yağmalama olayı** (3./12./20. gün): yalnız hiç dokunulmamış konteynerler; hikâye içerikli konteynerlere ve kilitli
+  kasalara dokunmaz; yağmalanan belge tutucuda binanın/odanın hikâye belgesi kalır. Yüklemede eski sürümün yağmasıyla
+  boşalmış hikâye konteyneri hiç kurulmamış sayılır, silinmiş belge geri konur.

@@ -301,6 +301,18 @@ export class Net {
     rec.token = p.token;
     rec.peer = peer.pid;
     for (const other of this.peers.values()) if (other !== peer && other.inGame) this.transport.send(other.pid, { t: 'pjoin', info });
+    // yeni gelene, oyunda olan diğer istemcileri de bildir. Hoş geldin paketi yükleme başlamadan kurulur: lobiden
+    // birlikte başlayan ya da bu oyuncu yüklenirken katılan istemciler o pakette yoktu ve 'pjoin' de yalnız oyundaki
+    // eşlere gider (yükleniyordu) → aksi hâlde birbirlerini hiç görmüyorlardı. Zaten tanınan oyuncu yinelenmez.
+    for (const other of this.peers.values()) {
+      if (other === peer || !other.inGame || !other.id) continue;
+      const orec = S.players.get(other.id);
+      if (!orec || orec.isLocal) continue;
+      this.transport.send(peer.pid, { t: 'pjoin', info: { id: orec.id, name: orec.name, charId: orec.charId, look: orec.look, token: orec.token, x: orec.pos.x, y: orec.pos.y, z: orec.pos.z, silent: true } });
+    }
+    // ...ve oyundaki tam oyuncu listesi: bu oyuncu yüklenirken ayrılan (hoş geldin paketinde olup artık olmayan) oyuncu
+    // onda hayalet olarak kalmasın ('pleave' yalnız oyundaki eşlere gider)
+    this.transport.send(peer.pid, { t: 'proster', ids: [...S.players.keys()] });
     if (S.offlinePlayers) delete S.offlinePlayers[p.token];
     this.voice.sync();
   }
@@ -392,6 +404,7 @@ export class Net {
       case 'snap': this.applySnap(m); break;
       case 'pjoin': if (this.session) this.session.addRemotePlayer(m.info); break;
       case 'pleave': if (this.session) this.session.removeRemotePlayer(m.id); break;
+      case 'proster': if (this.session && Array.isArray(m.ids)) { const keep = new Set(m.ids); for (const id of [...this.session.players.keys()]) if (!keep.has(id) && id !== this.session.localId) this.session.removeRemotePlayer(id, true); } break;
       case 'pong': this.rtt = performance.now() - m.ts; this.pingOut = 0; break;
       case 'ping': if (this.transport) this.transport.sendHost({ t: 'pong', ts: m.ts }); break;
       case 'pdata': if (this.session) { this.session.offlinePlayers = m.d || {}; if (m.zz) this.session.zoneState = m.zz; if (m.ev) this.session.eventsState = m.ev; } break;

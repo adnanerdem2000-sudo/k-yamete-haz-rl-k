@@ -177,7 +177,7 @@ export class GamePanels {
     el.append(
       e.img ? h('div.event-img', { style: { backgroundImage: `url(assets/img/events/${e.img}.jpg)` } }) : null,
       h('div.event-body', h('div.event-kicker', 'RASTGELE OLAY'), h('h2', e.title), h('p', e.text), choices));
-    this.ui.openPanel('event', el, { modal: true, keys: (ev) => { const n = parseInt(ev.key, 10); if (n >= 1 && n <= e.choices.length) { e.choices[n - 1].onSelect(); return true; } return false; }, noEsc: true });
+    this.ui.openPanel('event', el, { modal: true, keys: (ev) => { const n = parseInt(ev.key, 10); if (n >= 1 && n <= e.choices.length) { e.choices[n - 1].onSelect(); return true; } return false; }, noEsc: true, onClose: e.onClose });
   }
 
   closeEvent() { if (this.ui.panel && this.ui.panel.name === 'event') this.ui.closePanel(); }

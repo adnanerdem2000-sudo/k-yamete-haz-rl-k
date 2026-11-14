@@ -26,6 +26,15 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   await evalJS(A, () => { window.__game.ui.menus.hide(); window.__game.net.startGame(); });
   for (const P of [A, B, C]) await P.waitForFunction(() => window.__game.state === 'playing' && window.__game.session, null, { timeout: 900000 });
   log('üç sekme oyunda');
+  // lobiden birlikte başlayan istemciler birbirini görmeli: hoş geldin paketleri oyun başlarken kurulur (o an host'ta uzak
+  // oyuncu yok); oyunu sonra yükleyen istemci, önce katılanı host'un 'pjoin' bildirimiyle öğrenir (eskiden öğrenemiyordu)
+  const gorus = await Promise.all([B, C].map((P) => P.waitForFunction(([b, c]) => {
+    const S = window.__game.session; const r = S.players.get(S.localId === b ? c : b);
+    return !!(r && r.avatar && r.avatar.root.parent);
+  }, [jb.me, jc.me], { timeout: 180000, polling: 500 }).then(() => true, () => false)));
+  const gorusDurum = await Promise.all([B, C].map((P) => evalJS(P, () => { const S = window.__game.session; return { ben: S.localId, oyuncular: [...S.players.keys()], takim: S.teamList().length }; })));
+  log('istemciler birbirini görüyor', gorus, gorusDurum);
+  check(gorus.every(Boolean) && gorusDurum.every((d) => d && d.oyuncular.length === 3 && d.takim >= 3), 'lobiden birlikte başlayan üç oyuncu birbirini görmeli (oyuncu kaydı, avatar, takım listesi)', { gorus, gorusDurum });
   // C yağmalar (host üzerinden), B kapı açar
   const loot = await evalJS(C, () => { const S = window.__game.session; const c = S.world.containers.find((q) => q.building === 'home' && !q.locked && q.id !== 'home:0'); S.act('search_done', { id: c.id }); return c.id; });
   await C.waitForFunction((id) => { const st = window.__game.session.loot.get(id); return st && st.searched; }, loot, { timeout: 120000 }).catch(() => {});

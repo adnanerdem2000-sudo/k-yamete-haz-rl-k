@@ -67,6 +67,9 @@ export default async ({ page, url, wait, evalJS, log, newPage, errors }) => {
   // yeni host zombi simülasyonu
   await evalJS(B, () => { const S = window.__game.session; S.zombies.spawn('normal', S.local.pos.x + 8, S.local.pos.z + 8, {}); });
   await wait(3000);
+  // yazılım GPU'sunda iki sekmeyle kareler 2 sn'yi aşabiliyor (bir koşuda host gecikmesi 1.960 ms): anlık görüntünün
+  // istemciye ulaşması sabit 3 sn yerine koşulla beklenir (en çok 60 sn)
+  await C.waitForFunction(() => window.__game.session.zombies.views.size >= 1, null, { timeout: 60000, polling: 250 }).catch(() => {});
   const z = await evalJS(B, () => window.__game.session.zombies.list.size);
   const zc = await evalJS(C, () => window.__game.session.zombies.views.size);
   log('zombi (B host liste / C görünüm)', z, zc);

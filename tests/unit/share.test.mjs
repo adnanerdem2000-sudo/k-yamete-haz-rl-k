@@ -345,7 +345,7 @@ test('tüccar takası: stok host\'ta düşer ve herkeste güncellenir; alıcı �
   assert.deepEqual(errs, []);
 });
 
-test('depoya konan eski yiyecek, depodaki taze yığınla birleşince eski tazeliği taşımalı (envanterdeki gibi)', { skip: 'OYUN HATASI (bildirildi): Loot "loot_put", Build "store_put" ve Vehicles "trunk_put" mevcut yığına eklerken t0\'ı güncellemiyor (Inventory.addStack/move olderT0 kullanır). Bozulmak üzere olan yiyecek, depodaki taze yığına konup geri alınınca tazelenmiş oluyor.' }, (t) => {
+test('depoya konan eski yiyecek, depodaki taze yığınla birleşince eski tazeliği taşımalı (envanterdeki gibi)', (t) => {
   const errs = watchErrors(t);
   const H = makeSession('p_h', 'Hakan', { host: true });
   H.act('loot_put', { id: 'c_dolap', stack: { id: 'bread', qty: 1, t0: 5000 } });
@@ -358,7 +358,7 @@ test('depoya konan eski yiyecek, depodaki taze yığınla birleşince eski tazel
   assert.deepEqual(errs, []);
 });
 
-test('yağmalama olayı (3./12./20. gün) aranmamış hikâye konteynerlerini (özel içerik) boşaltmamalı', { skip: 'OYUN HATASI (bildirildi): Loot.onDay aranmamış her konteyneri (ev dışı) %15/%12 olasılıkla boş durumla değiştiriyor; special içerikli hikâye konteynerleri de (lab_sample → "Aşı İçin Umut" görevinin tek kaynağı, soldier_body → cephanelik anahtarı, cave_stash, pilot_log…) boşalıyor ve kasaların kilit bilgisi siliniyor.' }, () => {
+test('yağmalama olayı (3./12./20. gün) aranmamış hikâye konteynerlerini (özel içerik) boşaltmamalı', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const handlers = {}, appliers = {};
     const S = {
@@ -374,4 +374,138 @@ test('yağmalama olayı (3./12./20. gün) aranmamış hikâye konteynerlerini (�
     handlers.search_done({ id: 'c_lab' }, 'p1');
     assert.ok(L.get('c_lab').slots.some((s) => s && s.id === 'lab_sample'), `tohum ${seed}: virüs numunesi yerinde olmalı`);
   }
+});
+
+test('eşya verilen oyuncu bu arada oyundan çıktıysa (ya da yoksa) eşya verene geri döner; geçersiz istek yok sayılır', (t) => {
+  const errs = watchErrors(t);
+  const H = makeSession('p_h', 'Hakan', { host: true });
+  const C1 = makeSession('p_1', 'Cem', { x: 10, z: 0 });
+  link(H, C1);
+  C1.inventory.add('nails', 30);
+  C1.act('give', { to: 'p_gitti', stack: C1.inventory.takeAt(C1.inventory.firstSlotOf('nails'), 20) });
+  assert.equal(C1.inventory.count('nails'), 30, 'çıkmış oyuncuya verilen eşya kaybolmaz');
+  assert.ok(C1.game.ui.toasts().includes('Alıcı artık oyunda değil; eşya sende kaldı.'));
+  C1.act('give', { to: 'bot_yok', stack: C1.inventory.takeAt(C1.inventory.firstSlotOf('nails'), 5) });
+  assert.equal(C1.inventory.count('nails'), 30, 'olmayan bota verilen eşya da geri döner');
+  // bozuk istek (bilinmeyen eşya, miktarsız) host'ta yok sayılır, hata yok
+  C1.act('give', { to: 'p_h', stack: { id: 'yok_boyle_esya', qty: 1 } });
+  C1.act('give', { to: 'p_h', stack: { id: 'nails', qty: -3 } });
+  assert.equal(H.inventory.count('nails'), 0);
+  assert.deepEqual(errs, []);
+});
+
+test('alma miktarı doğrulanır: negatif/kesirli/aşırı istek konteyner, sandık ya da envanterde eşya çoğaltmaz', (t) => {
+  const errs = watchErrors(t);
+  const H = makeSession('p_h', 'Hakan', { host: true });
+  const C1 = makeSession('p_1', 'Cem', { x: 10, z: 0 });
+  link(H, C1);
+  H.act('loot_put', { id: 'c_dolap', stack: { id: 'nails', qty: 10 } });
+  C1.act('loot_take', { id: 'c_dolap', slot: 0, qty: -5 });
+  assert.equal(H.loot.get('c_dolap').slots[0], null, 'negatif istek: yığın çoğalmaz (tamamı alınır)');
+  assert.equal(C1.inventory.count('nails'), 10);
+  H.act('loot_put', { id: 'c_dolap', stack: { id: 'nails', qty: 10 } });
+  C1.act('loot_take', { id: 'c_dolap', slot: 0, qty: 2.7 });
+  C1.act('loot_take', { id: 'c_dolap', slot: 0, qty: 99 });
+  assert.equal(C1.inventory.count('nails'), 20, 'kesirli istek tam sayıya, aşırı istek yığına kırpılır');
+  assert.equal(H.loot.get('c_dolap').slots[0], null);
+  H.emit({ k: 'struct_add', id: 'st1', type: 'storage_crate', x: 0, y: 5, z: 0, rot: 0, built: 1, hp: 150 });
+  H.act('store_put', { id: 'st1', stack: { id: 'nails', qty: 6 } });
+  C1.act('store_take', { id: 'st1', slot: 0, qty: -100 });
+  assert.equal(C1.inventory.count('nails'), 26);
+  assert.equal(H.build.structures.get('st1').data.slots[0], null);
+  // bilinmeyen eşya ve sıfır/negatif miktar konteynere konmaz
+  H.act('loot_put', { id: 'c_dolap', stack: { id: 'yok_boyle_esya', qty: 1 } });
+  H.act('loot_put', { id: 'c_dolap', stack: { id: 'nails', qty: -4 } });
+  assert.deepEqual(H.loot.get('c_dolap').slots.filter(Boolean), []);
+  assert.deepEqual(errs, []);
+});
+
+test('yağmalama olayı kasaları ve kilitli konteynerleri boşaltmaz; olay sıradan konteynerlerde sürer (40 tohum)', () => {
+  let looted = 0;
+  for (let seed = 1; seed <= 40; seed++) {
+    const handlers = {}, appliers = {};
+    const S = {
+      isHost: true, seed, localId: 'p1', flags: {}, results: { searched: 0 }, diff: { loot: 1 }, time: new TimeSystem({ startDay: 1 }),
+      world: {
+        containers: [
+          { id: 'c_kasa', type: 'safe', x: 0, z: 0, building: 'bank' },
+          { id: 'c_kilit', type: 'crate', x: 1, z: 0, locked: 1, building: 'shop' },
+          ...Array.from({ length: 12 }, (_, i) => ({ id: 'c_' + i, type: 'crate', x: 2 + i, z: 0, building: 'shop' })),
+        ],
+        regionAt: () => ({ danger: 1 }), buildingById: {},
+      },
+      ui: { openStorage() {}, refreshStorage() {} }, quests: { onSearch() {} },
+      on(k, fn) { handlers[k] = fn; }, onEvt(k, fn) { (appliers[k] = appliers[k] || []).push(fn); },
+      emit(e) { for (const fn of appliers[e.k] || []) fn(e); },
+    };
+    const L = new Loot(S);
+    L.init();
+    for (const d of [3, 12, 20]) L.onDay(d);
+    assert.equal(L.get('c_kasa').locked, 2, `tohum ${seed}: kasa kilitli kalır`);
+    assert.ok(!L.get('c_kasa').looted && !L.get('c_kilit').looted, `tohum ${seed}: kasa/kilitli konteyner yağmalanmaz`);
+    looted += Array.from({ length: 12 }, (_, i) => L.get('c_' + i)).filter((s) => s && s.looted).length;
+  }
+  assert.ok(looted > 20, `yağmalama olayı sıradan konteynerlerde hâlâ çalışır (${looted}/480)`);
+});
+
+test('yağmalanan belge tutucuda binanın hikâye belgesi kalır (karakol masası: güvenlik kamerası kaydı, 60 tohum)', () => {
+  let lootedN = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const handlers = {}, appliers = {};
+    const S = {
+      isHost: true, seed, localId: 'p1', flags: {}, results: { searched: 0 }, diff: { loot: 1 }, time: new TimeSystem({ startDay: 1 }),
+      world: { containers: [{ id: 'c_masa', type: 'desk', x: 0, z: 0, building: 'police' }], regionAt: () => ({ danger: 2 }), buildingById: {} },
+      ui: { openStorage() {}, refreshStorage() {} }, quests: { onSearch() {} },
+      on(k, fn) { handlers[k] = fn; }, onEvt(k, fn) { (appliers[k] = appliers[k] || []).push(fn); },
+      emit(e) { for (const fn of appliers[e.k] || []) fn(e); },
+    };
+    const L = new Loot(S);
+    L.init();
+    for (const d of [3, 12, 20]) L.onDay(d);
+    if (L.get('c_masa') && L.get('c_masa').looted) lootedN++;
+    handlers.search_done({ id: 'c_masa' }, 'p1');
+    assert.ok(L.get('c_masa').slots.some((s) => s && s.id === 'note' && s.noteId === 'cctv'), `tohum ${seed}: belge masada`);
+  }
+  assert.ok(lootedN > 0, `en az bir tohumda masa yağmalandı (${lootedN}/60): yağmalanmış yolu da sınandı`);
+});
+
+test('kilitli başlayan kasa/dolap açılınca içeriği üretilir (eskiden hep boştu); kayıtta açılmamış kasa yüklemeden sonra da üretilir; eski yağmanın boşalttığı hikâye konteyneri onarılır', () => {
+  let dolu = 0;
+  for (let seed = 1; seed <= 30; seed++) {
+    const handlers = {}, appliers = {};
+    const S = {
+      isHost: true, seed, localId: 'p1', flags: {}, results: { searched: 0 }, diff: { loot: 1 }, time: new TimeSystem({ startDay: 1 }),
+      world: {
+        containers: [{ id: 'c_kasa', type: 'safe', x: 0, z: 0, building: 'bank' }, { id: 'c_dolap', type: 'locker', x: 2, z: 0, locked: 1, building: 'prison_admin' },
+          { id: 'c_lab', type: 'lab_bench', x: 4, z: 0, special: 'lab_sample', building: 'lab' }, { id: 'c_masa', type: 'desk', x: 6, z: 0, building: 'police' }],
+        regionAt: () => ({ danger: 3 }), buildingById: {},
+      },
+      ui: { openStorage() {}, refreshStorage() {} }, quests: { onSearch() {} },
+      on(k, fn) { handlers[k] = fn; }, onEvt(k, fn) { (appliers[k] = appliers[k] || []).push(fn); },
+      emit(e) { for (const fn of appliers[e.k] || []) fn(e); },
+    };
+    const L = new Loot(S);
+    L.init();
+    assert.equal(L.get('c_kasa').locked, 2);
+    handlers.unlock({ id: 'c_kasa' }, 'p1');
+    handlers.search_done({ id: 'c_kasa' }, 'p1');
+    if (L.get('c_kasa').slots.some(Boolean)) dolu++;
+    assert.equal(L.get('c_kasa').locked, 0);
+    // kayıt: kilitli dolap açılmadan kaydedildi; eski sürümün yağması hikâye konteynerini ve karakol masasını boşaltmıştı
+    const save = L.serialize();
+    save.c_lab = { s: 0, l: 0, i: new Array(12).fill(0) };
+    save.c_masa = { s: 0, l: 0, i: new Array(12).fill(0) };
+    const S2 = { ...S, flags: {} }, h2 = {};
+    S2.on = (k, fn) => { h2[k] = fn; };
+    const L2 = new Loot(S2);
+    L2.load(JSON.parse(JSON.stringify(save)));
+    assert.ok(L2.get('c_dolap') && L2.get('c_dolap').pending, 'açılmamış kilitli dolap yüklemeden sonra da üretilecek');
+    h2.unlock({ id: 'c_dolap' }, 'p1');
+    assert.equal(L2.get('c_dolap').pending, undefined);
+    assert.equal(L2.get('c_lab'), undefined, 'eski yağmanın boşalttığı hikâye konteyneri hiç kurulmamış sayılır');
+    h2.search_done({ id: 'c_lab' }, 'p1');
+    assert.ok(L2.get('c_lab').slots.some((x) => x && x.id === 'lab_sample'), 'virüs numunesi geri geldi');
+    assert.ok(L2.get('c_masa').slots.some((x) => x && x.id === 'note' && x.noteId === 'cctv'), 'silinen karakol belgesi geri kondu');
+  }
+  assert.ok(dolu >= 15, `açılan kasaların çoğu dolu (${dolu}/30); eskiden hepsi boştu`);
 });

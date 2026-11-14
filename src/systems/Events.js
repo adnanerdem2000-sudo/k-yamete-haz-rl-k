@@ -16,10 +16,15 @@ export class Events {
     this.done = new Set();
     this.schedule = []; // {at: totalMinutes, kind, id}
     this.broadcasts = [];
+    // açık (kararı bekleyen) olay kartı: {id, key}. Her eşte event_show ile kurulur, event_result ile kalkar.
+    // Kart çözülmeden zamanlanmış başka olay gösterilmez (sıra bekler); kart başka bir panelle kapanırsa yeniden açılır.
     this.active = null;
+    this.cardOpen = false;
+    this.resolvedKeys = new Set(); // (host) karara bağlanmış kart örnekleri: geç gelen ikinci seçim yok sayılır, bedeli iade edilir
+    this.shownAt = {}; // olay → bu eşte son gösterildiği oyun dakikası (göçte eski yedekteki planın yinelenmemesi için)
     this.temp = [];
     const S = session;
-    S.on('event_choice', (p, from) => this.applyChoice(p.id, p.choice, from));
+    S.on('event_choice', (p, from) => this.applyChoice(p.id, p.choice, from, p.key, p.paid));
     S.on('broadcast_truth', () => {
       S.emit({ k: 'broadcast', day: S.time.day, title: '📻 147.30 — CANLI YAYIN', text: '"Burası Kızılçam adası. Elimizde kargo manifestoları, santral raporları ve denek listeleri var. Bu bir kaza değildi. Son Işık bir temizlik değil, bir örtbas…"' });
       S.applyAction('team_morale', { amount: 15 }, null);
@@ -28,7 +33,10 @@ export class Events {
       S.results.choices.push('Gerçek anakaraya yayınlandı');
     });
     S.onEvt('event_show', (e) => this.show(e));
-    S.onEvt('event_result', (e) => { if (this.active && this.active.id === e.id) { S.ui.closeEvent(); this.active = null; } S.ui.toast(e.text, 'story', 5); S.results.choices.push(`${EVENTS[e.id]?.title || e.id}: ${e.choiceText}`); });
+    S.onEvt('event_result', (e) => {
+      if (this.active && (e.key ? this.active.key === e.key : this.active.id === e.id)) { this.active = null; S.ui.closeEvent(); }
+      S.ui.toast(e.text, 'story', 5); S.results.choices.push(`${EVENTS[e.id]?.title || e.id}: ${e.choiceText}`);
+    });
     S.onEvt('broadcast', (e) => { this.broadcasts.unshift({ day: e.day, text: e.text, title: e.title }); S.ui.broadcast(e.title, e.text); S.audio.play('radio', { vol: 0.8 }); });
     S.onEvt('env', (e) => { const env = S.env; if (e.streetPower !== undefined) env.streetPower = e.streetPower; if (e.doom !== undefined) env.doom = e.doom; if (e.redMist !== undefined) env.redMist = e.redMist; });
     S.onEvt('marker', (e) => S.map.addMarker(e.x, e.z, e.label, e.icon || 'quest'));
@@ -115,7 +123,7 @@ export class Events {
         this.prisonRiot();
         S.emit({ k: 'broadcast', day, title: 'TELSİZ — Cezaevi', text: '"Burası cezaevi, Gardiyan Necla. Dış kapı düştü, avlu dolu. B koğuşunda sekiz kişi var. Biri gelsin!"' });
         break;
-      case 'leaflets': this.trigger('leaflets'); break;
+      case 'leaflets': this.schedule.push({ at: S.time.total, kind: 'event', id: 'leaflets' }); break; // açık kart varsa sırasını bekler
       case 'lighthouse_hint':
         if (S.flags.lighthouse_lit) break;
         S.emit({ k: 'broadcast', day, title: 'TELSİZ — Deniz Feneri', text: '"Fener bekçisi İsmail… Gemi hâlâ açıkta, her gece ışık veriyor. Feneri yakabilirsek bizi görecekler."' });
@@ -178,11 +186,20 @@ export class Events {
 
   update(dt) {
     const S = this.s;
+    // kararı bekleyen kart başka bir panelle (depo, not…) kapandıysa o panel kapanınca yeniden açılır: olay kaybolmaz
+    if (this.active && !this.cardOpen && S.ui.isBlocking && !S.ui.isBlocking() && !(S.endings && S.endings.finished)) this.openCard();
     if (!S.isHost) return;
     const now = S.time.total;
     for (let i = this.schedule.length - 1; i >= 0; i--) {
       const e = this.schedule[i];
       if (now < e.at) continue;
+      // bir olay kartı açıkken (karar bekleniyor) vakti gelen olay sırasını bekler: aynı anda gelen kartlar birbirini
+      // sessizce kapatıp kaybetmesin (zaman atlaması, uyku hızlandırması sonrası birden çok olay). Açık kart zaten bu
+      // olaysa (göçte eski yedekten gelen aynı girdi) girdi düşer: olay ikinci kez gösterilmez.
+      if (e.kind === 'event' && this.active) {
+        if (this.active.id === e.id) { this.schedule.splice(i, 1); this.done.add(e.id); } else e.at = now + 3;
+        continue;
+      }
       // gündüz zombi doğmaz: vakti gelmiş (ör. göçte devralınan eski plan) zombi/sürü girdisi bu geceye kayar
       if ((e.kind === 'zspawn' || e.kind === 'horde') && !S.time.isNight && !S.zombies.frenzy && !(S.endings && S.endings.active)) { e.at = this.tonight(); continue; }
       this.schedule.splice(i, 1);
@@ -199,35 +216,75 @@ export class Events {
   }
 
   // ======================================================================= rastgele olaylar
+  /** (host) Olayı şimdi göster. Zamanlanmış olaylar update() üzerinden gelir (açık kart varsa sıra bekler). */
   trigger(id) {
     const S = this.s;
     const ev = EVENTS[id];
     if (!ev) return;
     this.done.add(id);
     this.scene(id, ev);
-    S.emit({ k: 'event_show', id });
+    // kart örneği anahtarı (olay + oyun saniyesi + sayaç): aynı olay aynı gün, hatta aynı anda yeniden gösterilse de
+    // kararlar karışmaz; göçten sonra yeni host'un sayacı sıfırdan başlasa da zaman bileşeni ayırır
+    this.seq = (this.seq || 0) + 1;
+    S.emit({ k: 'event_show', id, key: `${id}@${Math.round(S.time.total * 60)}#${this.seq}` });
   }
 
   show(e) {
-    const S = this.s;
-    const ev = EVENTS[e.id];
-    this.active = { id: e.id };
-    S.ui.openEvent({
-      id: e.id, title: ev.title, text: ev.text, img: ev.img,
-      choices: ev.choices.map((c, i) => ({ text: c.text, cost: c.cost, affordable: (c.cost || []).every(([it, n]) => S.inventory.has(it, n)), onSelect: () => {
-        if (c.cost) for (const [it, n] of c.cost) S.inventory.remove(it, n);
-        S.act('event_choice', { id: e.id, choice: i });
-      } })),
-    });
-    S.audio.play('alert', { vol: 0.6 });
+    if (!EVENTS[e.id]) return;
+    this.active = { id: e.id, key: e.key || null };
+    this.cardOpen = false;
+    this.done.add(e.id);
+    this.shownAt[e.id] = this.s.time.total;
+    this.openCard();
+    this.s.audio.play('alert', { vol: 0.6 });
   }
 
-  applyChoice(id, ci, from) {
+  /** Kart örneğinin karar anahtarı (anahtarsız eski kart: olay + gün) */
+  keyOf(id, key) { return key || id + ':' + this.s.time.day; }
+
+  /** Açık olay kartını (yeniden) çiz; seçimi yapan oyuncunun bedeli seçimde düşülür */
+  openCard() {
+    const S = this.s, a = this.active, ev = a && EVENTS[a.id];
+    if (!ev) return;
+    this.cardOpen = true;
+    S.ui.openEvent({
+      id: a.id, title: ev.title, text: ev.text, img: ev.img,
+      onClose: () => { if (this.active === a) this.cardOpen = false; },
+      choices: ev.choices.map((c, i) => ({ text: c.text, cost: c.cost, affordable: (c.cost || []).every(([it, n]) => S.inventory.has(it, n)), onSelect: () => {
+        // bir kartta tek seçim: çift tıklama/tuş ikinci seçimi göndermez (karar host'tan dönene dek kart açık kalır)
+        if (a.chosen) return;
+        if (c.cost && !c.cost.every(([it, n]) => S.inventory.has(it, n))) { S.ui.toast('Gerekli eşyalar yok.', 'warn'); return; }
+        a.chosen = true;
+        // ödenen bedel seçimle gider: karar başka bir oyuncunun seçimiyle verilmişse host yalnız ödeneni iade eder
+        const paid = c.cost ? c.cost.map(([it, n]) => [it, S.inventory.remove(it, n)]) : null;
+        S.act('event_choice', { id: a.id, key: a.key, choice: i, paid });
+      } })),
+    });
+  }
+
+  applyChoice(id, ci, from, key, paid) {
     const S = this.s;
     const ev = EVENTS[id];
-    if (!ev || this.resolved === id + ':' + S.time.day) return;
-    this.resolved = id + ':' + S.time.day;
-    const c = ev.choices[ci];
+    const c = ev && ev.choices[ci];
+    if (!c) return;
+    // seçenin ödediği bedel (yalnız seçeneğin bedelindeki eşyalar, bedel kadar): geç kalan seçimde iade edilir
+    const refund = () => {
+      if (!from || !c.cost || !Array.isArray(paid)) return;
+      const items = [];
+      for (const [it, n] of c.cost) { const q = paid.find((x) => Array.isArray(x) && x[0] === it); const back = q ? Math.min(n, Math.floor(q[1]) || 0) : 0; if (back > 0) items.push({ id: it, qty: back }); }
+      if (items.length) S.emit({ k: 'grant', to: from, items, silent: true });
+    };
+    // hangi kart: host'ta açık kart varsa onun anahtarı geçerli (istemcinin yolladığı anahtara güvenilmez); açık kart başka
+    // bir olaysa bu seçim eskimiş bir karta aittir. Host kartı hiç görmediyse (göçte sonradan katılan yeni host) istemcinin
+    // anahtarı, o da yoksa olay + gün
+    if (this.active && this.active.id !== id) { refund(); return; }
+    const k = this.active ? this.keyOf(id, this.active.key) : this.keyOf(id, key);
+    // karar bir kez uygulanır: aynı karta ikinci (geç) seçim — çift tıklama ya da iki oyuncunun aynı anda seçmesi —
+    // yok sayılır, ödenen bedel iade edilir (kartı ilk kararın sonucu herkeste kapatır)
+    if (this.resolvedKeys.has(k) || (!key && this.resolvedKeys.has(id + ':' + S.time.day))) { refund(); return; }
+    this.resolvedKeys.add(k);
+    this.resolvedKeys.add(id + ':' + S.time.day); // anahtarsız (eski sürüm) geç seçim de yakalansın
+    while (this.resolvedKeys.size > 64) this.resolvedKeys.delete(this.resolvedKeys.values().next().value);
     const f = c.effects || {};
     if (f.morale) S.applyAction('team_morale', { amount: f.morale }, null);
     if (f.rel) S.applyAction('rel', { faction: f.rel[0], delta: f.rel[1] }, null);
@@ -275,7 +332,7 @@ export class Events {
     if (f.allies) { S.applyAction('flag', { flag: 'allies', add: f.allies }, null); this.spawnAllies(f.allies); S.results.rescued += f.allies; }
     if (f.carDamage) { const v = S.vehicles.list.find((x) => x.seats[0]); if (v) S.applyAction('vehicle_damage', { id: v.id, dmg: v.maxHealth * f.carDamage }, null); }
     if (f.spawnNear) this.zHorde(f.spawnNear, null, false);
-    S.emit({ k: 'event_result', id, text: c.result, choiceText: c.text });
+    S.emit({ k: 'event_result', id, key: key || null, text: c.result, choiceText: c.text });
     if (id === 'injured_kid' && ci === 0) S.results.rescued += 2;
     this.schedule.push({ at: S.time.total + 120, kind: 'cleanup' });
   }
@@ -479,9 +536,35 @@ export class Events {
     }
   }
 
-  serialize() { return { done: [...this.done], schedule: this.schedule, broadcasts: this.broadcasts.slice(0, 20) }; }
-  load(o) { if (!o) return; this.done = new Set(o.done || []); this.schedule = o.schedule || []; this.broadcasts = o.broadcasts || []; }
-  dispose() { this.cleanupTemp(); }
+  /** Karar bekleyen kart (karara bağlanmış ama sonucu henüz yayılmamış kart sayılmaz: karar sırasında alınan otomatik kayıt) */
+  pending() {
+    const a = this.active;
+    return a && !this.resolvedKeys.has(this.keyOf(a.id, a.key)) ? { id: a.id, key: a.key } : null;
+  }
+  serialize() { return { done: [...this.done], schedule: this.schedule, broadcasts: this.broadcasts.slice(0, 20), pending: this.pending() }; }
+
+  /**
+   * Göçte yeni host: son 'pdata' yedeği (en çok ~8 sn eski) bu eşin kendi gördükleriyle birleştirilir. Yedekten sonra
+   * gösterilmiş olayın plandaki girdisi düşer (eski host'un son anda gösterdiği olay ikinci kez gelmez).
+   */
+  adoptBackup(st) {
+    if (!st) return;
+    this.done = new Set([...(st.done || []), ...this.done]);
+    this.schedule = (st.schedule || []).filter((x) => !(x.kind === 'event' && this.shownAt[x.id] !== undefined && this.shownAt[x.id] >= x.at - 5));
+  }
+  load(o) {
+    if (!o) return;
+    this.done = new Set(o.done || []); this.schedule = o.schedule || []; this.broadcasts = o.broadcasts || [];
+    // kayıtta (ya da katılınca hoş geldin paketinde) karar bekleyen kart: ilk karede yeniden açılır
+    if (o.pending && EVENTS[o.pending.id]) { this.active = { id: o.pending.id, key: o.pending.key || null }; this.cardOpen = false; }
+  }
+  dispose() {
+    this.cleanupTemp();
+    // oturum kapanırken (yeniden bağlanma, göç, ana menü) bu oturumun kartı ekranda kalmasın: kapanmayan kart yeni oturumda
+    // girdiyi kilitlerdi (bekleyen kart yeni oturumda hoş geldin paketinden yeniden açılır)
+    const U = this.s.ui;
+    if (U && U.panel && U.panel.name === 'event') U.closePanel(true);
+  }
 }
 
 export { dist, REGION_BY_ID };

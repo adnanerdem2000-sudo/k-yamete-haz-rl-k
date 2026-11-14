@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { VehicleVisuals, prepareWindowMaterials } from './VehicleVisuals.js';
 import { ITEMS } from '../data/items.js';
+import { putStack } from './Inventory.js';
 import { clamp, damp, dampAngle, wrapAngle, dist, uid, lerp } from '../core/util.js';
 import { G, ALL, groups, quatYaw, yawOf } from '../physics/PhysicsWorld.js';
 import { Collider } from '../world/Physics.js';
@@ -417,9 +418,8 @@ export class Vehicles {
     });
     S.on('trunk_put', (p, from) => {
       const v = this.byId(p.id); if (!v) return;
-      const def = ITEMS[p.stack.id]; let left = p.stack.qty;
-      if (def.stack > 1) for (const s of v.trunk) if (s && s.id === p.stack.id && left > 0) { const a = Math.min(def.stack - s.qty, left); s.qty += a; left -= a; }
-      for (let i = 0; i < v.trunkSize && left > 0; i++) if (!v.trunk[i]) { const a = Math.min(def.stack, left); v.trunk[i] = { ...p.stack, qty: a }; left -= a; }
+      if (!p.stack || !ITEMS[p.stack.id]) return;
+      const left = putStack(v.trunk, p.stack, v.trunkSize); // envanterle aynı birleştirme (eski yiyeceğin tazeliği korunur)
       S.emit({ k: 'veh_set', id: v.id, trunk: v.trunk });
       if (left > 0) S.emit({ k: 'grant', to: from, items: [{ ...p.stack, qty: left }], silent: true });
     });

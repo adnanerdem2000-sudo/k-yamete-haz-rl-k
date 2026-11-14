@@ -20,6 +20,35 @@ function stackable(a, b) {
   return a.noteId === b.noteId && a.dur === b.dur;
 }
 
+/**
+ * Konteyner, depo sandığı ve bagaj yuvalarına yığın koy — envanterle aynı birleştirme kuralı (aynı tür, not/aşınma
+ * eşit; birleşen yiyecekte eski tazelik geçerli). Yuva dizisini yerinde değiştirir; dönüş: sığmayan miktar.
+ * Geçersiz yığın (bilinmeyen eşya, miktar ≤ 0) hiç konmaz ve kalan sayılmaz (iade edilecek bir şey yok).
+ */
+export function putStack(slots, stack, size = slots.length) {
+  const def = stack && ITEMS[stack.id];
+  const qty = stack ? Math.floor(stack.qty) : 0;
+  if (!def || !(qty > 0)) return 0;
+  let left = qty;
+  if (def.stack > 1) {
+    for (const s of slots) {
+      if (left <= 0) break;
+      if (s && stackable(s, stack)) {
+        const add = Math.min(def.stack - s.qty, left);
+        if (add > 0) { olderT0(s, stack); s.qty += add; left -= add; }
+      }
+    }
+  }
+  for (let i = 0; i < size && left > 0; i++) if (!slots[i]) { const add = Math.min(def.stack, left); slots[i] = { ...stack, qty: add }; left -= add; }
+  return left;
+}
+
+/** İstemcinin istediği alma miktarı: tam sayı, en az 1, yığından fazla değil (eksik/geçersiz → yığının tamamı) */
+export function takeQty(want, have) {
+  const q = Math.floor(want);
+  return q > 0 ? Math.min(q, have) : have;
+}
+
 export class Inventory {
   constructor(size = 30, maxWeight = 32) {
     this.slots = new Array(size).fill(null);

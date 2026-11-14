@@ -160,4 +160,26 @@ export default async ({ page, url, shot, wait, evalJS, log, errors }) => {
     'günlük: harita sekmesi açılıp tuvale çizilmeli; zaman çizelgesi 2. gün başlangıcını ve olay kararını içermeli, ekranda tüm kayıtlar listelenmeli', { harita, cizelge });
   await S(() => window.__game.ui.closePanel());
   await wait(500); await shot(page, '/tmp/g-hud.png');
+  // 13) kayıttan yükleme, menü yolu (Ana Menü → TEK OYNA → Kayıt 1 → Yükle = MenuScreens.loadSlot): 9. adımdaki kayıt
+  // gün, saat, envanter, konum ve olay kararıyla geri gelmeli
+  await S(() => window.__game.endSession(true));
+  await page.waitForFunction(() => window.__game.state === 'menu' && !window.__game.session, null, { timeout: 60000 });
+  await S(() => window.__game.ui.menus.loadSlot('1'));
+  const yuklendi = await page.waitForFunction(() => window.__game.state === 'playing' && window.__game.session, null, { timeout: 200000 }).then(() => true, () => false);
+  await wait(1500);
+  const yukleme = await S(() => {
+    const S = window.__game.session, d = JSON.parse(localStorage.getItem('kiyamet_save_1') || 'null');
+    if (!S || !d) return null;
+    const me = d.players[d.hostToken] || {};
+    const kisa = (slots) => (slots || []).filter(Boolean).map((s) => s.id + 'x' + s.qty).sort();
+    return {
+      gun: S.time.day, kayitGun: Math.floor(d.time.total / 1440) + 1, dk: Math.round(S.time.total), kayitDk: Math.round(d.time.total),
+      env: kisa(S.inventory.serialize().slots || S.inventory.serialize()), kayitEnv: kisa((me.inv && me.inv.slots) || me.inv),
+      konum: me.pos ? +Math.hypot(S.local.pos.x - me.pos[0], S.local.pos.z - me.pos[2]).toFixed(2) : null,
+      kararlar: S.results.choices.length, kayitKarar: (d.results && d.results.choices || []).length,
+    };
+  });
+  log('kayıttan yükleme', { yuklendi, yukleme });
+  check(yuklendi && yukleme && yukleme.gun === yukleme.kayitGun && Math.abs(yukleme.dk - yukleme.kayitDk) < 30 && JSON.stringify(yukleme.env) === JSON.stringify(yukleme.kayitEnv) && yukleme.konum !== null && yukleme.konum < 1.5 && yukleme.kararlar === yukleme.kayitKarar && yukleme.kayitKarar >= 1,
+    'kayıt menüden yüklenmeli: gün, saat, envanter, konum ve olay kararları kayıttaki gibi', { yuklendi, yukleme });
 };

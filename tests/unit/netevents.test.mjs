@@ -377,7 +377,7 @@ test('sahte oturumla host-otoriter akış (Quests, Loot): istemci kancası/eylem
   assert.deepEqual(D.loot.get('c_pilot').slots.filter(Boolean).map((s) => s.id), ['note', 'first_aid', 'pistol', 'ammo_9mm'], 'içerik herkese yayılır');
   D.act('loot_take', { id: 'c_pilot', slot: 2 });
   const g = D.received.filter((e) => e.k === 'grant' && e.to === 'p_d').pop();
-  assert.deepEqual(g.items, [{ id: 'pistol', qty: 1, ammo: 4 }]);
+  assert.deepEqual(g.items, [{ id: 'pistol', qty: 1, ammo: 4, dur: 300 }]); // özel içerikteki silah da aşınır: tam dayanıklılıkla bulunur
   assert.ok([H, C, D].every((S) => S.loot.get('c_pilot').slots[2] === null));
   // ev konteyneri araması m1 benzeri görevi ilerletir (host eşleştirir)
   H.quests.addDynamic('dyn_ara', { kind: 'random', title: 'Evi Ara', objs: [{ t: 'search', building: 'home', count: 2, label: 'Ara' }] });
@@ -512,7 +512,7 @@ test('oturum içi eşitleme ve ayrılma: durum/kayıt/ping → host; anlık gör
   assert.deepEqual(errs, []);
 });
 
-test('lobiden başlatılan 3 kişilik oyunda istemciler birbirini görür (oturumunu sonra kuran, önce katılanı da görmeli)', { skip: 'OYUN HATASI (bildirildi): Net.attachSession bütün hoş geldin paketlerini oyun başlarken (host oturumunda henüz uzak oyuncu yokken) üretiyor; onClientJoined ise pjoin\'i yalnız o an inGame olan eşlere gönderiyor. Oturumunu daha geç kuran istemci, kendinden önce katılan istemciyi hiç öğrenmiyor (applySnap kaydı olmayan oyuncuyu atlıyor): avatar, konum, özet ve takım listesinde görünmüyor. Oyun sürerken iki oyuncunun aynı anda katılmasında da aynı boşluk var.' }, async (t) => {
+test('lobiden başlatılan 3 kişilik oyunda istemciler birbirini görür (oturumunu sonra kuran, önce katılanı da görmeli)', async (t) => {
   const hg = makeGame('host'), c1 = makeGame('c1'), c2 = makeGame('c2');
   t.after(() => closeAll(c2, c1, hg));
   const code = await hostRoom(hg, 'Hakan');
@@ -524,4 +524,13 @@ test('lobiden başlatılan 3 kişilik oyunda istemciler birbirini görür (oturu
   await hg.net.startGame();
   await waitFor(() => c1.session && c2.session && [...hg.net.peers.values()].every((p) => p.inGame), 'iki istemci de oyunda');
   await waitFor(() => c1.session.players.has(c2.session.localId) && c2.session.players.has(c1.session.localId), 'istemciler birbirini görür');
+  // katılırken gelen tam oyuncu listesi ('proster'): listede olmayan (yüklenirken ayrılmış) oyuncu sessizce kalkar
+  const S2 = c2.session;
+  S2.addRemotePlayer({ id: 'p_hayalet', name: 'Hayalet', charId: 'mert', x: 0, y: 0, z: 0, silent: true });
+  assert.ok(S2.players.has('p_hayalet'));
+  c2.net.onHostMsg({ t: 'proster', ids: [...hg.session.players.keys()] });
+  assert.ok(!S2.players.has('p_hayalet'), 'hayalet oyuncu kalktı');
+  assert.ok(S2.players.has(c1.session.localId) && S2.players.has(hg.session.localId) && S2.players.has(S2.localId), 'gerçek oyuncular ve kendisi kalır');
+  c2.net.onHostMsg({ t: 'proster', ids: 'bozuk' });
+  assert.equal(S2.players.size, 3, 'bozuk liste yok sayılır');
 });

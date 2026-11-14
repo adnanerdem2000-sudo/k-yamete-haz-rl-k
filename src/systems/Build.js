@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { BUILDABLES, PROJECTS } from '../data/buildables.js';
 import { ITEMS } from '../data/items.js';
+import { putStack, takeQty } from './Inventory.js';
 import { Geo } from '../world/Geo.js';
 import * as P from '../world/Props.js';
 import { NAV } from '../world/NavGrid.js';
@@ -61,7 +62,7 @@ export class Build {
       if (!st || !st.data.slots) return;
       const s = st.data.slots[p.slot];
       if (!s) return;
-      const qty = Math.min(p.qty || s.qty, s.qty);
+      const qty = takeQty(p.qty, s.qty);
       const slots = st.data.slots.map((x) => (x ? { ...x } : null));
       slots[p.slot].qty -= qty;
       if (slots[p.slot].qty <= 0) slots[p.slot] = null;
@@ -81,10 +82,8 @@ export class Build {
       if (!st || !def.storage) return;
       const slots = (st.data.slots || new Array(def.storage).fill(null)).map((x) => (x ? { ...x } : null));
       while (slots.length < def.storage) slots.push(null);
-      const idef = ITEMS[p.stack.id];
-      let left = p.stack.qty;
-      if (idef.stack > 1) for (const s of slots) if (s && s.id === p.stack.id && !s.noteId && left > 0) { const a = Math.min(idef.stack - s.qty, left); s.qty += a; left -= a; }
-      for (let i = 0; i < slots.length && left > 0; i++) if (!slots[i]) { const a = Math.min(idef.stack, left); slots[i] = { ...p.stack, qty: a }; left -= a; }
+      if (!p.stack || !ITEMS[p.stack.id]) return;
+      const left = putStack(slots, p.stack); // envanterle aynı birleştirme (eski yiyeceğin tazeliği korunur)
       S.emit({ k: 'struct_set', id: st.id, data: { ...st.data, slots } });
       if (left > 0) S.emit({ k: 'grant', to: from, items: [{ ...p.stack, qty: left }], silent: true });
     });

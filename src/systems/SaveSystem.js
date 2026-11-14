@@ -1,6 +1,8 @@
 // Kayıt sistemi: localStorage yuvaları (otomatik + 3 manuel), dışa/içe aktarma (JSON dosyası).
 // Kayıt verisi host'ta Session.serialize() ile üretilir; çok oyunculuda istemcilerin envanter/durumları
 // host kaydında jeton (token) ile saklanır ve geri bağlandıklarında iade edilir.
+import { DIFFICULTY } from '../data/difficulty.js';
+
 const PREFIX = 'kiyamet_save_';
 const INDEX = 'kiyamet_saves_index';
 export const SLOTS = ['auto', '1', '2', '3'];
@@ -12,6 +14,24 @@ function writeIndex(ix) { try { localStorage.setItem(INDEX, JSON.stringify(ix));
 export class SaveSystem {
   constructor(session) {
     this.s = session;
+  }
+
+  /**
+   * Kayıt verisi yüklenebilir mi: sürüm 1, sayısal zaman, en az bir oyuncu kaydı. Eksik/bozuk ayarlar (cfg) ve
+   * oyuncu kayıtsız host jetonu varsayılanla tamamlanır: elle düzenlenmiş ya da eski bir dosya menüde çökmeden
+   * yüklenir. Yüklenemeyecek veri için null döner.
+   */
+  static normalize(data) {
+    if (!data || typeof data !== 'object' || data.v !== 1) return null;
+    if (!data.time || typeof data.time !== 'object' || !Number.isFinite(data.time.total) || data.time.total < 0) return null;
+    if (!data.players || typeof data.players !== 'object') return null;
+    const tokens = Object.keys(data.players).filter((k) => data.players[k] && typeof data.players[k] === 'object');
+    if (!tokens.length) return null;
+    const cfg = data.cfg && typeof data.cfg === 'object' ? data.cfg : {};
+    const dm = Number.isFinite(cfg.dayMinutes) && cfg.dayMinutes > 0 ? cfg.dayMinutes : Number.isFinite(data.time.dayMinutes) && data.time.dayMinutes > 0 ? data.time.dayMinutes : 24;
+    data.cfg = { ...cfg, difficulty: Object.hasOwn(DIFFICULTY, cfg.difficulty) ? cfg.difficulty : 'normal', dayMinutes: dm, aiTeammates: Number.isFinite(cfg.aiTeammates) ? cfg.aiTeammates : 0 };
+    if (!data.players[data.hostToken]) data.hostToken = tokens[0];
+    return data;
   }
 
   /** Kayıt meta bilgisi */
@@ -29,8 +49,9 @@ export class SaveSystem {
     return SLOTS.map((slot) => ({ slot, name: SLOT_NAMES[slot], meta: ix[slot] || null }));
   }
 
+  /** Yuvadaki kaydı oku; bozuk/eksik kayıt → null (yükleme ekranı uyarı verir, oyun çökmez) */
   static read(slot) {
-    try { const raw = localStorage.getItem(PREFIX + slot); return raw ? JSON.parse(raw) : null; } catch { return null; }
+    try { const raw = localStorage.getItem(PREFIX + slot); return raw ? SaveSystem.normalize(JSON.parse(raw)) : null; } catch { return null; }
   }
 
   static write(slot, data) {
@@ -66,8 +87,9 @@ export class SaveSystem {
   /** Dosyadan içe aktar → yuvaya yaz */
   static async importFile(file, slot = '3') {
     const text = await file.text();
-    const data = JSON.parse(text);
-    if (!data || data.v !== 1 || !data.time || !data.players) throw new Error('Geçersiz kayıt dosyası');
+    let data = null;
+    try { data = SaveSystem.normalize(JSON.parse(text)); } catch { data = null; }
+    if (!data) throw new Error('Geçersiz kayıt dosyası');
     SaveSystem.write(slot, data);
     return data;
   }

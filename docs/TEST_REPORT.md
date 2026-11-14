@@ -91,15 +91,15 @@ etkilediği için Aşama 1'in sonunda (1b) düzeltiliyor.
 
 | # | Hata | Kanıt | Aşama |
 |---|---|---|---|
-| 1 | Aynı karede vakti gelen olay kartları birbirini sessizce kapatıyor; kapanan olay kararsız kalıp bir daha gelmiyor (zaman atlaması, uyku hızlandırması sonrası) | kod (`Events.update/show`, `UIManager.openPanel`) | 1b |
-| 2 | Aynı olay aynı gün yeniden gösterilirse seçim yok sayılıyor, bedel düşülüyor, kart kapanmıyor | kod (`Events.applyChoice`) | 1b |
-| 3 | 3./12./20. gün yağmalama olayı hikâye konteynerlerini (virüs numunesi → "Aşı İçin Umut" görevinin tek kaynağı, cephanelik anahtarı, pilot günlüğü…) ve belge tutucuları boşaltıyor, kasaların kilidini düşürüyor | birim (`share`) | 1b |
-| 4 | Konteyner, depo sandığı ve bagajda birleştirme eski yiyeceği tazeliyor (envanterdeki "eski tazelik geçerli" kuralı yok) | birim (`share`) | 1b |
-| 5 | Lobiden 3+ oyuncu başlayınca oyunu sonra yükleyen istemci önce katılanı hiç görmüyor (avatar, konum, takım listesi yok); oyun sürerken aynı anda katılanlarda da aynı boşluk | birim (`netevents`) | 1b |
-| 6 | Dosyadan içe aktarılan, ayarları (`cfg`) eksik kayıt doğrulamadan geçip yüklenirken çöküyor | kod (`SaveSystem.importFile`, `MenuScreens.loadSlot`) | 1b |
-| 7 | Eşya verilen oyuncu o arada oyundan çıkarsa eşya kayboluyor | kod (`Session` `give`) | 1b |
-| 8 | Host istemciden gelen alma miktarını doğrulamıyor (negatif miktarla konteynerde eşya çoğalıyor) | kod (`loot_take`, `store_take`) | 1b |
-| 9 | Özel içerikten, ödülden ve takastan gelen silah/aletler hiç aşınmıyor (dayanıklılık yazılmıyor) | kod (`SPECIAL_LOOT`, `grant`) | 1b |
+| 1 | Aynı karede vakti gelen olay kartları birbirini sessizce kapatıyor; kapanan olay kararsız kalıp bir daha gelmiyor (zaman atlaması, uyku hızlandırması sonrası) | kod (`Events.update/show`, `UIManager.openPanel`) | 1b — **düzeltildi** |
+| 2 | Aynı olay aynı gün yeniden gösterilirse seçim yok sayılıyor, bedel düşülüyor, kart kapanmıyor | kod (`Events.applyChoice`) | 1b — **düzeltildi** |
+| 3 | 3./12./20. gün yağmalama olayı hikâye konteynerlerini (virüs numunesi → "Aşı İçin Umut" görevinin tek kaynağı, cephanelik anahtarı, pilot günlüğü…) ve belge tutucuları boşaltıyor, kasaların kilidini düşürüyor | birim (`share`) | 1b — **düzeltildi** |
+| 4 | Konteyner, depo sandığı ve bagajda birleştirme eski yiyeceği tazeliyor (envanterdeki "eski tazelik geçerli" kuralı yok) | birim (`share`) | 1b — **düzeltildi** |
+| 5 | Lobiden 3+ oyuncu başlayınca oyunu sonra yükleyen istemci önce katılanı hiç görmüyor (avatar, konum, takım listesi yok); oyun sürerken aynı anda katılanlarda da aynı boşluk | birim (`netevents`) | 1b — **düzeltildi** |
+| 6 | Dosyadan içe aktarılan, ayarları (`cfg`) eksik kayıt doğrulamadan geçip yüklenirken çöküyor | kod (`SaveSystem.importFile`, `MenuScreens.loadSlot`) | 1b — **düzeltildi** |
+| 7 | Eşya verilen oyuncu o arada oyundan çıkarsa eşya kayboluyor | kod (`Session` `give`) | 1b — **düzeltildi** |
+| 8 | Host istemciden gelen alma miktarını doğrulamıyor (negatif miktarla konteynerde eşya çoğalıyor) | kod (`loot_take`, `store_take`) | 1b — **düzeltildi** |
+| 9 | Özel içerikten, ödülden ve takastan gelen silah/aletler hiç aşınmıyor (dayanıklılık yazılmıyor) | kod (`SPECIAL_LOOT`, `grant`) | 1b — **düzeltildi** |
 | 10 | Arama/sargı/tamir gibi döngülü eylem bir duygu hareketiyle (sevinç, dans) kesilirse klip sonsuza dek sürüyor; o karakterde ayak IK'sı ve kişisel hareketler kapanıyor | e2e (`motion`: 1. ve 2. karakter) | 2 |
 | 11 | Evin zemin katında ayak sesi çim olarak çalıyor (iç zemin eşiği 0,35 m, zemin kaldırma 0,30 m) | e2e (`audio`) + kod | 2 |
 | 12 | Çarpışma dünyası `isFloor`/`navType`/`navPad` seçeneklerini düşürüyor: döşeme denetimleri ölü kod; inşa hayaleti üst katlarda ve iskelede araziye düşüyor | birim (`collision`) | 3 |
@@ -116,6 +116,42 @@ etkilediği için Aşama 1'in sonunda (1b) düzeltiliyor.
 
 Ayrıca: `physics` koşusunda polis aracı fren denemesinde bir şeye çarpıp hasar aldı (şerit 72 m boş denetlenmişti; büyük
 olasılıkla zombi ya da önceki patlamanın enkazı). Tekrarlanırsa incelenecek.
+
+### Aşama 1b: hikâye, kayıt ve çok oyunculu bütünlük düzeltmeleri (hata 1–9)
+| # | Düzeltme | Doğrulama |
+|---|---|---|
+| 1–2 | Olay kartı kuyruğu: kart karar beklerken vakti gelen olay sırasını bekliyor; başka panel kartı kapatırsa panel kapanınca kart geri geliyor; her kart örneğinin anahtarı var, karar bir kez uygulanıyor, geç gelen ikinci seçimin bedeli iade ediliyor; karar bekleyen kart kayda ve hoş geldin paketine giriyor | birim: `save` (kuyruk, geri gelme, iade, aynı gün ikinci gösterim, kayıtla taşınma); e2e: `gameplay`, `story` (7 kart) |
+| 3 | Yağmalama olayı hikâye konteynerlerine ve kilitli kasalara dokunmuyor; yağmalanan belge tutucuda binanın belgesi kalıyor | birim: `share` (40 tohumda özel içerik; 40 tohumda kasa/kilitli; 60 tohumda karakol masasının belgesi) |
+| 4 | Konteyner, sandık ve bagaj tek birleştirme kuralı (`Inventory.putStack`): envanterle aynı, eski tazelik geçerli | birim: `share` |
+| 5 | Host, oturumunu kuran istemciye oyundaki diğer istemcileri bildiriyor (`pjoin`, sessiz) | birim: `netevents` (3 kişilik lobi); e2e: `host-migration3` üç gerçek sekme — düzeltmesiz kodla **düştü** (C yalnız kendini ve host'u görüyordu), düzeltmeyle geçti (B ve C üçer oyuncu, dörder kişilik takım görüyor) |
+| 6 | Kayıt okunurken ve içe aktarılırken doğrulanıyor (`SaveSystem.normalize`); eksik ayarlar ve kayıtsız host jetonu tamamlanıyor, bilinmeyen zorluk Normal | birim: `save`; e2e: `gameplay` artık oyunu kapatıp kaydı **ana menüden yüklüyor** (gün, saat, envanter, konum, olay kararları) — bu menü yolu daha önce hiçbir senaryoda yoktu |
+| 7 | Alıcısı oyunda olmayan eşya verene dönüyor (bildirimle) | birim: `share` |
+| 8 | Alma miktarı kırpılıyor (tam sayı, en az 1, yığından fazla değil); bilinmeyen eşya/geçersiz miktar konteynere konmuyor | birim: `share` |
+| 9 | Ödül, takas ve özel içerikle gelen silah/aletlere dayanıklılık yazılıyor | birim: `netevents` (pilot günlüğündeki tabanca tam dayanıklılıkla) |
+
+**Bağımsız inceleme (3 bakış açısı: olay kuyruğu ve arayüz; çok oyunculu ve host yetkisi; kayıt ve eşya kuralları;
+her bulguyu çürütmeye çalışan doğrulayıcı).** 1b değişikliğinde 9 gerçek kusur bulundu, hepsi düzeltildi ve teste bağlandı:
+
+| Bulgu | Düzeltme |
+|---|---|
+| Çift tıklamada ikinci seçim bedel ödemeden gidiyor, host tam bedeli iade ediyordu (eşya yaratma; doğrulayıcı yeniden üretti) | kartta tek seçim; bedel seçimde yeniden denetleniyor; seçim ödenen miktarı taşıyor, host yalnız onu (en çok seçeneğin bedeli kadar) iade ediyor |
+| Host, seçimdeki kart anahtarına güveniyordu; eski sürümden anahtarsız seçim kararı ikinci kez uygulatabiliyordu | host kendi açık kartının anahtarını kullanıyor; başka olaya ait (eskimiş) seçim iade edilip yok sayılıyor; olay + gün anahtarı da işaretleniyor |
+| Karar zamanı ilerletince (hasada yardım: 2 saat) gün başı otomatik kaydı karar sırasında alınıyor ve kartı bekliyor sayıyordu: o kayıt yüklenince karar yinelenirdi | kayda yalnız karara bağlanmamış kart giriyor |
+| Göçte eski host'un son anda gösterdiği olay, yeni host'un eski yedeğinde vakti gelmiş durduğu için ikinci kez geliyordu | her eş gösterilen olayın zamanını tutuyor; göçte yedekteki o girdi düşüyor; açık kartla aynı olayın girdisi de düşüyor |
+| Yeniden bağlanma/göçte eski oturumun kartı ekranda kalıp girdiyi kilitliyordu (kısmen önceden vardı) | oturum kapanırken kartı kapanıyor; bekleyen kart yeni oturumda hoş geldin paketinden yeniden açılıyor |
+| Yüklenirken ayrılan oyuncu, yeni katılanda hayalet olarak kalıyordu (önceden vardı) | host, katılana tam oyuncu listesini (`proster`) gönderiyor, listede olmayan sessizce kalkıyor |
+| "Yağmalandı" bilgisi kayda girmiyordu: yüklemeden sonra belge tutucu yeniden yağmalanıp belgesini kaybedebilirdi | yalnız hiç dokunulmamış (durumu olmayan) konteyner yağmalanıyor; durum kayıtla taşınıyor |
+| **Kilitli başlayan kasa ve dolaplar açılınca hep boştu** (önceden vardı: banka kasaları, gardiyan silah dolabı; banka şifresi hikâyesi boş kasaya açılıyordu) | içerik açılınca ya da aranınca üretiliyor (`Loot.ensure`); kayıtta açılmamış kasa yüklemeden sonra da üretiliyor |
+| Eski sürümün yağmasıyla boşalmış hikâye konteynerleri (virüs numunesi…) ve silinmiş belgeler eski kayıtlarda onarılmıyordu | yüklemede hikâye konteyneri hiç kurulmamış sayılıyor (aranınca içeriğiyle gelir), yağmalanmış belge tutucuya belgesi geri konuyor |
+| Elle düzenlenmiş kayıtta `constructor` gibi zorluk adı çarpanları NaN yapıyordu | zorluk yalnız tanımlı anahtarlardan (`Object.hasOwn`) |
+
+Birim testleri: 123 test, 118 geçti, 0 başarısız, 5 atlandı (kalan beşi 3. ve 5. aşamaların hataları: 12–16).
+Uçtan uca (1b kodu, sırayla): ilk koşuda 11/11 (`host-migration3`, `gameplay`, `story`, `multiplayer-local`, `multiplayer-6`,
+`host-migration`, `carry-mp`, `interact`, `shelters`, `smoke-single`, `ui-clicks`; 46 dk). İnceleme düzeltmelerinden sonra
+etkilenen 8 senaryo yeniden: 7/8 geçti; `host-migration` istemcinin yeni host'un zombisini görmesini sabit 3 sn bekliyordu
+ve o koşuda kareler çok yavaştı (eski host gecikmesi 1.960 ms) — bekleme koşula bağlandı (en çok 60 sn), senaryo tek
+başına yeniden koşuldu ve geçti (istemci zombiyi gördü). `gameplay`'in yeni kayıt yükleme denetimi: gün 2, saat farkı
+1 dk, 11 yığınlık envanter, konum ve olay kararı kayıttakiyle aynı.
 
 ---
 

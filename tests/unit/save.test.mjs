@@ -450,7 +450,7 @@ test('bozuk veri: bozuk yuva ve bozuk dizin çökertmez; içe aktarma eski sür�
   await assert.rejects(SaveSystem.importFile(file(JSON.stringify({ v: 1, players: {} }))), /Geçersiz kayıt dosyası/, 'zaman yok');
   await assert.rejects(SaveSystem.importFile(file(JSON.stringify({ v: 1, time: { total: 0 } }))), /Geçersiz kayıt dosyası/, 'oyuncu yok');
   await assert.rejects(SaveSystem.importFile(file('null')), /Geçersiz kayıt dosyası/);
-  await assert.rejects(SaveSystem.importFile(file('bu bir kayıt değil')), SyntaxError);
+  await assert.rejects(SaveSystem.importFile(file('bu bir kayıt değil')), /Geçersiz kayıt dosyası/, 'JSON olmayan dosya (kullanıcıya ham ayrıştırma hatası yerine anlaşılır ileti)');
   assert.equal(store.get('kiyamet_save_3'), 'eski', 'reddedilen dosya yuvayı değiştirmez');
   // meta: host jetonu bozuksa ilk oyuncu, zorluk yoksa normal
   const meta = SaveSystem.meta({ time: { total: 30 }, players: { x: { charId: 'deniz', name: 'D' } }, hostToken: 'yok' });
@@ -516,4 +516,158 @@ test('kayıttan yüklenen kapılar sessizce uygulanır (ses, kıymık efekti ve 
   assert.deepEqual(B.props.calls, [], 'yüklemede enkaz yok');
   assert.deepEqual(B.fx.calls, [], 'yüklemede vuruş efekti yok');
   assert.equal(B.world.doors.find((d) => d.id === 'd_kilitli').open01, 1, 'açık kapı açık konumda başlar (animasyonsuz)');
+});
+
+test('olay kartları sıra bekler: aynı anda vakti gelen ikinci olay ilki karara bağlanınca açılır; başka panelin kapattığı kart geri gelir; geç gelen ikinci seçim bedeli iade eder; bekleyen kart kayıtla taşınır', (t) => {
+  const errs = watchErrors(t);
+  const game = makeGame();
+  game.world.home.frame = { pt: (x, z) => ({ x, z }) };
+  // arayüz: tek panel yuvası (yeni panel eskisini kapatır, onClose çağrılır)
+  const shown = [];
+  let card = null;
+  game.ui.openEvent = (e) => { const old = card; card = e; if (old && old !== e && old.onClose) old.onClose(); shown.push(e.id); };
+  game.ui.closeEvent = () => { const c = card; card = null; if (c && c.onClose) c.onClose(); };
+  game.ui.isBlocking = () => !!card;
+  const S = makeSession(game);
+  S.time.set(5 * 1440 + 10 * 60); // 6. gün 10:00
+  const now = S.time.total;
+  S.events.schedule.push({ at: now - 1, kind: 'event', id: 'fever' }, { at: now - 1, kind: 'event', id: 'harvest' });
+  S.events.update(0.016);
+  assert.equal(shown.length, 1, 'aynı karede yalnız bir kart açılır (eskiden ikincisi ilkini sessizce kapatıyordu)');
+  const first = shown[0], second = first === 'fever' ? 'harvest' : 'fever';
+  assert.equal(S.events.active.id, first);
+  assert.ok(S.events.schedule.some((e) => e.id === second), 'ikinci olay sırada bekler');
+  S.time.set(S.time.total + 30); S.events.update(0.016);
+  assert.equal(shown.length, 1, 'kart açıkken sıradaki gösterilmez');
+  // kartı başka bir panel (ör. arama bitince açılan depo) kapatır: o panel açıkken kart gelmez, kapanınca geri gelir
+  const c1 = card; card = { id: 'depo' }; c1.onClose();
+  S.events.update(0.016);
+  assert.equal(shown.length, 1, 'başka panel açıkken kart yeniden açılmaz');
+  card = null;
+  S.events.update(0.016);
+  assert.deepEqual(shown, [first, first], 'panel kapanınca karar bekleyen kart yeniden açılır');
+  // karar: ücretsiz seçenek (ateş: karantina, hasat: vaktimiz yok)
+  const free = (id) => (id === 'fever' ? 2 : 1);
+  card.choices[free(first)].onSelect();
+  assert.equal(card, null, 'karar kartı kapatır');
+  assert.equal(S.events.active, null);
+  S.time.set(S.time.total + 5); S.events.update(0.016);
+  assert.equal(shown[shown.length - 1], second, 'sıradaki olay ilk karar verilince açılır');
+  card.choices[free(second)].onSelect();
+  assert.equal(S.events.active, null);
+  // geç gelen ikinci seçim (çift tıklama / iki oyuncunun aynı anda seçmesi): etki yinelenmez, bedel iade edilir
+  S.inventory.add('antibiotics', 2);
+  S.events.trigger('fever');
+  const key = S.events.active.key;
+  assert.ok(key && key.startsWith('fever@'));
+  card.choices[0].onSelect(); // antibiyotik ver (1 antibiyotik)
+  assert.equal(S.inventory.count('antibiotics'), 1);
+  const n0 = S.results.choices.length;
+  // aynı kartta ikinci tıklama (çift tıklama/tuş) hiç gönderilmez, bedel ikinci kez düşülmez
+  card && card.choices[0].onSelect();
+  assert.equal(S.inventory.count('antibiotics'), 1, 'çift tıklama ikinci bedeli düşmez');
+  // başka bir oyuncunun (ya da yeni sekmenin) geç gelen seçimi: ödediği bedel iade edilir, karar yinelenmez
+  S.inventory.remove('antibiotics', 1); // ikinci seçimin bedeli seçen tarafta düşülmüş olarak gelir
+  S.act('event_choice', { id: 'fever', key, choice: 0, paid: [['antibiotics', 1]] });
+  assert.equal(S.inventory.count('antibiotics'), 1, 'geç seçimin ödenen bedeli iade edildi');
+  assert.equal(S.results.choices.length, n0, 'karar ikinci kez uygulanmadı');
+  // hiçbir şey ödemeden gelen (ya da sahte) geç seçim eşya yaratmaz; bedelden fazlası iade edilmez
+  S.act('event_choice', { id: 'fever', key, choice: 0, paid: [['antibiotics', 0]] });
+  S.act('event_choice', { id: 'fever', key, choice: 0 });
+  S.act('event_choice', { id: 'fever', key, choice: 0, paid: [['antibiotics', 50], ['ammo_9mm', 30]] });
+  assert.deepEqual([S.inventory.count('antibiotics'), S.inventory.count('ammo_9mm')], [2, 0], 'iade en çok seçeneğin bedeli kadar, yalnız bedeldeki eşya');
+  S.inventory.remove('antibiotics', 1);
+  // aynı olay aynı gün yeniden gösterilirse (yeni kart örneği) kararı yine uygulanır ve kart kapanır
+  S.events.trigger('fever');
+  assert.notEqual(S.events.active.key, key);
+  card.choices[2].onSelect();
+  assert.equal(card, null, 'aynı gün ikinci kez gösterilen kart da kapanır (eskiden kilitleniyordu)');
+  assert.equal(S.results.choices.length, n0 + 1);
+  // karar bekleyen kart kayda girer; yüklenince ilk karede yeniden açılır
+  S.events.trigger('harvest');
+  const data = JSON.parse(JSON.stringify(S.serialize()));
+  assert.equal(data.events.pending.id, 'harvest');
+  const game2 = makeGame();
+  game2.world.home.frame = game.world.home.frame;
+  let card2 = null;
+  game2.ui.openEvent = (e) => { card2 = e; };
+  game2.ui.closeEvent = () => { card2 = null; };
+  game2.ui.isBlocking = () => !!card2;
+  const B = makeSession(game2, { token: data.hostToken, local: { name: 'Ayla', charId: 'mert' } });
+  B.load(data);
+  B.events.update(0.016);
+  assert.equal(card2 && card2.id, 'harvest', 'yüklenen kayıtta bekleyen kart açılır');
+  card2.choices[1].onSelect();
+  assert.equal(card2, null);
+  assert.equal(B.events.active, null);
+  assert.deepEqual(errs, []);
+});
+
+test('içe aktarılan/eski kayıtta eksik ayarlar varsayılanla tamamlanır, yükleme çökmez (cfg yok, bilinmeyen zorluk, kayıtsız host jetonu); oyuncusuz yuva okunmaz', async () => {
+  const file = (text) => ({ text: async () => text });
+  const raw = { v: 1, seed: 3, time: { total: 2000, dayMinutes: 30 }, players: { t1: { charId: 'elif', name: 'Ece' } }, hostToken: 'kayip' };
+  const d = await SaveSystem.importFile(file(JSON.stringify(raw)), '3');
+  assert.deepEqual(d.cfg, { difficulty: 'normal', dayMinutes: 30, aiTeammates: 0 });
+  assert.equal(d.hostToken, 't1', 'kayıtsız host jetonu ilk oyuncuya düşer');
+  assert.deepEqual([SaveSystem.read('3').cfg.difficulty, SaveSystem.read('3').hostToken], ['normal', 't1']);
+  const d2 = SaveSystem.normalize({ ...raw, cfg: { difficulty: 'kabus', dayMinutes: -4, aiTeammates: 2 } });
+  assert.deepEqual([d2.cfg.difficulty, d2.cfg.dayMinutes, d2.cfg.aiTeammates], ['normal', 30, 2], 'bilinmeyen zorluk normal, geçersiz gün uzunluğu zaman kaydından');
+  store.set('kiyamet_save_2', JSON.stringify({ v: 1, time: { total: 5 }, players: {} }));
+  assert.equal(SaveSystem.read('2'), null, 'oyuncusuz kayıt yüklenemez (menü uyarı verir)');
+  store.set('kiyamet_save_2', JSON.stringify({ v: 1, time: { total: -3 }, players: { a: {} } }));
+  assert.equal(SaveSystem.read('2'), null, 'negatif zaman');
+  // oturum: bilinmeyen zorluk normal sayılır (elle düzenlenmiş kayıt)
+  const S = makeSession(makeGame(), { difficulty: 'kabus' });
+  assert.equal(S.diff.name, 'Normal');
+});
+
+test('olay kararının kenar durumları: karar sırasında alınan otomatik kayıt kartı bekliyor saymaz; açık kart başka olaysa seçim iade edilir; göçte yedekten sonra gösterilen olay yinelenmez; oturum kapanınca kart kapanır', (t) => {
+  const errs = watchErrors(t);
+  const game = makeGame();
+  game.world.home.frame = { pt: (x, z) => ({ x, z }) };
+  let card = null;
+  game.ui.panel = null;
+  game.ui.openEvent = (e) => { card = e; game.ui.panel = { name: 'event' }; };
+  game.ui.closeEvent = () => { const c = card; card = null; game.ui.panel = null; if (c && c.onClose) c.onClose(); };
+  game.ui.closePanel = () => { const c = card; card = null; game.ui.panel = null; if (c && c.onClose) c.onClose(); };
+  game.ui.isBlocking = () => !!card;
+  const S = makeSession(game);
+  // 1) hasada yardım (2 saat ilerletir) gece yarısını geçince gün başı otomatik kaydı karar sırasında alınır
+  S.time.set(6 * 1440 + 23 * 60);
+  const autos = [];
+  S.saves.autosave = () => { autos.push(JSON.parse(JSON.stringify(S.serialize())).events.pending); };
+  // Session.start'taki zaman kancasının ilgili kısmı (Session.onTime: gün başında otomatik kayıt); karar zamanı ilerletince
+  // bu kayıt applyChoice'un içinde, sonuç olayı kartı kapatmadan önce alınır
+  S.time.on((type) => { if (type === 'day') S.saves.autosave(); });
+  S.events.trigger('harvest');
+  card.choices[0].onSelect();
+  assert.equal(S.time.day, 8, 'karar zamanı 2 saat ilerletti, gün döndü');
+  assert.ok(autos.length >= 1, 'gün başı otomatik kaydı alındı');
+  assert.deepEqual(autos, autos.map(() => null), 'karar sırasında alınan kayıt kartı bekliyor saymaz (yüklenince karar yinelenmezdi)');
+  // 2) açık kart başka bir olaysa (eskimiş kart) seçim uygulanmaz, ödenen bedel iade edilir
+  S.inventory.add('canned_food', 1);
+  S.events.trigger('thick_fog');
+  const n0 = S.results.choices.length, w0 = S.weather.type;
+  S.act('event_choice', { id: 'injured_kid', key: 'injured_kid@1#9', choice: 1, paid: [['canned_food', 1]] });
+  assert.deepEqual([S.results.choices.length, S.inventory.count('canned_food')], [n0, 2], 'eskimiş karta seçim: etki yok, bedel iade');
+  assert.equal(S.weather.type, w0);
+  card.choices[0].onSelect();
+  assert.equal(S.events.active, null);
+  // 3) göç: yeni host'un yedeği (pdata) kartı göstermeden önce alınmış; kendi gördüğü olay plandan düşer, gelecektekiler kalır
+  const now = S.time.total;
+  S.events.shownAt = { harvest: now };
+  S.events.adoptBackup({ done: ['market_riot'], schedule: [{ at: now - 1, kind: 'event', id: 'harvest' }, { at: now + 600, kind: 'event', id: 'fever' }, { at: now + 30, kind: 'zspawn', list: [] }] });
+  assert.deepEqual(S.events.schedule.map((x) => x.id || x.kind), ['fever', 'zspawn'], 'yedekten sonra gösterilen olay yinelenmez');
+  assert.ok(S.events.done.has('market_riot') && S.events.done.has('harvest'));
+  // açık kart aynı olaysa planda kalan aynı girdi düşer (ikinci kart açılmaz)
+  S.events.trigger('fever');
+  S.events.schedule.push({ at: S.time.total - 1, kind: 'event', id: 'fever' });
+  S.events.update(0.016);
+  assert.ok(!S.events.schedule.some((x) => x.id === 'fever' && x.at <= S.time.total), 'açık kartın vakti gelmiş yinelenen girdisi düşer (ikinci kart açılmaz)');
+  assert.ok(S.events.schedule.some((x) => x.id === 'fever' && x.at > S.time.total), 'gelecekteki ayrı girdi kalır');
+  // 4) oturum kapanınca (yeniden bağlanma/göç) bu oturumun kartı kapanır
+  assert.equal(game.ui.panel && game.ui.panel.name, 'event');
+  S.events.dispose();
+  assert.equal(game.ui.panel, null, 'kapanan oturumun kartı ekranda kalmaz');
+  assert.deepEqual(errs, []);
 });
